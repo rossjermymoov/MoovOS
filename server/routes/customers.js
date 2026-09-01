@@ -1561,8 +1561,7 @@ router.post('/bulk-sync-dc-ids', async (req, res, next) => {
           `UPDATE customers 
            SET dc_customer_id = NULL 
            WHERE dc_customer_id = $1 
-             AND LOWER(business_name) != LOWER($2) 
-             AND (trading_name IS NULL OR LOWER(trading_name) != LOWER($2))
+             AND LOWER(business_name) != LOWER($2)
            RETURNING id, business_name`,
           [dcId, name]
         );
@@ -1571,14 +1570,13 @@ router.post('/bulk-sync-dc-ids', async (req, res, next) => {
         }
       }
 
-      // 2. Find customer by exact name or trading name or billing alias
+      // 2. Find customer by exact name or billing alias
       let targetCust = null;
       if (name) {
         const r1 = await query(
           `SELECT id, business_name, dc_customer_id, billing_aliases 
            FROM customers 
-           WHERE LOWER(business_name) = LOWER($1) 
-              OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER($1))
+           WHERE LOWER(business_name) = LOWER($1)
            LIMIT 1`,
           [name]
         );
@@ -1627,12 +1625,13 @@ router.post('/bulk-sync-dc-ids', async (req, res, next) => {
       } else if (name) {
         // Create new customer
         const aliases = [name, dcId].filter(Boolean);
+        const randAcct = 'MOS-' + String(Math.floor(Math.random() * 90000 + 10000));
         const ins = await query(
           `INSERT INTO customers 
-            (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-           VALUES ($1, $2, $3, 'active', 'standard', $4)
+            (business_name, account_number, dc_customer_id, registered_address, postcode, phone_number, primary_email, account_status, tier, billing_aliases)
+           VALUES ($1, $2, $3, 'Registered Address', 'UK', '—', $4, 'active', 'standard', $5)
            RETURNING id, business_name, dc_customer_id`,
-          [name, dcId || null, accountNum || dcId || null, aliases]
+          [name, randAcct, dcId || null, `billing@${name.toLowerCase().replace(/[^a-z0-9]/g, '')}.co.uk`, aliases]
         );
 
         results.created++;

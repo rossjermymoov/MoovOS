@@ -3,22 +3,17 @@
 
 DO $$
 DECLARE
-  v_cust_id INT;
-  v_aliases TEXT[];
+  v_cust_id UUID;
 BEGIN
 
   -- ── Developer Testing (1) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = '1' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('Developer Testing') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Developer Testing'));
+    AND LOWER(business_name) != LOWER('Developer Testing');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Developer Testing') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Developer Testing'))
+  WHERE LOWER(business_name) = LOWER('Developer Testing')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -34,22 +29,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Developer Testing', '1', '1', 'active', 'standard', ARRAY['Developer Testing', '1', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Developer Testing', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), '1',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Developer Testing', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Developer Testing', '1', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Cloud 9 Fulfilment (Cloud9) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'Cloud9' OR dc_customer_id = '9')
-    AND LOWER(business_name) != LOWER('Cloud 9 Fulfilment') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Cloud 9 Fulfilment'));
+    AND LOWER(business_name) != LOWER('Cloud 9 Fulfilment');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Cloud 9 Fulfilment') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Cloud 9 Fulfilment'))
+  WHERE LOWER(business_name) = LOWER('Cloud 9 Fulfilment')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -65,22 +65,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Cloud 9 Fulfilment', 'Cloud9', 'Cloud9', 'active', 'standard', ARRAY['Cloud 9 Fulfilment', 'Cloud9', '9']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Cloud 9 Fulfilment', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Cloud9',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Cloud 9 Fulfilment', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Cloud 9 Fulfilment', 'Cloud9', '9']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── WXM - Greenplant UK Ltd (WXM-0004) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'WXM-0004' OR dc_customer_id = '0004')
-    AND LOWER(business_name) != LOWER('WXM - Greenplant UK Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('WXM - Greenplant UK Ltd'));
+    AND LOWER(business_name) != LOWER('WXM - Greenplant UK Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('WXM - Greenplant UK Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('WXM - Greenplant UK Ltd'))
+  WHERE LOWER(business_name) = LOWER('WXM - Greenplant UK Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -96,22 +101,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('WXM - Greenplant UK Ltd', 'WXM-0004', 'WXM-0004', 'active', 'standard', ARRAY['WXM - Greenplant UK Ltd', 'WXM-0004', '0004', '4']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'WXM - Greenplant UK Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'WXM-0004',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('WXM - Greenplant UK Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['WXM - Greenplant UK Ltd', 'WXM-0004', '0004', '4']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── WXM - Projekt Indigo Studio Ltd (WXM-0005) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'WXM-0005' OR dc_customer_id = '0005')
-    AND LOWER(business_name) != LOWER('WXM - Projekt Indigo Studio Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('WXM - Projekt Indigo Studio Ltd'));
+    AND LOWER(business_name) != LOWER('WXM - Projekt Indigo Studio Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('WXM - Projekt Indigo Studio Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('WXM - Projekt Indigo Studio Ltd'))
+  WHERE LOWER(business_name) = LOWER('WXM - Projekt Indigo Studio Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -127,22 +137,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('WXM - Projekt Indigo Studio Ltd', 'WXM-0005', 'WXM-0005', 'active', 'standard', ARRAY['WXM - Projekt Indigo Studio Ltd', 'WXM-0005', '0005', '5']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'WXM - Projekt Indigo Studio Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'WXM-0005',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('WXM - Projekt Indigo Studio Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['WXM - Projekt Indigo Studio Ltd', 'WXM-0005', '0005', '5']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Floship-Returns (FLOSHIP) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'FLOSHIP' )
-    AND LOWER(business_name) != LOWER('Floship-Returns') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Floship-Returns'));
+    AND LOWER(business_name) != LOWER('Floship-Returns');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Floship-Returns') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Floship-Returns'))
+  WHERE LOWER(business_name) = LOWER('Floship-Returns')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -158,22 +173,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Floship-Returns', 'FLOSHIP', 'FLOSHIP', 'active', 'standard', ARRAY['Floship-Returns', 'FLOSHIP']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Floship-Returns', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'FLOSHIP',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Floship-Returns', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Floship-Returns', 'FLOSHIP']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Keells (DP1-0201) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DP1-0201' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('Keells') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Keells'));
+    AND LOWER(business_name) != LOWER('Keells');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Keells') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Keells'))
+  WHERE LOWER(business_name) = LOWER('Keells')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -189,22 +209,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Keells', 'DP1-0201', 'DP1-0201', 'active', 'standard', ARRAY['Keells', 'DP1-0201', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Keells', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0201',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Keells', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Keells', 'DP1-0201', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── MoreHustl (HOF-0031) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'HOF-0031' OR dc_customer_id = '0031')
-    AND LOWER(business_name) != LOWER('MoreHustl') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('MoreHustl'));
+    AND LOWER(business_name) != LOWER('MoreHustl');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('MoreHustl') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('MoreHustl'))
+  WHERE LOWER(business_name) = LOWER('MoreHustl')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -220,22 +245,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('MoreHustl', 'HOF-0031', 'HOF-0031', 'active', 'standard', ARRAY['MoreHustl', 'HOF-0031', '0031', '31']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'MoreHustl', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'HOF-0031',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('MoreHustl', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['MoreHustl', 'HOF-0031', '0031', '31']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Suresh Deepal Herath 12 (Dep2-0006) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'Dep2-0006' OR dc_customer_id = '2')
-    AND LOWER(business_name) != LOWER('Suresh Deepal Herath 12') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Suresh Deepal Herath 12'));
+    AND LOWER(business_name) != LOWER('Suresh Deepal Herath 12');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Suresh Deepal Herath 12') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Suresh Deepal Herath 12'))
+  WHERE LOWER(business_name) = LOWER('Suresh Deepal Herath 12')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -251,22 +281,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Suresh Deepal Herath 12', 'Dep2-0006', 'Dep2-0006', 'active', 'standard', ARRAY['Suresh Deepal Herath 12', 'Dep2-0006', '2']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Suresh Deepal Herath 12', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Dep2-0006',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Suresh Deepal Herath 12', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Suresh Deepal Herath 12', 'Dep2-0006', '2']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── The Chosen Baller LLC (001-0002) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = '001-0002' OR dc_customer_id = '001')
-    AND LOWER(business_name) != LOWER('The Chosen Baller LLC') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('The Chosen Baller LLC'));
+    AND LOWER(business_name) != LOWER('The Chosen Baller LLC');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('The Chosen Baller LLC') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('The Chosen Baller LLC'))
+  WHERE LOWER(business_name) = LOWER('The Chosen Baller LLC')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -282,22 +317,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('The Chosen Baller LLC', '001-0002', '001-0002', 'active', 'standard', ARRAY['The Chosen Baller LLC', '001-0002', '001', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'The Chosen Baller LLC', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), '001-0002',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('The Chosen Baller LLC', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['The Chosen Baller LLC', '001-0002', '001', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── SND Electrical (HOF-0054) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'HOF-0054' OR dc_customer_id = '0054')
-    AND LOWER(business_name) != LOWER('SND Electrical') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('SND Electrical'));
+    AND LOWER(business_name) != LOWER('SND Electrical');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('SND Electrical') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('SND Electrical'))
+  WHERE LOWER(business_name) = LOWER('SND Electrical')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -313,22 +353,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('SND Electrical', 'HOF-0054', 'HOF-0054', 'active', 'standard', ARRAY['SND Electrical', 'HOF-0054', '0054', '54']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'SND Electrical', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'HOF-0054',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('SND Electrical', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['SND Electrical', 'HOF-0054', '0054', '54']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── E & L Trading Ltd (HOF-0055) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'HOF-0055' OR dc_customer_id = '0055')
-    AND LOWER(business_name) != LOWER('E & L Trading Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('E & L Trading Ltd'));
+    AND LOWER(business_name) != LOWER('E & L Trading Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('E & L Trading Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('E & L Trading Ltd'))
+  WHERE LOWER(business_name) = LOWER('E & L Trading Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -344,22 +389,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('E & L Trading Ltd', 'HOF-0055', 'HOF-0055', 'active', 'standard', ARRAY['E & L Trading Ltd', 'HOF-0055', '0055', '55']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'E & L Trading Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'HOF-0055',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('E & L Trading Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['E & L Trading Ltd', 'HOF-0055', '0055', '55']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Britalitez Limited (HOF-0056) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'HOF-0056' OR dc_customer_id = '0056')
-    AND LOWER(business_name) != LOWER('Britalitez Limited') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Britalitez Limited'));
+    AND LOWER(business_name) != LOWER('Britalitez Limited');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Britalitez Limited') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Britalitez Limited'))
+  WHERE LOWER(business_name) = LOWER('Britalitez Limited')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -375,22 +425,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Britalitez Limited', 'HOF-0056', 'HOF-0056', 'active', 'standard', ARRAY['Britalitez Limited', 'HOF-0056', '0056', '56']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Britalitez Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'HOF-0056',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Britalitez Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Britalitez Limited', 'HOF-0056', '0056', '56']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Moov Prod Admin two (DD2-0003) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DD2-0003' OR dc_customer_id = '2')
-    AND LOWER(business_name) != LOWER('Moov Prod Admin two') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Moov Prod Admin two'));
+    AND LOWER(business_name) != LOWER('Moov Prod Admin two');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Moov Prod Admin two') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Moov Prod Admin two'))
+  WHERE LOWER(business_name) = LOWER('Moov Prod Admin two')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -406,22 +461,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Moov Prod Admin two', 'DD2-0003', 'DD2-0003', 'active', 'standard', ARRAY['Moov Prod Admin two', 'DD2-0003', '2']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Moov Prod Admin two', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DD2-0003',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Moov Prod Admin two', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Moov Prod Admin two', 'DD2-0003', '2']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Danny Snelson (HOF-0008) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'HOF-0008' OR dc_customer_id = '0008')
-    AND LOWER(business_name) != LOWER('Danny Snelson') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Danny Snelson'));
+    AND LOWER(business_name) != LOWER('Danny Snelson');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Danny Snelson') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Danny Snelson'))
+  WHERE LOWER(business_name) = LOWER('Danny Snelson')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -437,22 +497,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Danny Snelson', 'HOF-0008', 'HOF-0008', 'active', 'standard', ARRAY['Danny Snelson', 'HOF-0008', '0008', '8']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Danny Snelson', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'HOF-0008',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Danny Snelson', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Danny Snelson', 'HOF-0008', '0008', '8']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Spare and Square (HOF-GONE) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'HOF-GONE' )
-    AND LOWER(business_name) != LOWER('Spare and Square') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Spare and Square'));
+    AND LOWER(business_name) != LOWER('Spare and Square');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Spare and Square') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Spare and Square'))
+  WHERE LOWER(business_name) = LOWER('Spare and Square')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -468,22 +533,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Spare and Square', 'HOF-GONE', 'HOF-GONE', 'active', 'standard', ARRAY['Spare and Square', 'HOF-GONE']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Spare and Square', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'HOF-GONE',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Spare and Square', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Spare and Square', 'HOF-GONE']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Crystal Nails (HOF-0009) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'HOF-0009' OR dc_customer_id = '0009')
-    AND LOWER(business_name) != LOWER('Crystal Nails') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Crystal Nails'));
+    AND LOWER(business_name) != LOWER('Crystal Nails');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Crystal Nails') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Crystal Nails'))
+  WHERE LOWER(business_name) = LOWER('Crystal Nails')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -499,22 +569,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Crystal Nails', 'HOF-0009', 'HOF-0009', 'active', 'standard', ARRAY['Crystal Nails', 'HOF-0009', '0009', '9']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Crystal Nails', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'HOF-0009',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Crystal Nails', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Crystal Nails', 'HOF-0009', '0009', '9']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Fight Outlet (HOF-0010) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'HOF-0010' OR dc_customer_id = '0010')
-    AND LOWER(business_name) != LOWER('Fight Outlet') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Fight Outlet'));
+    AND LOWER(business_name) != LOWER('Fight Outlet');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Fight Outlet') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Fight Outlet'))
+  WHERE LOWER(business_name) = LOWER('Fight Outlet')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -530,22 +605,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Fight Outlet', 'HOF-0010', 'HOF-0010', 'active', 'standard', ARRAY['Fight Outlet', 'HOF-0010', '0010', '10']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Fight Outlet', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'HOF-0010',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Fight Outlet', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Fight Outlet', 'HOF-0010', '0010', '10']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Prophecy Cricket Ltd (HOF-0011) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'HOF-0011' OR dc_customer_id = '0011')
-    AND LOWER(business_name) != LOWER('Prophecy Cricket Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Prophecy Cricket Ltd'));
+    AND LOWER(business_name) != LOWER('Prophecy Cricket Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Prophecy Cricket Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Prophecy Cricket Ltd'))
+  WHERE LOWER(business_name) = LOWER('Prophecy Cricket Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -561,22 +641,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Prophecy Cricket Ltd', 'HOF-0011', 'HOF-0011', 'active', 'standard', ARRAY['Prophecy Cricket Ltd', 'HOF-0011', '0011', '11']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Prophecy Cricket Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'HOF-0011',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Prophecy Cricket Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Prophecy Cricket Ltd', 'HOF-0011', '0011', '11']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Seedball Limited (HOF-0012) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'HOF-0012' OR dc_customer_id = '0012')
-    AND LOWER(business_name) != LOWER('Seedball Limited') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Seedball Limited'));
+    AND LOWER(business_name) != LOWER('Seedball Limited');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Seedball Limited') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Seedball Limited'))
+  WHERE LOWER(business_name) = LOWER('Seedball Limited')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -592,22 +677,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Seedball Limited', 'HOF-0012', 'HOF-0012', 'active', 'standard', ARRAY['Seedball Limited', 'HOF-0012', '0012', '12']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Seedball Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'HOF-0012',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Seedball Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Seedball Limited', 'HOF-0012', '0012', '12']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Saloos Ltd (MOOV-0002) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0002' OR dc_customer_id = '0002')
-    AND LOWER(business_name) != LOWER('Saloos Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Saloos Ltd'));
+    AND LOWER(business_name) != LOWER('Saloos Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Saloos Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Saloos Ltd'))
+  WHERE LOWER(business_name) = LOWER('Saloos Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -623,22 +713,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Saloos Ltd', 'MOOV-0002', 'MOOV-0002', 'active', 'standard', ARRAY['Saloos Ltd', 'MOOV-0002', '0002', '2']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Saloos Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0002',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Saloos Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Saloos Ltd', 'MOOV-0002', '0002', '2']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── MP Homewares Ltd (MOOV-0003) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0003' OR dc_customer_id = '0003')
-    AND LOWER(business_name) != LOWER('MP Homewares Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('MP Homewares Ltd'));
+    AND LOWER(business_name) != LOWER('MP Homewares Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('MP Homewares Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('MP Homewares Ltd'))
+  WHERE LOWER(business_name) = LOWER('MP Homewares Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -654,22 +749,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('MP Homewares Ltd', 'MOOV-0003', 'MOOV-0003', 'active', 'standard', ARRAY['MP Homewares Ltd', 'MOOV-0003', '0003', '3']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'MP Homewares Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0003',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('MP Homewares Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['MP Homewares Ltd', 'MOOV-0003', '0003', '3']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── I Luv Designer (MOOV-0004) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0004' OR dc_customer_id = '0004')
-    AND LOWER(business_name) != LOWER('I Luv Designer') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('I Luv Designer'));
+    AND LOWER(business_name) != LOWER('I Luv Designer');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('I Luv Designer') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('I Luv Designer'))
+  WHERE LOWER(business_name) = LOWER('I Luv Designer')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -685,22 +785,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('I Luv Designer', 'MOOV-0004', 'MOOV-0004', 'active', 'standard', ARRAY['I Luv Designer', 'MOOV-0004', '0004', '4']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'I Luv Designer', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0004',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('I Luv Designer', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['I Luv Designer', 'MOOV-0004', '0004', '4']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── 3 Devices Ltd (MOOV-0005) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0005' OR dc_customer_id = '0005')
-    AND LOWER(business_name) != LOWER('3 Devices Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('3 Devices Ltd'));
+    AND LOWER(business_name) != LOWER('3 Devices Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('3 Devices Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('3 Devices Ltd'))
+  WHERE LOWER(business_name) = LOWER('3 Devices Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -716,22 +821,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('3 Devices Ltd', 'MOOV-0005', 'MOOV-0005', 'active', 'standard', ARRAY['3 Devices Ltd', 'MOOV-0005', '0005', '5']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      '3 Devices Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0005',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('3 Devices Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['3 Devices Ltd', 'MOOV-0005', '0005', '5']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── EF TEST CUSTOMER QA EIGHT (DF1-0004) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DF1-0004' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('EF TEST CUSTOMER QA EIGHT') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('EF TEST CUSTOMER QA EIGHT'));
+    AND LOWER(business_name) != LOWER('EF TEST CUSTOMER QA EIGHT');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('EF TEST CUSTOMER QA EIGHT') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('EF TEST CUSTOMER QA EIGHT'))
+  WHERE LOWER(business_name) = LOWER('EF TEST CUSTOMER QA EIGHT')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -747,22 +857,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('EF TEST CUSTOMER QA EIGHT', 'DF1-0004', 'DF1-0004', 'active', 'standard', ARRAY['EF TEST CUSTOMER QA EIGHT', 'DF1-0004', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'EF TEST CUSTOMER QA EIGHT', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DF1-0004',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('EF TEST CUSTOMER QA EIGHT', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['EF TEST CUSTOMER QA EIGHT', 'DF1-0004', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Yayo Familia Ltd (MOOV-0006) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0006' OR dc_customer_id = '0006')
-    AND LOWER(business_name) != LOWER('Yayo Familia Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Yayo Familia Ltd'));
+    AND LOWER(business_name) != LOWER('Yayo Familia Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Yayo Familia Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Yayo Familia Ltd'))
+  WHERE LOWER(business_name) = LOWER('Yayo Familia Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -778,22 +893,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Yayo Familia Ltd', 'MOOV-0006', 'MOOV-0006', 'active', 'standard', ARRAY['Yayo Familia Ltd', 'MOOV-0006', '0006', '6']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Yayo Familia Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0006',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Yayo Familia Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Yayo Familia Ltd', 'MOOV-0006', '0006', '6']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Capatex Limited (MOOV-0007) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0007' OR dc_customer_id = '0007')
-    AND LOWER(business_name) != LOWER('Capatex Limited') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Capatex Limited'));
+    AND LOWER(business_name) != LOWER('Capatex Limited');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Capatex Limited') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Capatex Limited'))
+  WHERE LOWER(business_name) = LOWER('Capatex Limited')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -809,22 +929,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Capatex Limited', 'MOOV-0007', 'MOOV-0007', 'active', 'standard', ARRAY['Capatex Limited', 'MOOV-0007', '0007', '7']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Capatex Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0007',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Capatex Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Capatex Limited', 'MOOV-0007', '0007', '7']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Trident Pumps (MOOV-0008) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0008' OR dc_customer_id = '0008')
-    AND LOWER(business_name) != LOWER('Trident Pumps') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Trident Pumps'));
+    AND LOWER(business_name) != LOWER('Trident Pumps');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Trident Pumps') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Trident Pumps'))
+  WHERE LOWER(business_name) = LOWER('Trident Pumps')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -840,22 +965,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Trident Pumps', 'MOOV-0008', 'MOOV-0008', 'active', 'standard', ARRAY['Trident Pumps', 'MOOV-0008', '0008', '8']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Trident Pumps', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0008',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Trident Pumps', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Trident Pumps', 'MOOV-0008', '0008', '8']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Tribal Society (MOOV-0009) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0009' OR dc_customer_id = '0009')
-    AND LOWER(business_name) != LOWER('Tribal Society') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Tribal Society'));
+    AND LOWER(business_name) != LOWER('Tribal Society');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Tribal Society') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Tribal Society'))
+  WHERE LOWER(business_name) = LOWER('Tribal Society')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -871,22 +1001,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Tribal Society', 'MOOV-0009', 'MOOV-0009', 'active', 'standard', ARRAY['Tribal Society', 'MOOV-0009', '0009', '9']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Tribal Society', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0009',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Tribal Society', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Tribal Society', 'MOOV-0009', '0009', '9']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Millvill Industrial Supplies Ltd (MOOV-0010) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0010' OR dc_customer_id = '0010')
-    AND LOWER(business_name) != LOWER('Millvill Industrial Supplies Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Millvill Industrial Supplies Ltd'));
+    AND LOWER(business_name) != LOWER('Millvill Industrial Supplies Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Millvill Industrial Supplies Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Millvill Industrial Supplies Ltd'))
+  WHERE LOWER(business_name) = LOWER('Millvill Industrial Supplies Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -902,22 +1037,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Millvill Industrial Supplies Ltd', 'MOOV-0010', 'MOOV-0010', 'active', 'standard', ARRAY['Millvill Industrial Supplies Ltd', 'MOOV-0010', '0010', '10']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Millvill Industrial Supplies Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0010',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Millvill Industrial Supplies Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Millvill Industrial Supplies Ltd', 'MOOV-0010', '0010', '10']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── B2B Workwear & Janitorial Ltd (MOOV-0011) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0011' OR dc_customer_id = '0011')
-    AND LOWER(business_name) != LOWER('B2B Workwear & Janitorial Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('B2B Workwear & Janitorial Ltd'));
+    AND LOWER(business_name) != LOWER('B2B Workwear & Janitorial Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('B2B Workwear & Janitorial Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('B2B Workwear & Janitorial Ltd'))
+  WHERE LOWER(business_name) = LOWER('B2B Workwear & Janitorial Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -933,22 +1073,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('B2B Workwear & Janitorial Ltd', 'MOOV-0011', 'MOOV-0011', 'active', 'standard', ARRAY['B2B Workwear & Janitorial Ltd', 'MOOV-0011', '0011', '11']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'B2B Workwear & Janitorial Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0011',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('B2B Workwear & Janitorial Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['B2B Workwear & Janitorial Ltd', 'MOOV-0011', '0011', '11']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Britalitez Ltd (MOOV-0012) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0012' OR dc_customer_id = '0012')
-    AND LOWER(business_name) != LOWER('Britalitez Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Britalitez Ltd'));
+    AND LOWER(business_name) != LOWER('Britalitez Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Britalitez Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Britalitez Ltd'))
+  WHERE LOWER(business_name) = LOWER('Britalitez Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -964,22 +1109,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Britalitez Ltd', 'MOOV-0012', 'MOOV-0012', 'active', 'standard', ARRAY['Britalitez Ltd', 'MOOV-0012', '0012', '12']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Britalitez Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0012',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Britalitez Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Britalitez Ltd', 'MOOV-0012', '0012', '12']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Code Nine UK Ltd (MOOV-0013) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0013' OR dc_customer_id = '0013')
-    AND LOWER(business_name) != LOWER('Code Nine UK Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Code Nine UK Ltd'));
+    AND LOWER(business_name) != LOWER('Code Nine UK Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Code Nine UK Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Code Nine UK Ltd'))
+  WHERE LOWER(business_name) = LOWER('Code Nine UK Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -995,22 +1145,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Code Nine UK Ltd', 'MOOV-0013', 'MOOV-0013', 'active', 'standard', ARRAY['Code Nine UK Ltd', 'MOOV-0013', '0013', '13']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Code Nine UK Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0013',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Code Nine UK Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Code Nine UK Ltd', 'MOOV-0013', '0013', '13']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Edmunson Electrical Leeds (MOOV-0014) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0014' OR dc_customer_id = '0014')
-    AND LOWER(business_name) != LOWER('Edmunson Electrical Leeds') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Edmunson Electrical Leeds'));
+    AND LOWER(business_name) != LOWER('Edmunson Electrical Leeds');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Edmunson Electrical Leeds') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Edmunson Electrical Leeds'))
+  WHERE LOWER(business_name) = LOWER('Edmunson Electrical Leeds')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -1026,22 +1181,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Edmunson Electrical Leeds', 'MOOV-0014', 'MOOV-0014', 'active', 'standard', ARRAY['Edmunson Electrical Leeds', 'MOOV-0014', '0014', '14']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Edmunson Electrical Leeds', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0014',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Edmunson Electrical Leeds', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Edmunson Electrical Leeds', 'MOOV-0014', '0014', '14']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Green Footprint Services Ltd (MOOV-0015) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0015' OR dc_customer_id = '0015')
-    AND LOWER(business_name) != LOWER('Green Footprint Services Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Green Footprint Services Ltd'));
+    AND LOWER(business_name) != LOWER('Green Footprint Services Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Green Footprint Services Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Green Footprint Services Ltd'))
+  WHERE LOWER(business_name) = LOWER('Green Footprint Services Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -1057,22 +1217,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Green Footprint Services Ltd', 'MOOV-0015', 'MOOV-0015', 'active', 'standard', ARRAY['Green Footprint Services Ltd', 'MOOV-0015', '0015', '15']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Green Footprint Services Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0015',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Green Footprint Services Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Green Footprint Services Ltd', 'MOOV-0015', '0015', '15']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── EF QA CUSTOMER HS (DP1-0011) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DP1-0011' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('EF QA CUSTOMER HS') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('EF QA CUSTOMER HS'));
+    AND LOWER(business_name) != LOWER('EF QA CUSTOMER HS');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('EF QA CUSTOMER HS') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('EF QA CUSTOMER HS'))
+  WHERE LOWER(business_name) = LOWER('EF QA CUSTOMER HS')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -1088,22 +1253,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('EF QA CUSTOMER HS', 'DP1-0011', 'DP1-0011', 'active', 'standard', ARRAY['EF QA CUSTOMER HS', 'DP1-0011', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'EF QA CUSTOMER HS', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0011',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('EF QA CUSTOMER HS', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['EF QA CUSTOMER HS', 'DP1-0011', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── hjko (1233-0001) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = '1233-0001' OR dc_customer_id = '1233')
-    AND LOWER(business_name) != LOWER('hjko') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('hjko'));
+    AND LOWER(business_name) != LOWER('hjko');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('hjko') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('hjko'))
+  WHERE LOWER(business_name) = LOWER('hjko')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -1119,22 +1289,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('hjko', '1233-0001', '1233-0001', 'active', 'standard', ARRAY['hjko', '1233-0001', '1233']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'hjko', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), '1233-0001',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('hjko', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['hjko', '1233-0001', '1233']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── qwerty (DF1-0007) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DF1-0007' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('qwerty') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('qwerty'));
+    AND LOWER(business_name) != LOWER('qwerty');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('qwerty') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('qwerty'))
+  WHERE LOWER(business_name) = LOWER('qwerty')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -1150,22 +1325,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('qwerty', 'DF1-0007', 'DF1-0007', 'active', 'standard', ARRAY['qwerty', 'DF1-0007', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'qwerty', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DF1-0007',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('qwerty', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['qwerty', 'DF1-0007', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Norfolk Saw Services (MOOV-0016) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0016' OR dc_customer_id = '0016')
-    AND LOWER(business_name) != LOWER('Norfolk Saw Services') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Norfolk Saw Services'));
+    AND LOWER(business_name) != LOWER('Norfolk Saw Services');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Norfolk Saw Services') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Norfolk Saw Services'))
+  WHERE LOWER(business_name) = LOWER('Norfolk Saw Services')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -1181,22 +1361,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Norfolk Saw Services', 'MOOV-0016', 'MOOV-0016', 'active', 'standard', ARRAY['Norfolk Saw Services', 'MOOV-0016', '0016', '16']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Norfolk Saw Services', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0016',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Norfolk Saw Services', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Norfolk Saw Services', 'MOOV-0016', '0016', '16']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Rilco Electrical Supplies (MOOV-0017) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0017' OR dc_customer_id = '0017')
-    AND LOWER(business_name) != LOWER('Rilco Electrical Supplies') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Rilco Electrical Supplies'));
+    AND LOWER(business_name) != LOWER('Rilco Electrical Supplies');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Rilco Electrical Supplies') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Rilco Electrical Supplies'))
+  WHERE LOWER(business_name) = LOWER('Rilco Electrical Supplies')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -1212,22 +1397,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Rilco Electrical Supplies', 'MOOV-0017', 'MOOV-0017', 'active', 'standard', ARRAY['Rilco Electrical Supplies', 'MOOV-0017', '0017', '17']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Rilco Electrical Supplies', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0017',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Rilco Electrical Supplies', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Rilco Electrical Supplies', 'MOOV-0017', '0017', '17']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── asdfg (DF1-0008) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DF1-0008' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('asdfg') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('asdfg'));
+    AND LOWER(business_name) != LOWER('asdfg');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('asdfg') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('asdfg'))
+  WHERE LOWER(business_name) = LOWER('asdfg')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -1243,22 +1433,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('asdfg', 'DF1-0008', 'DF1-0008', 'active', 'standard', ARRAY['asdfg', 'DF1-0008', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'asdfg', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DF1-0008',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('asdfg', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['asdfg', 'DF1-0008', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Passion Accessories Ltd (MOOV-0018) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0018' OR dc_customer_id = '0018')
-    AND LOWER(business_name) != LOWER('Passion Accessories Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Passion Accessories Ltd'));
+    AND LOWER(business_name) != LOWER('Passion Accessories Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Passion Accessories Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Passion Accessories Ltd'))
+  WHERE LOWER(business_name) = LOWER('Passion Accessories Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -1274,22 +1469,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Passion Accessories Ltd', 'MOOV-0018', 'MOOV-0018', 'active', 'standard', ARRAY['Passion Accessories Ltd', 'MOOV-0018', '0018', '18']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Passion Accessories Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0018',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Passion Accessories Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Passion Accessories Ltd', 'MOOV-0018', '0018', '18']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Spare and Square Ltd (MOOV-0019) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0019' OR dc_customer_id = '0019')
-    AND LOWER(business_name) != LOWER('Spare and Square Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Spare and Square Ltd'));
+    AND LOWER(business_name) != LOWER('Spare and Square Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Spare and Square Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Spare and Square Ltd'))
+  WHERE LOWER(business_name) = LOWER('Spare and Square Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -1305,22 +1505,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Spare and Square Ltd', 'MOOV-0019', 'MOOV-0019', 'active', 'standard', ARRAY['Spare and Square Ltd', 'MOOV-0019', '0019', '19']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Spare and Square Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0019',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Spare and Square Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Spare and Square Ltd', 'MOOV-0019', '0019', '19']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── nnmm (DF1-0009) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DF1-0009' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('nnmm') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('nnmm'));
+    AND LOWER(business_name) != LOWER('nnmm');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('nnmm') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('nnmm'))
+  WHERE LOWER(business_name) = LOWER('nnmm')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -1336,22 +1541,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('nnmm', 'DF1-0009', 'DF1-0009', 'active', 'standard', ARRAY['nnmm', 'DF1-0009', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'nnmm', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DF1-0009',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('nnmm', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['nnmm', 'DF1-0009', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── check (1233-0002) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = '1233-0002' OR dc_customer_id = '1233')
-    AND LOWER(business_name) != LOWER('check') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('check'));
+    AND LOWER(business_name) != LOWER('check');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('check') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('check'))
+  WHERE LOWER(business_name) = LOWER('check')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -1367,22 +1577,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('check', '1233-0002', '1233-0002', 'active', 'standard', ARRAY['check', '1233-0002', '1233']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'check', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), '1233-0002',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('check', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['check', '1233-0002', '1233']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── SND ELECTRICAL WHOLESALERS (UK) LTD (MOOV-0020) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0020' OR dc_customer_id = '0020')
-    AND LOWER(business_name) != LOWER('SND ELECTRICAL WHOLESALERS (UK) LTD') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('SND ELECTRICAL WHOLESALERS (UK) LTD'));
+    AND LOWER(business_name) != LOWER('SND ELECTRICAL WHOLESALERS (UK) LTD');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('SND ELECTRICAL WHOLESALERS (UK) LTD') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('SND ELECTRICAL WHOLESALERS (UK) LTD'))
+  WHERE LOWER(business_name) = LOWER('SND ELECTRICAL WHOLESALERS (UK) LTD')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -1398,22 +1613,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('SND ELECTRICAL WHOLESALERS (UK) LTD', 'MOOV-0020', 'MOOV-0020', 'active', 'standard', ARRAY['SND ELECTRICAL WHOLESALERS (UK) LTD', 'MOOV-0020', '0020', '20']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'SND ELECTRICAL WHOLESALERS (UK) LTD', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0020',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('SND ELECTRICAL WHOLESALERS (UK) LTD', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['SND ELECTRICAL WHOLESALERS (UK) LTD', 'MOOV-0020', '0020', '20']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Efutures (DP1-0014) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DP1-0014' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('Efutures') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Efutures'));
+    AND LOWER(business_name) != LOWER('Efutures');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Efutures') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Efutures'))
+  WHERE LOWER(business_name) = LOWER('Efutures')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -1429,22 +1649,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Efutures', 'DP1-0014', 'DP1-0014', 'active', 'standard', ARRAY['Efutures', 'DP1-0014', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Efutures', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0014',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Efutures', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Efutures', 'DP1-0014', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Lifemax Limited (MOOV-0021) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0021' OR dc_customer_id = '0021')
-    AND LOWER(business_name) != LOWER('Lifemax Limited') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Lifemax Limited'));
+    AND LOWER(business_name) != LOWER('Lifemax Limited');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Lifemax Limited') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Lifemax Limited'))
+  WHERE LOWER(business_name) = LOWER('Lifemax Limited')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -1460,22 +1685,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Lifemax Limited', 'MOOV-0021', 'MOOV-0021', 'active', 'standard', ARRAY['Lifemax Limited', 'MOOV-0021', '0021', '21']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Lifemax Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0021',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Lifemax Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Lifemax Limited', 'MOOV-0021', '0021', '21']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── IFS (DD2-0005) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DD2-0005' OR dc_customer_id = '2')
-    AND LOWER(business_name) != LOWER('IFS') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('IFS'));
+    AND LOWER(business_name) != LOWER('IFS');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('IFS') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('IFS'))
+  WHERE LOWER(business_name) = LOWER('IFS')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -1491,22 +1721,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('IFS', 'DD2-0005', 'DD2-0005', 'active', 'standard', ARRAY['IFS', 'DD2-0005', '2']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'IFS', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DD2-0005',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('IFS', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['IFS', 'DD2-0005', '2']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── M and J Brothers Ltd (MOOV-0022) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0022' OR dc_customer_id = '0022')
-    AND LOWER(business_name) != LOWER('M and J Brothers Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('M and J Brothers Ltd'));
+    AND LOWER(business_name) != LOWER('M and J Brothers Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('M and J Brothers Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('M and J Brothers Ltd'))
+  WHERE LOWER(business_name) = LOWER('M and J Brothers Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -1522,22 +1757,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('M and J Brothers Ltd', 'MOOV-0022', 'MOOV-0022', 'active', 'standard', ARRAY['M and J Brothers Ltd', 'MOOV-0022', '0022', '22']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'M and J Brothers Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0022',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('M and J Brothers Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['M and J Brothers Ltd', 'MOOV-0022', '0022', '22']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Beacons and Lightbars (MOOV-0023) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0023' OR dc_customer_id = '0023')
-    AND LOWER(business_name) != LOWER('Beacons and Lightbars') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Beacons and Lightbars'));
+    AND LOWER(business_name) != LOWER('Beacons and Lightbars');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Beacons and Lightbars') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Beacons and Lightbars'))
+  WHERE LOWER(business_name) = LOWER('Beacons and Lightbars')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -1553,22 +1793,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Beacons and Lightbars', 'MOOV-0023', 'MOOV-0023', 'active', 'standard', ARRAY['Beacons and Lightbars', 'MOOV-0023', '0023', '23']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Beacons and Lightbars', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0023',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Beacons and Lightbars', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Beacons and Lightbars', 'MOOV-0023', '0023', '23']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── DDUP International Ltd (MOOV-0024) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0024' OR dc_customer_id = '0024')
-    AND LOWER(business_name) != LOWER('DDUP International Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('DDUP International Ltd'));
+    AND LOWER(business_name) != LOWER('DDUP International Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('DDUP International Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('DDUP International Ltd'))
+  WHERE LOWER(business_name) = LOWER('DDUP International Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -1584,22 +1829,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('DDUP International Ltd', 'MOOV-0024', 'MOOV-0024', 'active', 'standard', ARRAY['DDUP International Ltd', 'MOOV-0024', '0024', '24']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'DDUP International Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0024',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('DDUP International Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['DDUP International Ltd', 'MOOV-0024', '0024', '24']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Granola Kitchen Ltd (MOOV-0025) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0025' OR dc_customer_id = '0025')
-    AND LOWER(business_name) != LOWER('Granola Kitchen Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Granola Kitchen Ltd'));
+    AND LOWER(business_name) != LOWER('Granola Kitchen Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Granola Kitchen Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Granola Kitchen Ltd'))
+  WHERE LOWER(business_name) = LOWER('Granola Kitchen Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -1615,22 +1865,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Granola Kitchen Ltd', 'MOOV-0025', 'MOOV-0025', 'active', 'standard', ARRAY['Granola Kitchen Ltd', 'MOOV-0025', '0025', '25']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Granola Kitchen Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0025',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Granola Kitchen Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Granola Kitchen Ltd', 'MOOV-0025', '0025', '25']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Pet & Grooming Supplies Ltd (MOOV-0026) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0026' OR dc_customer_id = '0026')
-    AND LOWER(business_name) != LOWER('Pet & Grooming Supplies Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Pet & Grooming Supplies Ltd'));
+    AND LOWER(business_name) != LOWER('Pet & Grooming Supplies Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Pet & Grooming Supplies Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Pet & Grooming Supplies Ltd'))
+  WHERE LOWER(business_name) = LOWER('Pet & Grooming Supplies Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -1646,22 +1901,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Pet & Grooming Supplies Ltd', 'MOOV-0026', 'MOOV-0026', 'active', 'standard', ARRAY['Pet & Grooming Supplies Ltd', 'MOOV-0026', '0026', '26']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Pet & Grooming Supplies Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0026',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Pet & Grooming Supplies Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Pet & Grooming Supplies Ltd', 'MOOV-0026', '0026', '26']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── SRR3 (DF1-0010) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DF1-0010' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('SRR3') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('SRR3'));
+    AND LOWER(business_name) != LOWER('SRR3');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('SRR3') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('SRR3'))
+  WHERE LOWER(business_name) = LOWER('SRR3')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -1677,22 +1937,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('SRR3', 'DF1-0010', 'DF1-0010', 'active', 'standard', ARRAY['SRR3', 'DF1-0010', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'SRR3', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DF1-0010',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('SRR3', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['SRR3', 'DF1-0010', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Uni4mers (Uni4mers) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'Uni4mers' OR dc_customer_id = '4')
-    AND LOWER(business_name) != LOWER('Uni4mers') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Uni4mers'));
+    AND LOWER(business_name) != LOWER('Uni4mers');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Uni4mers') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Uni4mers'))
+  WHERE LOWER(business_name) = LOWER('Uni4mers')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -1708,22 +1973,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Uni4mers', 'Uni4mers', 'Uni4mers', 'active', 'standard', ARRAY['Uni4mers', 'Uni4mers', '4']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Uni4mers', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Uni4mers',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Uni4mers', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Uni4mers', 'Uni4mers', '4']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Efutures4 (DP1-0016) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DP1-0016' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('Efutures4') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Efutures4'));
+    AND LOWER(business_name) != LOWER('Efutures4');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Efutures4') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Efutures4'))
+  WHERE LOWER(business_name) = LOWER('Efutures4')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -1739,22 +2009,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Efutures4', 'DP1-0016', 'DP1-0016', 'active', 'standard', ARRAY['Efutures4', 'DP1-0016', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Efutures4', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0016',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Efutures4', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Efutures4', 'DP1-0016', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── EFtures5 (DP1-0017) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DP1-0017' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('EFtures5') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('EFtures5'));
+    AND LOWER(business_name) != LOWER('EFtures5');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('EFtures5') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('EFtures5'))
+  WHERE LOWER(business_name) = LOWER('EFtures5')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -1770,22 +2045,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('EFtures5', 'DP1-0017', 'DP1-0017', 'active', 'standard', ARRAY['EFtures5', 'DP1-0017', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'EFtures5', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0017',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('EFtures5', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['EFtures5', 'DP1-0017', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Sharkeye Wheel Aligners UK Ltd (MOOV-0027) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0027' OR dc_customer_id = '0027')
-    AND LOWER(business_name) != LOWER('Sharkeye Wheel Aligners UK Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Sharkeye Wheel Aligners UK Ltd'));
+    AND LOWER(business_name) != LOWER('Sharkeye Wheel Aligners UK Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Sharkeye Wheel Aligners UK Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Sharkeye Wheel Aligners UK Ltd'))
+  WHERE LOWER(business_name) = LOWER('Sharkeye Wheel Aligners UK Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -1801,22 +2081,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Sharkeye Wheel Aligners UK Ltd', 'MOOV-0027', 'MOOV-0027', 'active', 'standard', ARRAY['Sharkeye Wheel Aligners UK Ltd', 'MOOV-0027', '0027', '27']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Sharkeye Wheel Aligners UK Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0027',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Sharkeye Wheel Aligners UK Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Sharkeye Wheel Aligners UK Ltd', 'MOOV-0027', '0027', '27']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Efutures5 (DDJ1-0001) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DDJ1-0001' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('Efutures5') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Efutures5'));
+    AND LOWER(business_name) != LOWER('Efutures5');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Efutures5') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Efutures5'))
+  WHERE LOWER(business_name) = LOWER('Efutures5')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -1832,22 +2117,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Efutures5', 'DDJ1-0001', 'DDJ1-0001', 'active', 'standard', ARRAY['Efutures5', 'DDJ1-0001', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Efutures5', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DDJ1-0001',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Efutures5', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Efutures5', 'DDJ1-0001', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── The Hanger Store (MOOV-0028) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0028' OR dc_customer_id = '0028')
-    AND LOWER(business_name) != LOWER('The Hanger Store') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('The Hanger Store'));
+    AND LOWER(business_name) != LOWER('The Hanger Store');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('The Hanger Store') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('The Hanger Store'))
+  WHERE LOWER(business_name) = LOWER('The Hanger Store')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -1863,22 +2153,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('The Hanger Store', 'MOOV-0028', 'MOOV-0028', 'active', 'standard', ARRAY['The Hanger Store', 'MOOV-0028', '0028', '28']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'The Hanger Store', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0028',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('The Hanger Store', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['The Hanger Store', 'MOOV-0028', '0028', '28']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── How High Brands (MOOV-0029) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0029' OR dc_customer_id = '0029')
-    AND LOWER(business_name) != LOWER('How High Brands') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('How High Brands'));
+    AND LOWER(business_name) != LOWER('How High Brands');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('How High Brands') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('How High Brands'))
+  WHERE LOWER(business_name) = LOWER('How High Brands')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -1894,22 +2189,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('How High Brands', 'MOOV-0029', 'MOOV-0029', 'active', 'standard', ARRAY['How High Brands', 'MOOV-0029', '0029', '29']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'How High Brands', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0029',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('How High Brands', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['How High Brands', 'MOOV-0029', '0029', '29']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── SQA (DP1-0019) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DP1-0019' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('SQA') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('SQA'));
+    AND LOWER(business_name) != LOWER('SQA');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('SQA') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('SQA'))
+  WHERE LOWER(business_name) = LOWER('SQA')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -1925,22 +2225,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('SQA', 'DP1-0019', 'DP1-0019', 'active', 'standard', ARRAY['SQA', 'DP1-0019', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'SQA', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0019',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('SQA', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['SQA', 'DP1-0019', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── SINGER (DP1-0021) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DP1-0021' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('SINGER') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('SINGER'));
+    AND LOWER(business_name) != LOWER('SINGER');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('SINGER') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('SINGER'))
+  WHERE LOWER(business_name) = LOWER('SINGER')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -1956,22 +2261,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('SINGER', 'DP1-0021', 'DP1-0021', 'active', 'standard', ARRAY['SINGER', 'DP1-0021', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'SINGER', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0021',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('SINGER', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['SINGER', 'DP1-0021', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Greenplant UK Ltd (MOOV-0030) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0030' OR dc_customer_id = '0030')
-    AND LOWER(business_name) != LOWER('Greenplant UK Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Greenplant UK Ltd'));
+    AND LOWER(business_name) != LOWER('Greenplant UK Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Greenplant UK Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Greenplant UK Ltd'))
+  WHERE LOWER(business_name) = LOWER('Greenplant UK Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -1987,22 +2297,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Greenplant UK Ltd', 'MOOV-0030', 'MOOV-0030', 'active', 'standard', ARRAY['Greenplant UK Ltd', 'MOOV-0030', '0030', '30']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Greenplant UK Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0030',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Greenplant UK Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Greenplant UK Ltd', 'MOOV-0030', '0030', '30']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Assetee (DP1-0024) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DP1-0024' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('Assetee') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Assetee'));
+    AND LOWER(business_name) != LOWER('Assetee');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Assetee') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Assetee'))
+  WHERE LOWER(business_name) = LOWER('Assetee')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -2018,22 +2333,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Assetee', 'DP1-0024', 'DP1-0024', 'active', 'standard', ARRAY['Assetee', 'DP1-0024', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Assetee', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0024',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Assetee', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Assetee', 'DP1-0024', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Mobberley Cakes Ltd (MOOV-0031) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0031' OR dc_customer_id = '0031')
-    AND LOWER(business_name) != LOWER('Mobberley Cakes Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Mobberley Cakes Ltd'));
+    AND LOWER(business_name) != LOWER('Mobberley Cakes Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Mobberley Cakes Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Mobberley Cakes Ltd'))
+  WHERE LOWER(business_name) = LOWER('Mobberley Cakes Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -2049,22 +2369,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Mobberley Cakes Ltd', 'MOOV-0031', 'MOOV-0031', 'active', 'standard', ARRAY['Mobberley Cakes Ltd', 'MOOV-0031', '0031', '31']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Mobberley Cakes Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0031',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Mobberley Cakes Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Mobberley Cakes Ltd', 'MOOV-0031', '0031', '31']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Ecom Group UK Limited (MOOV-0032) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0032' OR dc_customer_id = '0032')
-    AND LOWER(business_name) != LOWER('Ecom Group UK Limited') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Ecom Group UK Limited'));
+    AND LOWER(business_name) != LOWER('Ecom Group UK Limited');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Ecom Group UK Limited') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Ecom Group UK Limited'))
+  WHERE LOWER(business_name) = LOWER('Ecom Group UK Limited')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -2080,22 +2405,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Ecom Group UK Limited', 'MOOV-0032', 'MOOV-0032', 'active', 'standard', ARRAY['Ecom Group UK Limited', 'MOOV-0032', '0032', '32']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Ecom Group UK Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0032',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Ecom Group UK Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Ecom Group UK Limited', 'MOOV-0032', '0032', '32']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Heaven Scent Incense Ltd (MOOV-0033) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0033' OR dc_customer_id = '0033')
-    AND LOWER(business_name) != LOWER('Heaven Scent Incense Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Heaven Scent Incense Ltd'));
+    AND LOWER(business_name) != LOWER('Heaven Scent Incense Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Heaven Scent Incense Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Heaven Scent Incense Ltd'))
+  WHERE LOWER(business_name) = LOWER('Heaven Scent Incense Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -2111,22 +2441,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Heaven Scent Incense Ltd', 'MOOV-0033', 'MOOV-0033', 'active', 'standard', ARRAY['Heaven Scent Incense Ltd', 'MOOV-0033', '0033', '33']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Heaven Scent Incense Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0033',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Heaven Scent Incense Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Heaven Scent Incense Ltd', 'MOOV-0033', '0033', '33']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── EFUTURES6 (DP1-0025) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DP1-0025' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('EFUTURES6') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('EFUTURES6'));
+    AND LOWER(business_name) != LOWER('EFUTURES6');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('EFUTURES6') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('EFUTURES6'))
+  WHERE LOWER(business_name) = LOWER('EFUTURES6')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -2142,22 +2477,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('EFUTURES6', 'DP1-0025', 'DP1-0025', 'active', 'standard', ARRAY['EFUTURES6', 'DP1-0025', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'EFUTURES6', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0025',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('EFUTURES6', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['EFUTURES6', 'DP1-0025', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── AJP1 (AJP1) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'AJP1' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('AJP1') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('AJP1'));
+    AND LOWER(business_name) != LOWER('AJP1');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('AJP1') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('AJP1'))
+  WHERE LOWER(business_name) = LOWER('AJP1')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -2173,22 +2513,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('AJP1', 'AJP1', 'AJP1', 'active', 'standard', ARRAY['AJP1', 'AJP1', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'AJP1', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'AJP1',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('AJP1', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['AJP1', 'AJP1', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── AJP2 (AJP2) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'AJP2' OR dc_customer_id = '2')
-    AND LOWER(business_name) != LOWER('AJP2') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('AJP2'));
+    AND LOWER(business_name) != LOWER('AJP2');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('AJP2') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('AJP2'))
+  WHERE LOWER(business_name) = LOWER('AJP2')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -2204,22 +2549,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('AJP2', 'AJP2', 'AJP2', 'active', 'standard', ARRAY['AJP2', 'AJP2', '2']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'AJP2', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'AJP2',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('AJP2', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['AJP2', 'AJP2', '2']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── AJP3 (AJP3) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'AJP3' OR dc_customer_id = '3')
-    AND LOWER(business_name) != LOWER('AJP3') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('AJP3'));
+    AND LOWER(business_name) != LOWER('AJP3');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('AJP3') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('AJP3'))
+  WHERE LOWER(business_name) = LOWER('AJP3')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -2235,22 +2585,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('AJP3', 'AJP3', 'AJP3', 'active', 'standard', ARRAY['AJP3', 'AJP3', '3']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'AJP3', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'AJP3',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('AJP3', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['AJP3', 'AJP3', '3']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── AJP4 (AJP4) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'AJP4' OR dc_customer_id = '4')
-    AND LOWER(business_name) != LOWER('AJP4') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('AJP4'));
+    AND LOWER(business_name) != LOWER('AJP4');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('AJP4') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('AJP4'))
+  WHERE LOWER(business_name) = LOWER('AJP4')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -2266,22 +2621,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('AJP4', 'AJP4', 'AJP4', 'active', 'standard', ARRAY['AJP4', 'AJP4', '4']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'AJP4', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'AJP4',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('AJP4', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['AJP4', 'AJP4', '4']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── AJP5 (AJP5) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'AJP5' OR dc_customer_id = '5')
-    AND LOWER(business_name) != LOWER('AJP5') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('AJP5'));
+    AND LOWER(business_name) != LOWER('AJP5');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('AJP5') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('AJP5'))
+  WHERE LOWER(business_name) = LOWER('AJP5')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -2297,22 +2657,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('AJP5', 'AJP5', 'AJP5', 'active', 'standard', ARRAY['AJP5', 'AJP5', '5']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'AJP5', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'AJP5',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('AJP5', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['AJP5', 'AJP5', '5']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Info Technology Supply (MOOV-0034) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0034' OR dc_customer_id = '0034')
-    AND LOWER(business_name) != LOWER('Info Technology Supply') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Info Technology Supply'));
+    AND LOWER(business_name) != LOWER('Info Technology Supply');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Info Technology Supply') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Info Technology Supply'))
+  WHERE LOWER(business_name) = LOWER('Info Technology Supply')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -2328,22 +2693,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Info Technology Supply', 'MOOV-0034', 'MOOV-0034', 'active', 'standard', ARRAY['Info Technology Supply', 'MOOV-0034', '0034', '34']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Info Technology Supply', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0034',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Info Technology Supply', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Info Technology Supply', 'MOOV-0034', '0034', '34']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── 99X (DP1-0027) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DP1-0027' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('99X') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('99X'));
+    AND LOWER(business_name) != LOWER('99X');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('99X') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('99X'))
+  WHERE LOWER(business_name) = LOWER('99X')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -2359,22 +2729,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('99X', 'DP1-0027', 'DP1-0027', 'active', 'standard', ARRAY['99X', 'DP1-0027', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      '99X', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0027',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('99X', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['99X', 'DP1-0027', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Aegean Sea Ltd (MOOV-0035) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0035' OR dc_customer_id = '0035')
-    AND LOWER(business_name) != LOWER('Aegean Sea Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Aegean Sea Ltd'));
+    AND LOWER(business_name) != LOWER('Aegean Sea Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Aegean Sea Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Aegean Sea Ltd'))
+  WHERE LOWER(business_name) = LOWER('Aegean Sea Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -2390,22 +2765,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Aegean Sea Ltd', 'MOOV-0035', 'MOOV-0035', 'active', 'standard', ARRAY['Aegean Sea Ltd', 'MOOV-0035', '0035', '35']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Aegean Sea Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0035',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Aegean Sea Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Aegean Sea Ltd', 'MOOV-0035', '0035', '35']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── LB Finance (DP1-0028) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DP1-0028' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('LB Finance') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('LB Finance'));
+    AND LOWER(business_name) != LOWER('LB Finance');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('LB Finance') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('LB Finance'))
+  WHERE LOWER(business_name) = LOWER('LB Finance')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -2421,22 +2801,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('LB Finance', 'DP1-0028', 'DP1-0028', 'active', 'standard', ARRAY['LB Finance', 'DP1-0028', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'LB Finance', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0028',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('LB Finance', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['LB Finance', 'DP1-0028', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── DM AGENCY AND DISTRIBUTION (MOOV-0036) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0036' OR dc_customer_id = '0036')
-    AND LOWER(business_name) != LOWER('DM AGENCY AND DISTRIBUTION') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('DM AGENCY AND DISTRIBUTION'));
+    AND LOWER(business_name) != LOWER('DM AGENCY AND DISTRIBUTION');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('DM AGENCY AND DISTRIBUTION') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('DM AGENCY AND DISTRIBUTION'))
+  WHERE LOWER(business_name) = LOWER('DM AGENCY AND DISTRIBUTION')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -2452,22 +2837,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('DM AGENCY AND DISTRIBUTION', 'MOOV-0036', 'MOOV-0036', 'active', 'standard', ARRAY['DM AGENCY AND DISTRIBUTION', 'MOOV-0036', '0036', '36']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'DM AGENCY AND DISTRIBUTION', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0036',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('DM AGENCY AND DISTRIBUTION', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['DM AGENCY AND DISTRIBUTION', 'MOOV-0036', '0036', '36']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── DDPL (DDPL) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DDPL' )
-    AND LOWER(business_name) != LOWER('DDPL') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('DDPL'));
+    AND LOWER(business_name) != LOWER('DDPL');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('DDPL') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('DDPL'))
+  WHERE LOWER(business_name) = LOWER('DDPL')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -2483,22 +2873,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('DDPL', 'DDPL', 'DDPL', 'active', 'standard', ARRAY['DDPL', 'DDPL']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'DDPL', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DDPL',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('DDPL', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['DDPL', 'DDPL']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Aglory MERCHANT ENTERPRISES LIMITED (Aglory MERCHANT ENTERPRISES LIMITED) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'Aglory MERCHANT ENTERPRISES LIMITED' )
-    AND LOWER(business_name) != LOWER('Aglory MERCHANT ENTERPRISES LIMITED') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Aglory MERCHANT ENTERPRISES LIMITED'));
+    AND LOWER(business_name) != LOWER('Aglory MERCHANT ENTERPRISES LIMITED');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Aglory MERCHANT ENTERPRISES LIMITED') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Aglory MERCHANT ENTERPRISES LIMITED'))
+  WHERE LOWER(business_name) = LOWER('Aglory MERCHANT ENTERPRISES LIMITED')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -2514,22 +2909,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Aglory MERCHANT ENTERPRISES LIMITED', 'Aglory MERCHANT ENTERPRISES LIMITED', 'Aglory MERCHANT ENTERPRISES LIMITED', 'active', 'standard', ARRAY['Aglory MERCHANT ENTERPRISES LIMITED', 'Aglory MERCHANT ENTERPRISES LIMITED']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Aglory MERCHANT ENTERPRISES LIMITED', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Aglory MERCHANT ENTERPRISES LIMITED',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Aglory MERCHANT ENTERPRISES LIMITED', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Aglory MERCHANT ENTERPRISES LIMITED', 'Aglory MERCHANT ENTERPRISES LIMITED']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── HCL (DP1-0029) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DP1-0029' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('HCL') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('HCL'));
+    AND LOWER(business_name) != LOWER('HCL');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('HCL') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('HCL'))
+  WHERE LOWER(business_name) = LOWER('HCL')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -2545,22 +2945,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('HCL', 'DP1-0029', 'DP1-0029', 'active', 'standard', ARRAY['HCL', 'DP1-0029', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'HCL', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0029',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('HCL', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['HCL', 'DP1-0029', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── NEXT (DP1-0030) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DP1-0030' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('NEXT') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('NEXT'));
+    AND LOWER(business_name) != LOWER('NEXT');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('NEXT') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('NEXT'))
+  WHERE LOWER(business_name) = LOWER('NEXT')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -2576,22 +2981,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('NEXT', 'DP1-0030', 'DP1-0030', 'active', 'standard', ARRAY['NEXT', 'DP1-0030', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'NEXT', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0030',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('NEXT', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['NEXT', 'DP1-0030', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── E Square (E Square) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'E Square' )
-    AND LOWER(business_name) != LOWER('E Square') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('E Square'));
+    AND LOWER(business_name) != LOWER('E Square');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('E Square') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('E Square'))
+  WHERE LOWER(business_name) = LOWER('E Square')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -2607,22 +3017,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('E Square', 'E Square', 'E Square', 'active', 'standard', ARRAY['E Square', 'E Square']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'E Square', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'E Square',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('E Square', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['E Square', 'E Square']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Natural Spa Supplies Ltd (MOOV-0037) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0037' OR dc_customer_id = '0037')
-    AND LOWER(business_name) != LOWER('Natural Spa Supplies Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Natural Spa Supplies Ltd'));
+    AND LOWER(business_name) != LOWER('Natural Spa Supplies Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Natural Spa Supplies Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Natural Spa Supplies Ltd'))
+  WHERE LOWER(business_name) = LOWER('Natural Spa Supplies Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -2638,22 +3053,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Natural Spa Supplies Ltd', 'MOOV-0037', 'MOOV-0037', 'active', 'standard', ARRAY['Natural Spa Supplies Ltd', 'MOOV-0037', '0037', '37']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Natural Spa Supplies Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0037',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Natural Spa Supplies Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Natural Spa Supplies Ltd', 'MOOV-0037', '0037', '37']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── JOY ASIAN FOOD & GROCERY LIMITED (MOOV-0038) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0038' OR dc_customer_id = '0038')
-    AND LOWER(business_name) != LOWER('JOY ASIAN FOOD & GROCERY LIMITED') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('JOY ASIAN FOOD & GROCERY LIMITED'));
+    AND LOWER(business_name) != LOWER('JOY ASIAN FOOD & GROCERY LIMITED');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('JOY ASIAN FOOD & GROCERY LIMITED') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('JOY ASIAN FOOD & GROCERY LIMITED'))
+  WHERE LOWER(business_name) = LOWER('JOY ASIAN FOOD & GROCERY LIMITED')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -2669,22 +3089,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('JOY ASIAN FOOD & GROCERY LIMITED', 'MOOV-0038', 'MOOV-0038', 'active', 'standard', ARRAY['JOY ASIAN FOOD & GROCERY LIMITED', 'MOOV-0038', '0038', '38']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'JOY ASIAN FOOD & GROCERY LIMITED', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0038',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('JOY ASIAN FOOD & GROCERY LIMITED', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['JOY ASIAN FOOD & GROCERY LIMITED', 'MOOV-0038', '0038', '38']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Bakers Street Limited (MOOV-0039) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0039' OR dc_customer_id = '0039')
-    AND LOWER(business_name) != LOWER('Bakers Street Limited') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Bakers Street Limited'));
+    AND LOWER(business_name) != LOWER('Bakers Street Limited');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Bakers Street Limited') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Bakers Street Limited'))
+  WHERE LOWER(business_name) = LOWER('Bakers Street Limited')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -2700,22 +3125,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Bakers Street Limited', 'MOOV-0039', 'MOOV-0039', 'active', 'standard', ARRAY['Bakers Street Limited', 'MOOV-0039', '0039', '39']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Bakers Street Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0039',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Bakers Street Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Bakers Street Limited', 'MOOV-0039', '0039', '39']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── 8ack (8ack) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = '8ack' OR dc_customer_id = '8')
-    AND LOWER(business_name) != LOWER('8ack') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('8ack'));
+    AND LOWER(business_name) != LOWER('8ack');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('8ack') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('8ack'))
+  WHERE LOWER(business_name) = LOWER('8ack')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -2731,22 +3161,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('8ack', '8ack', '8ack', 'active', 'standard', ARRAY['8ack', '8ack', '8']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      '8ack', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), '8ack',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('8ack', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['8ack', '8ack', '8']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Jane Scott Ceramics (MOOV-0040) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0040' OR dc_customer_id = '0040')
-    AND LOWER(business_name) != LOWER('Jane Scott Ceramics') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Jane Scott Ceramics'));
+    AND LOWER(business_name) != LOWER('Jane Scott Ceramics');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Jane Scott Ceramics') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Jane Scott Ceramics'))
+  WHERE LOWER(business_name) = LOWER('Jane Scott Ceramics')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -2762,22 +3197,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Jane Scott Ceramics', 'MOOV-0040', 'MOOV-0040', 'active', 'standard', ARRAY['Jane Scott Ceramics', 'MOOV-0040', '0040', '40']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Jane Scott Ceramics', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0040',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Jane Scott Ceramics', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Jane Scott Ceramics', 'MOOV-0040', '0040', '40']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── SCR DISTRIBUTION (MOOV-0041) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0041' OR dc_customer_id = '0041')
-    AND LOWER(business_name) != LOWER('SCR DISTRIBUTION') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('SCR DISTRIBUTION'));
+    AND LOWER(business_name) != LOWER('SCR DISTRIBUTION');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('SCR DISTRIBUTION') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('SCR DISTRIBUTION'))
+  WHERE LOWER(business_name) = LOWER('SCR DISTRIBUTION')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -2793,22 +3233,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('SCR DISTRIBUTION', 'MOOV-0041', 'MOOV-0041', 'active', 'standard', ARRAY['SCR DISTRIBUTION', 'MOOV-0041', '0041', '41']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'SCR DISTRIBUTION', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0041',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('SCR DISTRIBUTION', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['SCR DISTRIBUTION', 'MOOV-0041', '0041', '41']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Megway (Megway Parcels) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'Megway Parcels' )
-    AND LOWER(business_name) != LOWER('Megway') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Megway'));
+    AND LOWER(business_name) != LOWER('Megway');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Megway') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Megway'))
+  WHERE LOWER(business_name) = LOWER('Megway')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -2824,22 +3269,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Megway', 'Megway Parcels', 'Megway Parcels', 'active', 'standard', ARRAY['Megway', 'Megway Parcels']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Megway', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Megway Parcels',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Megway', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Megway', 'Megway Parcels']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Lather Up (MOOV-0042) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0042' OR dc_customer_id = '0042')
-    AND LOWER(business_name) != LOWER('Lather Up') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Lather Up'));
+    AND LOWER(business_name) != LOWER('Lather Up');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Lather Up') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Lather Up'))
+  WHERE LOWER(business_name) = LOWER('Lather Up')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -2855,22 +3305,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Lather Up', 'MOOV-0042', 'MOOV-0042', 'active', 'standard', ARRAY['Lather Up', 'MOOV-0042', '0042', '42']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Lather Up', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0042',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Lather Up', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Lather Up', 'MOOV-0042', '0042', '42']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Impoxer LTD T/A Makrom (MOOV-0043) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0043' OR dc_customer_id = '0043')
-    AND LOWER(business_name) != LOWER('Impoxer LTD T/A Makrom') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Impoxer LTD T/A Makrom'));
+    AND LOWER(business_name) != LOWER('Impoxer LTD T/A Makrom');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Impoxer LTD T/A Makrom') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Impoxer LTD T/A Makrom'))
+  WHERE LOWER(business_name) = LOWER('Impoxer LTD T/A Makrom')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -2886,22 +3341,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Impoxer LTD T/A Makrom', 'MOOV-0043', 'MOOV-0043', 'active', 'standard', ARRAY['Impoxer LTD T/A Makrom', 'MOOV-0043', '0043', '43']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Impoxer LTD T/A Makrom', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0043',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Impoxer LTD T/A Makrom', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Impoxer LTD T/A Makrom', 'MOOV-0043', '0043', '43']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Vertura Ltd (MOOV-0045) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0045' OR dc_customer_id = '0045')
-    AND LOWER(business_name) != LOWER('Vertura Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Vertura Ltd'));
+    AND LOWER(business_name) != LOWER('Vertura Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Vertura Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Vertura Ltd'))
+  WHERE LOWER(business_name) = LOWER('Vertura Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -2917,22 +3377,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Vertura Ltd', 'MOOV-0045', 'MOOV-0045', 'active', 'standard', ARRAY['Vertura Ltd', 'MOOV-0045', '0045', '45']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Vertura Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0045',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Vertura Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Vertura Ltd', 'MOOV-0045', '0045', '45']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Roar Gill Ltd (MOOV-0046) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0046' OR dc_customer_id = '0046')
-    AND LOWER(business_name) != LOWER('Roar Gill Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Roar Gill Ltd'));
+    AND LOWER(business_name) != LOWER('Roar Gill Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Roar Gill Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Roar Gill Ltd'))
+  WHERE LOWER(business_name) = LOWER('Roar Gill Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -2948,22 +3413,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Roar Gill Ltd', 'MOOV-0046', 'MOOV-0046', 'active', 'standard', ARRAY['Roar Gill Ltd', 'MOOV-0046', '0046', '46']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Roar Gill Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0046',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Roar Gill Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Roar Gill Ltd', 'MOOV-0046', '0046', '46']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Oriental Mart (Oriental Mart) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'Oriental Mart' )
-    AND LOWER(business_name) != LOWER('Oriental Mart') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Oriental Mart'));
+    AND LOWER(business_name) != LOWER('Oriental Mart');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Oriental Mart') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Oriental Mart'))
+  WHERE LOWER(business_name) = LOWER('Oriental Mart')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -2979,22 +3449,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Oriental Mart', 'Oriental Mart', 'Oriental Mart', 'active', 'standard', ARRAY['Oriental Mart', 'Oriental Mart']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Oriental Mart', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Oriental Mart',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Oriental Mart', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Oriental Mart', 'Oriental Mart']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Reevo (MOOV-0047) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0047' OR dc_customer_id = '0047')
-    AND LOWER(business_name) != LOWER('Reevo') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Reevo'));
+    AND LOWER(business_name) != LOWER('Reevo');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Reevo') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Reevo'))
+  WHERE LOWER(business_name) = LOWER('Reevo')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -3010,22 +3485,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Reevo', 'MOOV-0047', 'MOOV-0047', 'active', 'standard', ARRAY['Reevo', 'MOOV-0047', '0047', '47']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Reevo', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0047',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Reevo', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Reevo', 'MOOV-0047', '0047', '47']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Lace and Favour Ltd (MOOV-0048) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0048' OR dc_customer_id = '0048')
-    AND LOWER(business_name) != LOWER('Lace and Favour Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Lace and Favour Ltd'));
+    AND LOWER(business_name) != LOWER('Lace and Favour Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Lace and Favour Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Lace and Favour Ltd'))
+  WHERE LOWER(business_name) = LOWER('Lace and Favour Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -3041,22 +3521,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Lace and Favour Ltd', 'MOOV-0048', 'MOOV-0048', 'active', 'standard', ARRAY['Lace and Favour Ltd', 'MOOV-0048', '0048', '48']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Lace and Favour Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0048',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Lace and Favour Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Lace and Favour Ltd', 'MOOV-0048', '0048', '48']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Andersen EV (Andersen EV) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'Andersen EV' )
-    AND LOWER(business_name) != LOWER('Andersen EV') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Andersen EV'));
+    AND LOWER(business_name) != LOWER('Andersen EV');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Andersen EV') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Andersen EV'))
+  WHERE LOWER(business_name) = LOWER('Andersen EV')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -3072,22 +3557,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Andersen EV', 'Andersen EV', 'Andersen EV', 'active', 'standard', ARRAY['Andersen EV', 'Andersen EV']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Andersen EV', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Andersen EV',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Andersen EV', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Andersen EV', 'Andersen EV']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Henry And Tosh Limited (MOOV-0050) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0050' OR dc_customer_id = '0050')
-    AND LOWER(business_name) != LOWER('Henry And Tosh Limited') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Henry And Tosh Limited'));
+    AND LOWER(business_name) != LOWER('Henry And Tosh Limited');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Henry And Tosh Limited') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Henry And Tosh Limited'))
+  WHERE LOWER(business_name) = LOWER('Henry And Tosh Limited')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -3103,22 +3593,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Henry And Tosh Limited', 'MOOV-0050', 'MOOV-0050', 'active', 'standard', ARRAY['Henry And Tosh Limited', 'MOOV-0050', '0050', '50']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Henry And Tosh Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0050',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Henry And Tosh Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Henry And Tosh Limited', 'MOOV-0050', '0050', '50']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── March Laboratories Ltd / Ace Canine Healthcare (MOOV-0051) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0051' OR dc_customer_id = '0051')
-    AND LOWER(business_name) != LOWER('March Laboratories Ltd / Ace Canine Healthcare') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('March Laboratories Ltd / Ace Canine Healthcare'));
+    AND LOWER(business_name) != LOWER('March Laboratories Ltd / Ace Canine Healthcare');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('March Laboratories Ltd / Ace Canine Healthcare') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('March Laboratories Ltd / Ace Canine Healthcare'))
+  WHERE LOWER(business_name) = LOWER('March Laboratories Ltd / Ace Canine Healthcare')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -3134,22 +3629,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('March Laboratories Ltd / Ace Canine Healthcare', 'MOOV-0051', 'MOOV-0051', 'active', 'standard', ARRAY['March Laboratories Ltd / Ace Canine Healthcare', 'MOOV-0051', '0051', '51']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'March Laboratories Ltd / Ace Canine Healthcare', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0051',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('March Laboratories Ltd / Ace Canine Healthcare', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['March Laboratories Ltd / Ace Canine Healthcare', 'MOOV-0051', '0051', '51']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── May2024 (DF1-0012) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DF1-0012' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('May2024') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('May2024'));
+    AND LOWER(business_name) != LOWER('May2024');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('May2024') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('May2024'))
+  WHERE LOWER(business_name) = LOWER('May2024')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -3165,22 +3665,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('May2024', 'DF1-0012', 'DF1-0012', 'active', 'standard', ARRAY['May2024', 'DF1-0012', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'May2024', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DF1-0012',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('May2024', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['May2024', 'DF1-0012', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── test 2024 (DF1-0013) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DF1-0013' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('test 2024') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('test 2024'));
+    AND LOWER(business_name) != LOWER('test 2024');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('test 2024') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('test 2024'))
+  WHERE LOWER(business_name) = LOWER('test 2024')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -3196,22 +3701,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('test 2024', 'DF1-0013', 'DF1-0013', 'active', 'standard', ARRAY['test 2024', 'DF1-0013', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'test 2024', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DF1-0013',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('test 2024', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['test 2024', 'DF1-0013', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── testii (DF1-0014) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DF1-0014' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('testii') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('testii'));
+    AND LOWER(business_name) != LOWER('testii');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('testii') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('testii'))
+  WHERE LOWER(business_name) = LOWER('testii')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -3227,22 +3737,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('testii', 'DF1-0014', 'DF1-0014', 'active', 'standard', ARRAY['testii', 'DF1-0014', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'testii', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DF1-0014',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('testii', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['testii', 'DF1-0014', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Abans Company (DQA1-0001) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DQA1-0001' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('Abans Company') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Abans Company'));
+    AND LOWER(business_name) != LOWER('Abans Company');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Abans Company') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Abans Company'))
+  WHERE LOWER(business_name) = LOWER('Abans Company')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -3258,22 +3773,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Abans Company', 'DQA1-0001', 'DQA1-0001', 'active', 'standard', ARRAY['Abans Company', 'DQA1-0001', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Abans Company', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DQA1-0001',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Abans Company', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Abans Company', 'DQA1-0001', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Neil Test (MOOV-0053) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0053' OR dc_customer_id = '0053')
-    AND LOWER(business_name) != LOWER('Neil Test') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Neil Test'));
+    AND LOWER(business_name) != LOWER('Neil Test');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Neil Test') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Neil Test'))
+  WHERE LOWER(business_name) = LOWER('Neil Test')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -3289,22 +3809,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Neil Test', 'MOOV-0053', 'MOOV-0053', 'active', 'standard', ARRAY['Neil Test', 'MOOV-0053', '0053', '53']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Neil Test', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0053',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Neil Test', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Neil Test', 'MOOV-0053', '0053', '53']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Moov Parcel (MOOV-0054) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0054' OR dc_customer_id = '0054')
-    AND LOWER(business_name) != LOWER('Moov Parcel') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Moov Parcel'));
+    AND LOWER(business_name) != LOWER('Moov Parcel');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Moov Parcel') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Moov Parcel'))
+  WHERE LOWER(business_name) = LOWER('Moov Parcel')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -3320,22 +3845,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Moov Parcel', 'MOOV-0054', 'MOOV-0054', 'active', 'standard', ARRAY['Moov Parcel', 'MOOV-0054', '0054', '54']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Moov Parcel', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0054',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Moov Parcel', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Moov Parcel', 'MOOV-0054', '0054', '54']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Ultra Soft Water Softeners Ltd (MOOV-0056) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0056' OR dc_customer_id = '0056')
-    AND LOWER(business_name) != LOWER('Ultra Soft Water Softeners Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Ultra Soft Water Softeners Ltd'));
+    AND LOWER(business_name) != LOWER('Ultra Soft Water Softeners Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Ultra Soft Water Softeners Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Ultra Soft Water Softeners Ltd'))
+  WHERE LOWER(business_name) = LOWER('Ultra Soft Water Softeners Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -3351,22 +3881,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Ultra Soft Water Softeners Ltd', 'MOOV-0056', 'MOOV-0056', 'active', 'standard', ARRAY['Ultra Soft Water Softeners Ltd', 'MOOV-0056', '0056', '56']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Ultra Soft Water Softeners Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0056',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Ultra Soft Water Softeners Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Ultra Soft Water Softeners Ltd', 'MOOV-0056', '0056', '56']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── UK Optics Ltd (MOOV-0057) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0057' OR dc_customer_id = '0057')
-    AND LOWER(business_name) != LOWER('UK Optics Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('UK Optics Ltd'));
+    AND LOWER(business_name) != LOWER('UK Optics Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('UK Optics Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('UK Optics Ltd'))
+  WHERE LOWER(business_name) = LOWER('UK Optics Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -3382,22 +3917,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('UK Optics Ltd', 'MOOV-0057', 'MOOV-0057', 'active', 'standard', ARRAY['UK Optics Ltd', 'MOOV-0057', '0057', '57']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'UK Optics Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0057',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('UK Optics Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['UK Optics Ltd', 'MOOV-0057', '0057', '57']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── CLIPHER LTD (MOOV-0058) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0058' OR dc_customer_id = '0058')
-    AND LOWER(business_name) != LOWER('CLIPHER LTD') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('CLIPHER LTD'));
+    AND LOWER(business_name) != LOWER('CLIPHER LTD');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('CLIPHER LTD') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('CLIPHER LTD'))
+  WHERE LOWER(business_name) = LOWER('CLIPHER LTD')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -3413,22 +3953,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('CLIPHER LTD', 'MOOV-0058', 'MOOV-0058', 'active', 'standard', ARRAY['CLIPHER LTD', 'MOOV-0058', '0058', '58']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'CLIPHER LTD', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0058',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('CLIPHER LTD', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['CLIPHER LTD', 'MOOV-0058', '0058', '58']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Damro (DF1-0015) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DF1-0015' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('Damro') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Damro'));
+    AND LOWER(business_name) != LOWER('Damro');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Damro') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Damro'))
+  WHERE LOWER(business_name) = LOWER('Damro')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -3444,22 +3989,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Damro', 'DF1-0015', 'DF1-0015', 'active', 'standard', ARRAY['Damro', 'DF1-0015', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Damro', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DF1-0015',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Damro', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Damro', 'DF1-0015', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Teleseen (DP1-0034) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DP1-0034' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('Teleseen') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Teleseen'));
+    AND LOWER(business_name) != LOWER('Teleseen');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Teleseen') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Teleseen'))
+  WHERE LOWER(business_name) = LOWER('Teleseen')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -3475,22 +4025,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Teleseen', 'DP1-0034', 'DP1-0034', 'active', 'standard', ARRAY['Teleseen', 'DP1-0034', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Teleseen', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0034',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Teleseen', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Teleseen', 'DP1-0034', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Live Quote Testing (LQT) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'LQT' )
-    AND LOWER(business_name) != LOWER('Live Quote Testing') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Live Quote Testing'));
+    AND LOWER(business_name) != LOWER('Live Quote Testing');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Live Quote Testing') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Live Quote Testing'))
+  WHERE LOWER(business_name) = LOWER('Live Quote Testing')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -3506,22 +4061,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Live Quote Testing', 'LQT', 'LQT', 'active', 'standard', ARRAY['Live Quote Testing', 'LQT']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Live Quote Testing', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'LQT',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Live Quote Testing', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Live Quote Testing', 'LQT']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── P&S Products & Refreshening Ltd (MOOV-0059) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0059' OR dc_customer_id = '0059')
-    AND LOWER(business_name) != LOWER('P&S Products & Refreshening Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('P&S Products & Refreshening Ltd'));
+    AND LOWER(business_name) != LOWER('P&S Products & Refreshening Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('P&S Products & Refreshening Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('P&S Products & Refreshening Ltd'))
+  WHERE LOWER(business_name) = LOWER('P&S Products & Refreshening Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -3537,22 +4097,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('P&S Products & Refreshening Ltd', 'MOOV-0059', 'MOOV-0059', 'active', 'standard', ARRAY['P&S Products & Refreshening Ltd', 'MOOV-0059', '0059', '59']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'P&S Products & Refreshening Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0059',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('P&S Products & Refreshening Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['P&S Products & Refreshening Ltd', 'MOOV-0059', '0059', '59']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── HOME AND HAVEN LIMITED (MOOV-0060) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0060' OR dc_customer_id = '0060')
-    AND LOWER(business_name) != LOWER('HOME AND HAVEN LIMITED') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('HOME AND HAVEN LIMITED'));
+    AND LOWER(business_name) != LOWER('HOME AND HAVEN LIMITED');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('HOME AND HAVEN LIMITED') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('HOME AND HAVEN LIMITED'))
+  WHERE LOWER(business_name) = LOWER('HOME AND HAVEN LIMITED')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -3568,22 +4133,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('HOME AND HAVEN LIMITED', 'MOOV-0060', 'MOOV-0060', 'active', 'standard', ARRAY['HOME AND HAVEN LIMITED', 'MOOV-0060', '0060', '60']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'HOME AND HAVEN LIMITED', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0060',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('HOME AND HAVEN LIMITED', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['HOME AND HAVEN LIMITED', 'MOOV-0060', '0060', '60']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── 2024 (DP1-0037) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DP1-0037' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('2024') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('2024'));
+    AND LOWER(business_name) != LOWER('2024');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('2024') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('2024'))
+  WHERE LOWER(business_name) = LOWER('2024')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -3599,22 +4169,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('2024', 'DP1-0037', 'DP1-0037', 'active', 'standard', ARRAY['2024', 'DP1-0037', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      '2024', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0037',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('2024', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['2024', 'DP1-0037', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Jetstar Airways (DP1-0038) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DP1-0038' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('Jetstar Airways') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Jetstar Airways'));
+    AND LOWER(business_name) != LOWER('Jetstar Airways');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Jetstar Airways') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Jetstar Airways'))
+  WHERE LOWER(business_name) = LOWER('Jetstar Airways')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -3630,22 +4205,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Jetstar Airways', 'DP1-0038', 'DP1-0038', 'active', 'standard', ARRAY['Jetstar Airways', 'DP1-0038', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Jetstar Airways', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0038',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Jetstar Airways', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Jetstar Airways', 'DP1-0038', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Rifai UK Ltd (MOOV-0061) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0061' OR dc_customer_id = '0061')
-    AND LOWER(business_name) != LOWER('Rifai UK Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Rifai UK Ltd'));
+    AND LOWER(business_name) != LOWER('Rifai UK Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Rifai UK Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Rifai UK Ltd'))
+  WHERE LOWER(business_name) = LOWER('Rifai UK Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -3661,22 +4241,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Rifai UK Ltd', 'MOOV-0061', 'MOOV-0061', 'active', 'standard', ARRAY['Rifai UK Ltd', 'MOOV-0061', '0061', '61']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Rifai UK Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0061',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Rifai UK Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Rifai UK Ltd', 'MOOV-0061', '0061', '61']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Giga Distributors (MOOV-0062) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0062' OR dc_customer_id = '0062')
-    AND LOWER(business_name) != LOWER('Giga Distributors') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Giga Distributors'));
+    AND LOWER(business_name) != LOWER('Giga Distributors');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Giga Distributors') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Giga Distributors'))
+  WHERE LOWER(business_name) = LOWER('Giga Distributors')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -3692,22 +4277,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Giga Distributors', 'MOOV-0062', 'MOOV-0062', 'active', 'standard', ARRAY['Giga Distributors', 'MOOV-0062', '0062', '62']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Giga Distributors', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0062',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Giga Distributors', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Giga Distributors', 'MOOV-0062', '0062', '62']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── TKS NATURALS LTD (MOOV-0063) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0063' OR dc_customer_id = '0063')
-    AND LOWER(business_name) != LOWER('TKS NATURALS LTD') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('TKS NATURALS LTD'));
+    AND LOWER(business_name) != LOWER('TKS NATURALS LTD');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('TKS NATURALS LTD') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('TKS NATURALS LTD'))
+  WHERE LOWER(business_name) = LOWER('TKS NATURALS LTD')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -3723,22 +4313,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('TKS NATURALS LTD', 'MOOV-0063', 'MOOV-0063', 'active', 'standard', ARRAY['TKS NATURALS LTD', 'MOOV-0063', '0063', '63']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'TKS NATURALS LTD', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0063',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('TKS NATURALS LTD', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['TKS NATURALS LTD', 'MOOV-0063', '0063', '63']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Mini La Mode (MOOV-0064) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0064' OR dc_customer_id = '0064')
-    AND LOWER(business_name) != LOWER('Mini La Mode') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Mini La Mode'));
+    AND LOWER(business_name) != LOWER('Mini La Mode');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Mini La Mode') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Mini La Mode'))
+  WHERE LOWER(business_name) = LOWER('Mini La Mode')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -3754,22 +4349,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Mini La Mode', 'MOOV-0064', 'MOOV-0064', 'active', 'standard', ARRAY['Mini La Mode', 'MOOV-0064', '0064', '64']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Mini La Mode', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0064',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Mini La Mode', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Mini La Mode', 'MOOV-0064', '0064', '64']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── TCS Worldwide (TCS) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'TCS' )
-    AND LOWER(business_name) != LOWER('TCS Worldwide') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('TCS Worldwide'));
+    AND LOWER(business_name) != LOWER('TCS Worldwide');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('TCS Worldwide') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('TCS Worldwide'))
+  WHERE LOWER(business_name) = LOWER('TCS Worldwide')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -3785,22 +4385,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('TCS Worldwide', 'TCS', 'TCS', 'active', 'standard', ARRAY['TCS Worldwide', 'TCS']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'TCS Worldwide', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'TCS',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('TCS Worldwide', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['TCS Worldwide', 'TCS']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── ERTECH LTD (MOOV-0066) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0066' OR dc_customer_id = '0066')
-    AND LOWER(business_name) != LOWER('ERTECH LTD') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('ERTECH LTD'));
+    AND LOWER(business_name) != LOWER('ERTECH LTD');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('ERTECH LTD') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('ERTECH LTD'))
+  WHERE LOWER(business_name) = LOWER('ERTECH LTD')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -3816,22 +4421,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('ERTECH LTD', 'MOOV-0066', 'MOOV-0066', 'active', 'standard', ARRAY['ERTECH LTD', 'MOOV-0066', '0066', '66']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'ERTECH LTD', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0066',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('ERTECH LTD', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['ERTECH LTD', 'MOOV-0066', '0066', '66']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── D S Engineering (MOOV-0067) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0067' OR dc_customer_id = '0067')
-    AND LOWER(business_name) != LOWER('D S Engineering') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('D S Engineering'));
+    AND LOWER(business_name) != LOWER('D S Engineering');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('D S Engineering') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('D S Engineering'))
+  WHERE LOWER(business_name) = LOWER('D S Engineering')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -3847,22 +4457,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('D S Engineering', 'MOOV-0067', 'MOOV-0067', 'active', 'standard', ARRAY['D S Engineering', 'MOOV-0067', '0067', '67']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'D S Engineering', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0067',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('D S Engineering', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['D S Engineering', 'MOOV-0067', '0067', '67']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── kol (1233-0003) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = '1233-0003' OR dc_customer_id = '1233')
-    AND LOWER(business_name) != LOWER('kol') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('kol'));
+    AND LOWER(business_name) != LOWER('kol');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('kol') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('kol'))
+  WHERE LOWER(business_name) = LOWER('kol')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -3878,22 +4493,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('kol', '1233-0003', '1233-0003', 'active', 'standard', ARRAY['kol', '1233-0003', '1233']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'kol', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), '1233-0003',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('kol', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['kol', '1233-0003', '1233']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Hairways (Hair & Beauty) Ltd (MOOV-0068) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0068' OR dc_customer_id = '0068')
-    AND LOWER(business_name) != LOWER('Hairways (Hair & Beauty) Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Hairways (Hair & Beauty) Ltd'));
+    AND LOWER(business_name) != LOWER('Hairways (Hair & Beauty) Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Hairways (Hair & Beauty) Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Hairways (Hair & Beauty) Ltd'))
+  WHERE LOWER(business_name) = LOWER('Hairways (Hair & Beauty) Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -3909,22 +4529,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Hairways (Hair & Beauty) Ltd', 'MOOV-0068', 'MOOV-0068', 'active', 'standard', ARRAY['Hairways (Hair & Beauty) Ltd', 'MOOV-0068', '0068', '68']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Hairways (Hair & Beauty) Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0068',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Hairways (Hair & Beauty) Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Hairways (Hair & Beauty) Ltd', 'MOOV-0068', '0068', '68']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Soghaat Gifts & Fragrances Ltd. (MOOV-0069) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0069' OR dc_customer_id = '0069')
-    AND LOWER(business_name) != LOWER('Soghaat Gifts & Fragrances Ltd.') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Soghaat Gifts & Fragrances Ltd.'));
+    AND LOWER(business_name) != LOWER('Soghaat Gifts & Fragrances Ltd.');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Soghaat Gifts & Fragrances Ltd.') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Soghaat Gifts & Fragrances Ltd.'))
+  WHERE LOWER(business_name) = LOWER('Soghaat Gifts & Fragrances Ltd.')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -3940,22 +4565,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Soghaat Gifts & Fragrances Ltd.', 'MOOV-0069', 'MOOV-0069', 'active', 'standard', ARRAY['Soghaat Gifts & Fragrances Ltd.', 'MOOV-0069', '0069', '69']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Soghaat Gifts & Fragrances Ltd.', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0069',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Soghaat Gifts & Fragrances Ltd.', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Soghaat Gifts & Fragrances Ltd.', 'MOOV-0069', '0069', '69']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Lampfix (MOOV-0070) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0070' OR dc_customer_id = '0070')
-    AND LOWER(business_name) != LOWER('Lampfix') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Lampfix'));
+    AND LOWER(business_name) != LOWER('Lampfix');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Lampfix') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Lampfix'))
+  WHERE LOWER(business_name) = LOWER('Lampfix')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -3971,22 +4601,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Lampfix', 'MOOV-0070', 'MOOV-0070', 'active', 'standard', ARRAY['Lampfix', 'MOOV-0070', '0070', '70']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Lampfix', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0070',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Lampfix', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Lampfix', 'MOOV-0070', '0070', '70']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Bentley Photographic (MOOV-0071) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0071' OR dc_customer_id = '0071')
-    AND LOWER(business_name) != LOWER('Bentley Photographic') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Bentley Photographic'));
+    AND LOWER(business_name) != LOWER('Bentley Photographic');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Bentley Photographic') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Bentley Photographic'))
+  WHERE LOWER(business_name) = LOWER('Bentley Photographic')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -4002,22 +4637,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Bentley Photographic', 'MOOV-0071', 'MOOV-0071', 'active', 'standard', ARRAY['Bentley Photographic', 'MOOV-0071', '0071', '71']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Bentley Photographic', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0071',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Bentley Photographic', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Bentley Photographic', 'MOOV-0071', '0071', '71']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Creative Solution (DQA1-0005) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DQA1-0005' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('Creative Solution') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Creative Solution'));
+    AND LOWER(business_name) != LOWER('Creative Solution');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Creative Solution') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Creative Solution'))
+  WHERE LOWER(business_name) = LOWER('Creative Solution')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -4033,22 +4673,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Creative Solution', 'DQA1-0005', 'DQA1-0005', 'active', 'standard', ARRAY['Creative Solution', 'DQA1-0005', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Creative Solution', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DQA1-0005',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Creative Solution', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Creative Solution', 'DQA1-0005', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Gapstar (DP1-0043) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DP1-0043' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('Gapstar') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Gapstar'));
+    AND LOWER(business_name) != LOWER('Gapstar');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Gapstar') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Gapstar'))
+  WHERE LOWER(business_name) = LOWER('Gapstar')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -4064,22 +4709,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Gapstar', 'DP1-0043', 'DP1-0043', 'active', 'standard', ARRAY['Gapstar', 'DP1-0043', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Gapstar', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0043',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Gapstar', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Gapstar', 'DP1-0043', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── TestCompany11 (DDK1-0002) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DDK1-0002' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('TestCompany11') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('TestCompany11'));
+    AND LOWER(business_name) != LOWER('TestCompany11');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('TestCompany11') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('TestCompany11'))
+  WHERE LOWER(business_name) = LOWER('TestCompany11')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -4095,22 +4745,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('TestCompany11', 'DDK1-0002', 'DDK1-0002', 'active', 'standard', ARRAY['TestCompany11', 'DDK1-0002', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'TestCompany11', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DDK1-0002',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('TestCompany11', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['TestCompany11', 'DDK1-0002', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Virtusa (DQA1-0007) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DQA1-0007' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('Virtusa') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Virtusa'));
+    AND LOWER(business_name) != LOWER('Virtusa');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Virtusa') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Virtusa'))
+  WHERE LOWER(business_name) = LOWER('Virtusa')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -4126,22 +4781,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Virtusa', 'DQA1-0007', 'DQA1-0007', 'active', 'standard', ARRAY['Virtusa', 'DQA1-0007', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Virtusa', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DQA1-0007',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Virtusa', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Virtusa', 'DQA1-0007', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Toyota (DQA1-0009) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DQA1-0009' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('Toyota') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Toyota'));
+    AND LOWER(business_name) != LOWER('Toyota');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Toyota') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Toyota'))
+  WHERE LOWER(business_name) = LOWER('Toyota')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -4157,22 +4817,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Toyota', 'DQA1-0009', 'DQA1-0009', 'active', 'standard', ARRAY['Toyota', 'DQA1-0009', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Toyota', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DQA1-0009',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Toyota', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Toyota', 'DQA1-0009', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Brandix (DQA1-0011) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DQA1-0011' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('Brandix') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Brandix'));
+    AND LOWER(business_name) != LOWER('Brandix');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Brandix') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Brandix'))
+  WHERE LOWER(business_name) = LOWER('Brandix')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -4188,22 +4853,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Brandix', 'DQA1-0011', 'DQA1-0011', 'active', 'standard', ARRAY['Brandix', 'DQA1-0011', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Brandix', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DQA1-0011',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Brandix', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Brandix', 'DQA1-0011', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Softlogic (DQA1-0012) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DQA1-0012' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('Softlogic') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Softlogic'));
+    AND LOWER(business_name) != LOWER('Softlogic');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Softlogic') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Softlogic'))
+  WHERE LOWER(business_name) = LOWER('Softlogic')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -4219,22 +4889,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Softlogic', 'DQA1-0012', 'DQA1-0012', 'active', 'standard', ARRAY['Softlogic', 'DQA1-0012', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Softlogic', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DQA1-0012',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Softlogic', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Softlogic', 'DQA1-0012', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Daraz (DQA1-0013) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DQA1-0013' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('Daraz') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Daraz'));
+    AND LOWER(business_name) != LOWER('Daraz');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Daraz') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Daraz'))
+  WHERE LOWER(business_name) = LOWER('Daraz')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -4250,22 +4925,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Daraz', 'DQA1-0013', 'DQA1-0013', 'active', 'standard', ARRAY['Daraz', 'DQA1-0013', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Daraz', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DQA1-0013',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Daraz', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Daraz', 'DQA1-0013', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Impact Particles (MOOV-0072) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0072' OR dc_customer_id = '0072')
-    AND LOWER(business_name) != LOWER('Impact Particles') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Impact Particles'));
+    AND LOWER(business_name) != LOWER('Impact Particles');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Impact Particles') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Impact Particles'))
+  WHERE LOWER(business_name) = LOWER('Impact Particles')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -4281,22 +4961,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Impact Particles', 'MOOV-0072', 'MOOV-0072', 'active', 'standard', ARRAY['Impact Particles', 'MOOV-0072', '0072', '72']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Impact Particles', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0072',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Impact Particles', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Impact Particles', 'MOOV-0072', '0072', '72']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Garden Greatness LTD (MOOV-0073) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0073' OR dc_customer_id = '0073')
-    AND LOWER(business_name) != LOWER('Garden Greatness LTD') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Garden Greatness LTD'));
+    AND LOWER(business_name) != LOWER('Garden Greatness LTD');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Garden Greatness LTD') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Garden Greatness LTD'))
+  WHERE LOWER(business_name) = LOWER('Garden Greatness LTD')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -4312,22 +4997,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Garden Greatness LTD', 'MOOV-0073', 'MOOV-0073', 'active', 'standard', ARRAY['Garden Greatness LTD', 'MOOV-0073', '0073', '73']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Garden Greatness LTD', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0073',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Garden Greatness LTD', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Garden Greatness LTD', 'MOOV-0073', '0073', '73']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Major Brushes Ltd (MOOV-0074) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0074' OR dc_customer_id = '0074')
-    AND LOWER(business_name) != LOWER('Major Brushes Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Major Brushes Ltd'));
+    AND LOWER(business_name) != LOWER('Major Brushes Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Major Brushes Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Major Brushes Ltd'))
+  WHERE LOWER(business_name) = LOWER('Major Brushes Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -4343,22 +5033,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Major Brushes Ltd', 'MOOV-0074', 'MOOV-0074', 'active', 'standard', ARRAY['Major Brushes Ltd', 'MOOV-0074', '0074', '74']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Major Brushes Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0074',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Major Brushes Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Major Brushes Ltd', 'MOOV-0074', '0074', '74']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Ottone Hardware (MOOV-0065) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0065' OR dc_customer_id = '0065')
-    AND LOWER(business_name) != LOWER('Ottone Hardware') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Ottone Hardware'));
+    AND LOWER(business_name) != LOWER('Ottone Hardware');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Ottone Hardware') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Ottone Hardware'))
+  WHERE LOWER(business_name) = LOWER('Ottone Hardware')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -4374,22 +5069,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Ottone Hardware', 'MOOV-0065', 'MOOV-0065', 'active', 'standard', ARRAY['Ottone Hardware', 'MOOV-0065', '0065', '65']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Ottone Hardware', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0065',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Ottone Hardware', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Ottone Hardware', 'MOOV-0065', '0065', '65']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Europa (Europa) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'Europa' )
-    AND LOWER(business_name) != LOWER('Europa') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Europa'));
+    AND LOWER(business_name) != LOWER('Europa');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Europa') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Europa'))
+  WHERE LOWER(business_name) = LOWER('Europa')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -4405,22 +5105,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Europa', 'Europa', 'Europa', 'active', 'standard', ARRAY['Europa', 'Europa']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Europa', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Europa',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Europa', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Europa', 'Europa']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── TELESONIC (DQA1-0014) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DQA1-0014' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('TELESONIC') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('TELESONIC'));
+    AND LOWER(business_name) != LOWER('TELESONIC');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('TELESONIC') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('TELESONIC'))
+  WHERE LOWER(business_name) = LOWER('TELESONIC')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -4436,22 +5141,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('TELESONIC', 'DQA1-0014', 'DQA1-0014', 'active', 'standard', ARRAY['TELESONIC', 'DQA1-0014', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'TELESONIC', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DQA1-0014',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('TELESONIC', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['TELESONIC', 'DQA1-0014', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── ALDO (DQA1-0015) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DQA1-0015' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('ALDO') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('ALDO'));
+    AND LOWER(business_name) != LOWER('ALDO');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('ALDO') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('ALDO'))
+  WHERE LOWER(business_name) = LOWER('ALDO')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -4467,22 +5177,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('ALDO', 'DQA1-0015', 'DQA1-0015', 'active', 'standard', ARRAY['ALDO', 'DQA1-0015', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'ALDO', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DQA1-0015',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('ALDO', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['ALDO', 'DQA1-0015', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Barry AI (Barry AI) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'Barry AI' )
-    AND LOWER(business_name) != LOWER('Barry AI') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Barry AI'));
+    AND LOWER(business_name) != LOWER('Barry AI');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Barry AI') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Barry AI'))
+  WHERE LOWER(business_name) = LOWER('Barry AI')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -4498,22 +5213,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Barry AI', 'Barry AI', 'Barry AI', 'active', 'standard', ARRAY['Barry AI', 'Barry AI']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Barry AI', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Barry AI',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Barry AI', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Barry AI', 'Barry AI']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── NECTR (MOOV-0075) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0075' OR dc_customer_id = '0075')
-    AND LOWER(business_name) != LOWER('NECTR') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('NECTR'));
+    AND LOWER(business_name) != LOWER('NECTR');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('NECTR') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('NECTR'))
+  WHERE LOWER(business_name) = LOWER('NECTR')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -4529,22 +5249,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('NECTR', 'MOOV-0075', 'MOOV-0075', 'active', 'standard', ARRAY['NECTR', 'MOOV-0075', '0075', '75']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'NECTR', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0075',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('NECTR', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['NECTR', 'MOOV-0075', '0075', '75']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Ray Wai-Shing (HOF-0007) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'HOF-0007' OR dc_customer_id = '0007')
-    AND LOWER(business_name) != LOWER('Ray Wai-Shing') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Ray Wai-Shing'));
+    AND LOWER(business_name) != LOWER('Ray Wai-Shing');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Ray Wai-Shing') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Ray Wai-Shing'))
+  WHERE LOWER(business_name) = LOWER('Ray Wai-Shing')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -4560,22 +5285,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Ray Wai-Shing', 'HOF-0007', 'HOF-0007', 'active', 'standard', ARRAY['Ray Wai-Shing', 'HOF-0007', '0007', '7']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Ray Wai-Shing', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'HOF-0007',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Ray Wai-Shing', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Ray Wai-Shing', 'HOF-0007', '0007', '7']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Michael Chadburn (HOF-0003) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'HOF-0003' OR dc_customer_id = '0003')
-    AND LOWER(business_name) != LOWER('Michael Chadburn') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Michael Chadburn'));
+    AND LOWER(business_name) != LOWER('Michael Chadburn');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Michael Chadburn') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Michael Chadburn'))
+  WHERE LOWER(business_name) = LOWER('Michael Chadburn')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -4591,22 +5321,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Michael Chadburn', 'HOF-0003', 'HOF-0003', 'active', 'standard', ARRAY['Michael Chadburn', 'HOF-0003', '0003', '3']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Michael Chadburn', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'HOF-0003',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Michael Chadburn', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Michael Chadburn', 'HOF-0003', '0003', '3']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── UK Demo (DD2-0002) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DD2-0002' OR dc_customer_id = '2')
-    AND LOWER(business_name) != LOWER('UK Demo') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('UK Demo'));
+    AND LOWER(business_name) != LOWER('UK Demo');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('UK Demo') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('UK Demo'))
+  WHERE LOWER(business_name) = LOWER('UK Demo')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -4622,22 +5357,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('UK Demo', 'DD2-0002', 'DD2-0002', 'active', 'standard', ARRAY['UK Demo', 'DD2-0002', '2']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'UK Demo', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DD2-0002',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('UK Demo', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['UK Demo', 'DD2-0002', '2']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Ninja UK Production (HOF-0002) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'HOF-0002' OR dc_customer_id = '0002')
-    AND LOWER(business_name) != LOWER('Ninja UK Production') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Ninja UK Production'));
+    AND LOWER(business_name) != LOWER('Ninja UK Production');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Ninja UK Production') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Ninja UK Production'))
+  WHERE LOWER(business_name) = LOWER('Ninja UK Production')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -4653,22 +5393,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Ninja UK Production', 'HOF-0002', 'HOF-0002', 'active', 'standard', ARRAY['Ninja UK Production', 'HOF-0002', '0002', '2']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Ninja UK Production', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'HOF-0002',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Ninja UK Production', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Ninja UK Production', 'HOF-0002', '0002', '2']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Prod Chinthaka (HOF-0001) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'HOF-0001' OR dc_customer_id = '0001')
-    AND LOWER(business_name) != LOWER('Prod Chinthaka') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Prod Chinthaka'));
+    AND LOWER(business_name) != LOWER('Prod Chinthaka');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Prod Chinthaka') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Prod Chinthaka'))
+  WHERE LOWER(business_name) = LOWER('Prod Chinthaka')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -4684,22 +5429,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Prod Chinthaka', 'HOF-0001', 'HOF-0001', 'active', 'standard', ARRAY['Prod Chinthaka', 'HOF-0001', '0001', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Prod Chinthaka', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'HOF-0001',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Prod Chinthaka', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Prod Chinthaka', 'HOF-0001', '0001', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── EFUTURES1 (DP1-0001) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DP1-0001' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('EFUTURES1') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('EFUTURES1'));
+    AND LOWER(business_name) != LOWER('EFUTURES1');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('EFUTURES1') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('EFUTURES1'))
+  WHERE LOWER(business_name) = LOWER('EFUTURES1')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -4715,22 +5465,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('EFUTURES1', 'DP1-0001', 'DP1-0001', 'active', 'standard', ARRAY['EFUTURES1', 'DP1-0001', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'EFUTURES1', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0001',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('EFUTURES1', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['EFUTURES1', 'DP1-0001', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Moreyeah Foods Ltd (MOOV-0076) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0076' OR dc_customer_id = '0076')
-    AND LOWER(business_name) != LOWER('Moreyeah Foods Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Moreyeah Foods Ltd'));
+    AND LOWER(business_name) != LOWER('Moreyeah Foods Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Moreyeah Foods Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Moreyeah Foods Ltd'))
+  WHERE LOWER(business_name) = LOWER('Moreyeah Foods Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -4746,22 +5501,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Moreyeah Foods Ltd', 'MOOV-0076', 'MOOV-0076', 'active', 'standard', ARRAY['Moreyeah Foods Ltd', 'MOOV-0076', '0076', '76']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Moreyeah Foods Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0076',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Moreyeah Foods Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Moreyeah Foods Ltd', 'MOOV-0076', '0076', '76']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── S Smith & Sons Carpets Ltd (MOOV-0077) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0077' OR dc_customer_id = '0077')
-    AND LOWER(business_name) != LOWER('S Smith & Sons Carpets Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('S Smith & Sons Carpets Ltd'));
+    AND LOWER(business_name) != LOWER('S Smith & Sons Carpets Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('S Smith & Sons Carpets Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('S Smith & Sons Carpets Ltd'))
+  WHERE LOWER(business_name) = LOWER('S Smith & Sons Carpets Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -4777,22 +5537,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('S Smith & Sons Carpets Ltd', 'MOOV-0077', 'MOOV-0077', 'active', 'standard', ARRAY['S Smith & Sons Carpets Ltd', 'MOOV-0077', '0077', '77']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'S Smith & Sons Carpets Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0077',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('S Smith & Sons Carpets Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['S Smith & Sons Carpets Ltd', 'MOOV-0077', '0077', '77']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── The Railway Shop Ltd (MOOV-0078) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0078' OR dc_customer_id = '0078')
-    AND LOWER(business_name) != LOWER('The Railway Shop Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('The Railway Shop Ltd'));
+    AND LOWER(business_name) != LOWER('The Railway Shop Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('The Railway Shop Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('The Railway Shop Ltd'))
+  WHERE LOWER(business_name) = LOWER('The Railway Shop Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -4808,22 +5573,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('The Railway Shop Ltd', 'MOOV-0078', 'MOOV-0078', 'active', 'standard', ARRAY['The Railway Shop Ltd', 'MOOV-0078', '0078', '78']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'The Railway Shop Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0078',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('The Railway Shop Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['The Railway Shop Ltd', 'MOOV-0078', '0078', '78']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Pex Ltd (MOOV-0079) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0079' OR dc_customer_id = '0079')
-    AND LOWER(business_name) != LOWER('Pex Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Pex Ltd'));
+    AND LOWER(business_name) != LOWER('Pex Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Pex Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Pex Ltd'))
+  WHERE LOWER(business_name) = LOWER('Pex Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -4839,22 +5609,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Pex Ltd', 'MOOV-0079', 'MOOV-0079', 'active', 'standard', ARRAY['Pex Ltd', 'MOOV-0079', '0079', '79']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Pex Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0079',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Pex Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Pex Ltd', 'MOOV-0079', '0079', '79']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Finger on Pulse Ltd (MOOV-0080) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0080' OR dc_customer_id = '0080')
-    AND LOWER(business_name) != LOWER('Finger on Pulse Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Finger on Pulse Ltd'));
+    AND LOWER(business_name) != LOWER('Finger on Pulse Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Finger on Pulse Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Finger on Pulse Ltd'))
+  WHERE LOWER(business_name) = LOWER('Finger on Pulse Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -4870,22 +5645,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Finger on Pulse Ltd', 'MOOV-0080', 'MOOV-0080', 'active', 'standard', ARRAY['Finger on Pulse Ltd', 'MOOV-0080', '0080', '80']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Finger on Pulse Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0080',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Finger on Pulse Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Finger on Pulse Ltd', 'MOOV-0080', '0080', '80']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Iglu Meal Prep (Iglu Meal Prep) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'Iglu Meal Prep' )
-    AND LOWER(business_name) != LOWER('Iglu Meal Prep') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Iglu Meal Prep'));
+    AND LOWER(business_name) != LOWER('Iglu Meal Prep');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Iglu Meal Prep') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Iglu Meal Prep'))
+  WHERE LOWER(business_name) = LOWER('Iglu Meal Prep')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -4901,22 +5681,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Iglu Meal Prep', 'Iglu Meal Prep', 'Iglu Meal Prep', 'active', 'standard', ARRAY['Iglu Meal Prep', 'Iglu Meal Prep']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Iglu Meal Prep', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Iglu Meal Prep',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Iglu Meal Prep', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Iglu Meal Prep', 'Iglu Meal Prep']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Yourbookstore (Yourbookstore) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'Yourbookstore' )
-    AND LOWER(business_name) != LOWER('Yourbookstore') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Yourbookstore'));
+    AND LOWER(business_name) != LOWER('Yourbookstore');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Yourbookstore') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Yourbookstore'))
+  WHERE LOWER(business_name) = LOWER('Yourbookstore')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -4932,22 +5717,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Yourbookstore', 'Yourbookstore', 'Yourbookstore', 'active', 'standard', ARRAY['Yourbookstore', 'Yourbookstore']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Yourbookstore', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Yourbookstore',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Yourbookstore', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Yourbookstore', 'Yourbookstore']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Carnivore Cartel Ltd (MOOV-0081) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0081' OR dc_customer_id = '0081')
-    AND LOWER(business_name) != LOWER('Carnivore Cartel Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Carnivore Cartel Ltd'));
+    AND LOWER(business_name) != LOWER('Carnivore Cartel Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Carnivore Cartel Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Carnivore Cartel Ltd'))
+  WHERE LOWER(business_name) = LOWER('Carnivore Cartel Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -4963,22 +5753,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Carnivore Cartel Ltd', 'MOOV-0081', 'MOOV-0081', 'active', 'standard', ARRAY['Carnivore Cartel Ltd', 'MOOV-0081', '0081', '81']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Carnivore Cartel Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0081',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Carnivore Cartel Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Carnivore Cartel Ltd', 'MOOV-0081', '0081', '81']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Igluu Ltd (MOOV-0082) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0082' OR dc_customer_id = '0082')
-    AND LOWER(business_name) != LOWER('Igluu Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Igluu Ltd'));
+    AND LOWER(business_name) != LOWER('Igluu Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Igluu Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Igluu Ltd'))
+  WHERE LOWER(business_name) = LOWER('Igluu Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -4994,22 +5789,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Igluu Ltd', 'MOOV-0082', 'MOOV-0082', 'active', 'standard', ARRAY['Igluu Ltd', 'MOOV-0082', '0082', '82']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Igluu Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0082',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Igluu Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Igluu Ltd', 'MOOV-0082', '0082', '82']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── E-Health Pharmacy Ltd (MOOV-0083) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0083' OR dc_customer_id = '0083')
-    AND LOWER(business_name) != LOWER('E-Health Pharmacy Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('E-Health Pharmacy Ltd'));
+    AND LOWER(business_name) != LOWER('E-Health Pharmacy Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('E-Health Pharmacy Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('E-Health Pharmacy Ltd'))
+  WHERE LOWER(business_name) = LOWER('E-Health Pharmacy Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -5025,22 +5825,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('E-Health Pharmacy Ltd', 'MOOV-0083', 'MOOV-0083', 'active', 'standard', ARRAY['E-Health Pharmacy Ltd', 'MOOV-0083', '0083', '83']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'E-Health Pharmacy Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0083',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('E-Health Pharmacy Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['E-Health Pharmacy Ltd', 'MOOV-0083', '0083', '83']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Techworknetwork LTD (MOOV-0084) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0084' OR dc_customer_id = '0084')
-    AND LOWER(business_name) != LOWER('Techworknetwork LTD') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Techworknetwork LTD'));
+    AND LOWER(business_name) != LOWER('Techworknetwork LTD');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Techworknetwork LTD') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Techworknetwork LTD'))
+  WHERE LOWER(business_name) = LOWER('Techworknetwork LTD')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -5056,22 +5861,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Techworknetwork LTD', 'MOOV-0084', 'MOOV-0084', 'active', 'standard', ARRAY['Techworknetwork LTD', 'MOOV-0084', '0084', '84']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Techworknetwork LTD', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0084',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Techworknetwork LTD', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Techworknetwork LTD', 'MOOV-0084', '0084', '84']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Matrix Seating Limited (MOOV-0085) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0085' OR dc_customer_id = '0085')
-    AND LOWER(business_name) != LOWER('Matrix Seating Limited') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Matrix Seating Limited'));
+    AND LOWER(business_name) != LOWER('Matrix Seating Limited');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Matrix Seating Limited') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Matrix Seating Limited'))
+  WHERE LOWER(business_name) = LOWER('Matrix Seating Limited')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -5087,22 +5897,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Matrix Seating Limited', 'MOOV-0085', 'MOOV-0085', 'active', 'standard', ARRAY['Matrix Seating Limited', 'MOOV-0085', '0085', '85']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Matrix Seating Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0085',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Matrix Seating Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Matrix Seating Limited', 'MOOV-0085', '0085', '85']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── test (DP1-0044) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DP1-0044' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('test') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('test'));
+    AND LOWER(business_name) != LOWER('test');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('test') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('test'))
+  WHERE LOWER(business_name) = LOWER('test')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -5118,22 +5933,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('test', 'DP1-0044', 'DP1-0044', 'active', 'standard', ARRAY['test', 'DP1-0044', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'test', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0044',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('test', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['test', 'DP1-0044', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Test company name (DP1-0045) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DP1-0045' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('Test company name') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Test company name'));
+    AND LOWER(business_name) != LOWER('Test company name');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Test company name') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Test company name'))
+  WHERE LOWER(business_name) = LOWER('Test company name')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -5149,22 +5969,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Test company name', 'DP1-0045', 'DP1-0045', 'active', 'standard', ARRAY['Test company name', 'DP1-0045', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Test company name', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0045',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Test company name', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Test company name', 'DP1-0045', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Zesta (DP2-0001) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DP2-0001' OR dc_customer_id = '2')
-    AND LOWER(business_name) != LOWER('Zesta') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Zesta'));
+    AND LOWER(business_name) != LOWER('Zesta');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Zesta') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Zesta'))
+  WHERE LOWER(business_name) = LOWER('Zesta')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -5180,22 +6005,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Zesta', 'DP2-0001', 'DP2-0001', 'active', 'standard', ARRAY['Zesta', 'DP2-0001', '2']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Zesta', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP2-0001',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Zesta', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Zesta', 'DP2-0001', '2']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── HSBC (DDJ1-0002) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DDJ1-0002' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('HSBC') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('HSBC'));
+    AND LOWER(business_name) != LOWER('HSBC');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('HSBC') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('HSBC'))
+  WHERE LOWER(business_name) = LOWER('HSBC')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -5211,22 +6041,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('HSBC', 'DDJ1-0002', 'DDJ1-0002', 'active', 'standard', ARRAY['HSBC', 'DDJ1-0002', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'HSBC', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DDJ1-0002',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('HSBC', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['HSBC', 'DDJ1-0002', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Danijels Parcels (MOOV-0087) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0087' OR dc_customer_id = '0087')
-    AND LOWER(business_name) != LOWER('Danijels Parcels') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Danijels Parcels'));
+    AND LOWER(business_name) != LOWER('Danijels Parcels');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Danijels Parcels') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Danijels Parcels'))
+  WHERE LOWER(business_name) = LOWER('Danijels Parcels')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -5242,22 +6077,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Danijels Parcels', 'MOOV-0087', 'MOOV-0087', 'active', 'standard', ARRAY['Danijels Parcels', 'MOOV-0087', '0087', '87']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Danijels Parcels', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0087',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Danijels Parcels', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Danijels Parcels', 'MOOV-0087', '0087', '87']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── TCS Express Worldwide UK Limited (MOOV-0088) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0088' OR dc_customer_id = '0088')
-    AND LOWER(business_name) != LOWER('TCS Express Worldwide UK Limited') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('TCS Express Worldwide UK Limited'));
+    AND LOWER(business_name) != LOWER('TCS Express Worldwide UK Limited');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('TCS Express Worldwide UK Limited') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('TCS Express Worldwide UK Limited'))
+  WHERE LOWER(business_name) = LOWER('TCS Express Worldwide UK Limited')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -5273,22 +6113,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('TCS Express Worldwide UK Limited', 'MOOV-0088', 'MOOV-0088', 'active', 'standard', ARRAY['TCS Express Worldwide UK Limited', 'MOOV-0088', '0088', '88']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'TCS Express Worldwide UK Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0088',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('TCS Express Worldwide UK Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['TCS Express Worldwide UK Limited', 'MOOV-0088', '0088', '88']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Clearance Stock Supplies Limited (MOOV-0089) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0089' OR dc_customer_id = '0089')
-    AND LOWER(business_name) != LOWER('Clearance Stock Supplies Limited') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Clearance Stock Supplies Limited'));
+    AND LOWER(business_name) != LOWER('Clearance Stock Supplies Limited');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Clearance Stock Supplies Limited') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Clearance Stock Supplies Limited'))
+  WHERE LOWER(business_name) = LOWER('Clearance Stock Supplies Limited')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -5304,22 +6149,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Clearance Stock Supplies Limited', 'MOOV-0089', 'MOOV-0089', 'active', 'standard', ARRAY['Clearance Stock Supplies Limited', 'MOOV-0089', '0089', '89']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Clearance Stock Supplies Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0089',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Clearance Stock Supplies Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Clearance Stock Supplies Limited', 'MOOV-0089', '0089', '89']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Octopus (DP1-0046) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DP1-0046' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('Octopus') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Octopus'));
+    AND LOWER(business_name) != LOWER('Octopus');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Octopus') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Octopus'))
+  WHERE LOWER(business_name) = LOWER('Octopus')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -5335,22 +6185,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Octopus', 'DP1-0046', 'DP1-0046', 'active', 'standard', ARRAY['Octopus', 'DP1-0046', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Octopus', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0046',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Octopus', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Octopus', 'DP1-0046', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Matt Test (MOOV-0090) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0090' OR dc_customer_id = '0090')
-    AND LOWER(business_name) != LOWER('Matt Test') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Matt Test'));
+    AND LOWER(business_name) != LOWER('Matt Test');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Matt Test') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Matt Test'))
+  WHERE LOWER(business_name) = LOWER('Matt Test')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -5366,22 +6221,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Matt Test', 'MOOV-0090', 'MOOV-0090', 'active', 'standard', ARRAY['Matt Test', 'MOOV-0090', '0090', '90']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Matt Test', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0090',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Matt Test', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Matt Test', 'MOOV-0090', '0090', '90']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Test company (DQA1-0016) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DQA1-0016' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('Test company') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Test company'));
+    AND LOWER(business_name) != LOWER('Test company');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Test company') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Test company'))
+  WHERE LOWER(business_name) = LOWER('Test company')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -5397,22 +6257,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Test company', 'DQA1-0016', 'DQA1-0016', 'active', 'standard', ARRAY['Test company', 'DQA1-0016', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Test company', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DQA1-0016',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Test company', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Test company', 'DQA1-0016', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Pet Food Online LTD (MOOV-0091) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0091' OR dc_customer_id = '0091')
-    AND LOWER(business_name) != LOWER('Pet Food Online LTD') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Pet Food Online LTD'));
+    AND LOWER(business_name) != LOWER('Pet Food Online LTD');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Pet Food Online LTD') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Pet Food Online LTD'))
+  WHERE LOWER(business_name) = LOWER('Pet Food Online LTD')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -5428,22 +6293,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Pet Food Online LTD', 'MOOV-0091', 'MOOV-0091', 'active', 'standard', ARRAY['Pet Food Online LTD', 'MOOV-0091', '0091', '91']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Pet Food Online LTD', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0091',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Pet Food Online LTD', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Pet Food Online LTD', 'MOOV-0091', '0091', '91']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Aromina (DDJ1-0003) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DDJ1-0003' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('Aromina') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Aromina'));
+    AND LOWER(business_name) != LOWER('Aromina');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Aromina') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Aromina'))
+  WHERE LOWER(business_name) = LOWER('Aromina')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -5459,22 +6329,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Aromina', 'DDJ1-0003', 'DDJ1-0003', 'active', 'standard', ARRAY['Aromina', 'DDJ1-0003', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Aromina', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DDJ1-0003',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Aromina', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Aromina', 'DDJ1-0003', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Paragon Design Joinery Ltd (MOOV-0092) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0092' OR dc_customer_id = '0092')
-    AND LOWER(business_name) != LOWER('Paragon Design Joinery Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Paragon Design Joinery Ltd'));
+    AND LOWER(business_name) != LOWER('Paragon Design Joinery Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Paragon Design Joinery Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Paragon Design Joinery Ltd'))
+  WHERE LOWER(business_name) = LOWER('Paragon Design Joinery Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -5490,22 +6365,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Paragon Design Joinery Ltd', 'MOOV-0092', 'MOOV-0092', 'active', 'standard', ARRAY['Paragon Design Joinery Ltd', 'MOOV-0092', '0092', '92']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Paragon Design Joinery Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0092',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Paragon Design Joinery Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Paragon Design Joinery Ltd', 'MOOV-0092', '0092', '92']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Macchiato Bar Ltd (MOOV-0093) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0093' OR dc_customer_id = '0093')
-    AND LOWER(business_name) != LOWER('Macchiato Bar Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Macchiato Bar Ltd'));
+    AND LOWER(business_name) != LOWER('Macchiato Bar Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Macchiato Bar Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Macchiato Bar Ltd'))
+  WHERE LOWER(business_name) = LOWER('Macchiato Bar Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -5521,22 +6401,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Macchiato Bar Ltd', 'MOOV-0093', 'MOOV-0093', 'active', 'standard', ARRAY['Macchiato Bar Ltd', 'MOOV-0093', '0093', '93']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Macchiato Bar Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0093',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Macchiato Bar Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Macchiato Bar Ltd', 'MOOV-0093', '0093', '93']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Soothe Limited t/a Luxury Skincare Brands (MOOV-0094) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0094' OR dc_customer_id = '0094')
-    AND LOWER(business_name) != LOWER('Soothe Limited t/a Luxury Skincare Brands') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Soothe Limited t/a Luxury Skincare Brands'));
+    AND LOWER(business_name) != LOWER('Soothe Limited t/a Luxury Skincare Brands');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Soothe Limited t/a Luxury Skincare Brands') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Soothe Limited t/a Luxury Skincare Brands'))
+  WHERE LOWER(business_name) = LOWER('Soothe Limited t/a Luxury Skincare Brands')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -5552,22 +6437,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Soothe Limited t/a Luxury Skincare Brands', 'MOOV-0094', 'MOOV-0094', 'active', 'standard', ARRAY['Soothe Limited t/a Luxury Skincare Brands', 'MOOV-0094', '0094', '94']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Soothe Limited t/a Luxury Skincare Brands', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0094',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Soothe Limited t/a Luxury Skincare Brands', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Soothe Limited t/a Luxury Skincare Brands', 'MOOV-0094', '0094', '94']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── MAD baits supplies Ltd (MOOV-0095) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0095' OR dc_customer_id = '0095')
-    AND LOWER(business_name) != LOWER('MAD baits supplies Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('MAD baits supplies Ltd'));
+    AND LOWER(business_name) != LOWER('MAD baits supplies Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('MAD baits supplies Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('MAD baits supplies Ltd'))
+  WHERE LOWER(business_name) = LOWER('MAD baits supplies Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -5583,22 +6473,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('MAD baits supplies Ltd', 'MOOV-0095', 'MOOV-0095', 'active', 'standard', ARRAY['MAD baits supplies Ltd', 'MOOV-0095', '0095', '95']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'MAD baits supplies Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0095',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('MAD baits supplies Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['MAD baits supplies Ltd', 'MOOV-0095', '0095', '95']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Sam Scotts Limited (MOOV-0097) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0097' OR dc_customer_id = '0097')
-    AND LOWER(business_name) != LOWER('Sam Scotts Limited') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Sam Scotts Limited'));
+    AND LOWER(business_name) != LOWER('Sam Scotts Limited');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Sam Scotts Limited') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Sam Scotts Limited'))
+  WHERE LOWER(business_name) = LOWER('Sam Scotts Limited')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -5614,22 +6509,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Sam Scotts Limited', 'MOOV-0097', 'MOOV-0097', 'active', 'standard', ARRAY['Sam Scotts Limited', 'MOOV-0097', '0097', '97']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Sam Scotts Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0097',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Sam Scotts Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Sam Scotts Limited', 'MOOV-0097', '0097', '97']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Crytec Limited (MOOV-0098) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0098' OR dc_customer_id = '0098')
-    AND LOWER(business_name) != LOWER('Crytec Limited') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Crytec Limited'));
+    AND LOWER(business_name) != LOWER('Crytec Limited');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Crytec Limited') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Crytec Limited'))
+  WHERE LOWER(business_name) = LOWER('Crytec Limited')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -5645,22 +6545,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Crytec Limited', 'MOOV-0098', 'MOOV-0098', 'active', 'standard', ARRAY['Crytec Limited', 'MOOV-0098', '0098', '98']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Crytec Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0098',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Crytec Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Crytec Limited', 'MOOV-0098', '0098', '98']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Hairways (Hair & Beauty) Ltd Site B (MOOV-0099) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0099' OR dc_customer_id = '0099')
-    AND LOWER(business_name) != LOWER('Hairways (Hair & Beauty) Ltd Site B') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Hairways (Hair & Beauty) Ltd Site B'));
+    AND LOWER(business_name) != LOWER('Hairways (Hair & Beauty) Ltd Site B');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Hairways (Hair & Beauty) Ltd Site B') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Hairways (Hair & Beauty) Ltd Site B'))
+  WHERE LOWER(business_name) = LOWER('Hairways (Hair & Beauty) Ltd Site B')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -5676,22 +6581,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Hairways (Hair & Beauty) Ltd Site B', 'MOOV-0099', 'MOOV-0099', 'active', 'standard', ARRAY['Hairways (Hair & Beauty) Ltd Site B', 'MOOV-0099', '0099', '99']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Hairways (Hair & Beauty) Ltd Site B', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0099',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Hairways (Hair & Beauty) Ltd Site B', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Hairways (Hair & Beauty) Ltd Site B', 'MOOV-0099', '0099', '99']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── WoodUbend Ltd (MOOV-0101) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0101' OR dc_customer_id = '0101')
-    AND LOWER(business_name) != LOWER('WoodUbend Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('WoodUbend Ltd'));
+    AND LOWER(business_name) != LOWER('WoodUbend Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('WoodUbend Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('WoodUbend Ltd'))
+  WHERE LOWER(business_name) = LOWER('WoodUbend Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -5707,22 +6617,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('WoodUbend Ltd', 'MOOV-0101', 'MOOV-0101', 'active', 'standard', ARRAY['WoodUbend Ltd', 'MOOV-0101', '0101', '101']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'WoodUbend Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0101',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('WoodUbend Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['WoodUbend Ltd', 'MOOV-0101', '0101', '101']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── TMK Trading Ltd t/a Nexus Modelling Supplies (MOOV-0102) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0102' OR dc_customer_id = '0102')
-    AND LOWER(business_name) != LOWER('TMK Trading Ltd t/a Nexus Modelling Supplies') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('TMK Trading Ltd t/a Nexus Modelling Supplies'));
+    AND LOWER(business_name) != LOWER('TMK Trading Ltd t/a Nexus Modelling Supplies');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('TMK Trading Ltd t/a Nexus Modelling Supplies') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('TMK Trading Ltd t/a Nexus Modelling Supplies'))
+  WHERE LOWER(business_name) = LOWER('TMK Trading Ltd t/a Nexus Modelling Supplies')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -5738,22 +6653,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('TMK Trading Ltd t/a Nexus Modelling Supplies', 'MOOV-0102', 'MOOV-0102', 'active', 'standard', ARRAY['TMK Trading Ltd t/a Nexus Modelling Supplies', 'MOOV-0102', '0102', '102']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'TMK Trading Ltd t/a Nexus Modelling Supplies', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0102',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('TMK Trading Ltd t/a Nexus Modelling Supplies', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['TMK Trading Ltd t/a Nexus Modelling Supplies', 'MOOV-0102', '0102', '102']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Brexons Workwear (MOOV-0103) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0103' OR dc_customer_id = '0103')
-    AND LOWER(business_name) != LOWER('Brexons Workwear') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Brexons Workwear'));
+    AND LOWER(business_name) != LOWER('Brexons Workwear');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Brexons Workwear') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Brexons Workwear'))
+  WHERE LOWER(business_name) = LOWER('Brexons Workwear')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -5769,22 +6689,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Brexons Workwear', 'MOOV-0103', 'MOOV-0103', 'active', 'standard', ARRAY['Brexons Workwear', 'MOOV-0103', '0103', '103']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Brexons Workwear', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0103',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Brexons Workwear', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Brexons Workwear', 'MOOV-0103', '0103', '103']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Sing Ko (MOOV-0105) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0105' OR dc_customer_id = '0105')
-    AND LOWER(business_name) != LOWER('Sing Ko') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Sing Ko'));
+    AND LOWER(business_name) != LOWER('Sing Ko');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Sing Ko') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Sing Ko'))
+  WHERE LOWER(business_name) = LOWER('Sing Ko')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -5800,22 +6725,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Sing Ko', 'MOOV-0105', 'MOOV-0105', 'active', 'standard', ARRAY['Sing Ko', 'MOOV-0105', '0105', '105']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Sing Ko', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0105',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Sing Ko', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Sing Ko', 'MOOV-0105', '0105', '105']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Boori (Europe) LTD (MOOV-0106) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0106' OR dc_customer_id = '0106')
-    AND LOWER(business_name) != LOWER('Boori (Europe) LTD') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Boori (Europe) LTD'));
+    AND LOWER(business_name) != LOWER('Boori (Europe) LTD');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Boori (Europe) LTD') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Boori (Europe) LTD'))
+  WHERE LOWER(business_name) = LOWER('Boori (Europe) LTD')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -5831,22 +6761,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Boori (Europe) LTD', 'MOOV-0106', 'MOOV-0106', 'active', 'standard', ARRAY['Boori (Europe) LTD', 'MOOV-0106', '0106', '106']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Boori (Europe) LTD', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0106',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Boori (Europe) LTD', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Boori (Europe) LTD', 'MOOV-0106', '0106', '106']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── mike (123-0001) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = '123-0001' OR dc_customer_id = '123')
-    AND LOWER(business_name) != LOWER('mike') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('mike'));
+    AND LOWER(business_name) != LOWER('mike');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('mike') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('mike'))
+  WHERE LOWER(business_name) = LOWER('mike')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -5862,22 +6797,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('mike', '123-0001', '123-0001', 'active', 'standard', ARRAY['mike', '123-0001', '123']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'mike', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), '123-0001',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('mike', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['mike', '123-0001', '123']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── sdfdsf (11-2002) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = '11-2002' OR dc_customer_id = '11')
-    AND LOWER(business_name) != LOWER('sdfdsf') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('sdfdsf'));
+    AND LOWER(business_name) != LOWER('sdfdsf');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('sdfdsf') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('sdfdsf'))
+  WHERE LOWER(business_name) = LOWER('sdfdsf')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -5893,22 +6833,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('sdfdsf', '11-2002', '11-2002', 'active', 'standard', ARRAY['sdfdsf', '11-2002', '11']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'sdfdsf', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), '11-2002',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('sdfdsf', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['sdfdsf', '11-2002', '11']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── MV (123-0002) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = '123-0002' OR dc_customer_id = '123')
-    AND LOWER(business_name) != LOWER('MV') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('MV'));
+    AND LOWER(business_name) != LOWER('MV');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('MV') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('MV'))
+  WHERE LOWER(business_name) = LOWER('MV')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -5924,22 +6869,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('MV', '123-0002', '123-0002', 'active', 'standard', ARRAY['MV', '123-0002', '123']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'MV', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), '123-0002',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('MV', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['MV', '123-0002', '123']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── SYNTAXGENIE (123-0003) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = '123-0003' OR dc_customer_id = '123')
-    AND LOWER(business_name) != LOWER('SYNTAXGENIE') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('SYNTAXGENIE'));
+    AND LOWER(business_name) != LOWER('SYNTAXGENIE');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('SYNTAXGENIE') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('SYNTAXGENIE'))
+  WHERE LOWER(business_name) = LOWER('SYNTAXGENIE')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -5955,22 +6905,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('SYNTAXGENIE', '123-0003', '123-0003', 'active', 'standard', ARRAY['SYNTAXGENIE', '123-0003', '123']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'SYNTAXGENIE', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), '123-0003',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('SYNTAXGENIE', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['SYNTAXGENIE', '123-0003', '123']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── sdgsd (123-0004) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = '123-0004' OR dc_customer_id = '123')
-    AND LOWER(business_name) != LOWER('sdgsd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('sdgsd'));
+    AND LOWER(business_name) != LOWER('sdgsd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('sdgsd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('sdgsd'))
+  WHERE LOWER(business_name) = LOWER('sdgsd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -5986,22 +6941,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('sdgsd', '123-0004', '123-0004', 'active', 'standard', ARRAY['sdgsd', '123-0004', '123']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'sdgsd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), '123-0004',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('sdgsd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['sdgsd', '123-0004', '123']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── cf (11-2001) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = '11-2001' OR dc_customer_id = '11')
-    AND LOWER(business_name) != LOWER('cf') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('cf'));
+    AND LOWER(business_name) != LOWER('cf');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('cf') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('cf'))
+  WHERE LOWER(business_name) = LOWER('cf')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -6017,22 +6977,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('cf', '11-2001', '11-2001', 'active', 'standard', ARRAY['cf', '11-2001', '11']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'cf', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), '11-2001',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('cf', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['cf', '11-2001', '11']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Property Documents Ltd (MOOV-0107) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0107' OR dc_customer_id = '0107')
-    AND LOWER(business_name) != LOWER('Property Documents Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Property Documents Ltd'));
+    AND LOWER(business_name) != LOWER('Property Documents Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Property Documents Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Property Documents Ltd'))
+  WHERE LOWER(business_name) = LOWER('Property Documents Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -6048,22 +7013,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Property Documents Ltd', 'MOOV-0107', 'MOOV-0107', 'active', 'standard', ARRAY['Property Documents Ltd', 'MOOV-0107', '0107', '107']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Property Documents Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0107',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Property Documents Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Property Documents Ltd', 'MOOV-0107', '0107', '107']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Accentura (DP1-0047) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DP1-0047' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('Accentura') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Accentura'));
+    AND LOWER(business_name) != LOWER('Accentura');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Accentura') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Accentura'))
+  WHERE LOWER(business_name) = LOWER('Accentura')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -6079,22 +7049,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Accentura', 'DP1-0047', 'DP1-0047', 'active', 'standard', ARRAY['Accentura', 'DP1-0047', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Accentura', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0047',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Accentura', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Accentura', 'DP1-0047', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Direct Auto Electrics Ltd (MOOV-0108) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0108' OR dc_customer_id = '0108')
-    AND LOWER(business_name) != LOWER('Direct Auto Electrics Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Direct Auto Electrics Ltd'));
+    AND LOWER(business_name) != LOWER('Direct Auto Electrics Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Direct Auto Electrics Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Direct Auto Electrics Ltd'))
+  WHERE LOWER(business_name) = LOWER('Direct Auto Electrics Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -6110,22 +7085,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Direct Auto Electrics Ltd', 'MOOV-0108', 'MOOV-0108', 'active', 'standard', ARRAY['Direct Auto Electrics Ltd', 'MOOV-0108', '0108', '108']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Direct Auto Electrics Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0108',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Direct Auto Electrics Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Direct Auto Electrics Ltd', 'MOOV-0108', '0108', '108']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Sampath Bank (DDJ1-0004) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DDJ1-0004' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('Sampath Bank') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Sampath Bank'));
+    AND LOWER(business_name) != LOWER('Sampath Bank');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Sampath Bank') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Sampath Bank'))
+  WHERE LOWER(business_name) = LOWER('Sampath Bank')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -6141,22 +7121,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Sampath Bank', 'DDJ1-0004', 'DDJ1-0004', 'active', 'standard', ARRAY['Sampath Bank', 'DDJ1-0004', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Sampath Bank', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DDJ1-0004',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Sampath Bank', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Sampath Bank', 'DDJ1-0004', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── W J Jones Ltd T/A Zoar''s Ark (MOOV-0109) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0109' OR dc_customer_id = '0109')
-    AND LOWER(business_name) != LOWER('W J Jones Ltd T/A Zoar''s Ark') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('W J Jones Ltd T/A Zoar''s Ark'));
+    AND LOWER(business_name) != LOWER('W J Jones Ltd T/A Zoar''s Ark');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('W J Jones Ltd T/A Zoar''s Ark') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('W J Jones Ltd T/A Zoar''s Ark'))
+  WHERE LOWER(business_name) = LOWER('W J Jones Ltd T/A Zoar''s Ark')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -6172,22 +7157,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('W J Jones Ltd T/A Zoar''s Ark', 'MOOV-0109', 'MOOV-0109', 'active', 'standard', ARRAY['W J Jones Ltd T/A Zoar''s Ark', 'MOOV-0109', '0109', '109']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'W J Jones Ltd T/A Zoar''s Ark', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0109',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('W J Jones Ltd T/A Zoar''s Ark', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['W J Jones Ltd T/A Zoar''s Ark', 'MOOV-0109', '0109', '109']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Raycom Ltd (MOOV-0110) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0110' OR dc_customer_id = '0110')
-    AND LOWER(business_name) != LOWER('Raycom Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Raycom Ltd'));
+    AND LOWER(business_name) != LOWER('Raycom Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Raycom Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Raycom Ltd'))
+  WHERE LOWER(business_name) = LOWER('Raycom Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -6203,22 +7193,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Raycom Ltd', 'MOOV-0110', 'MOOV-0110', 'active', 'standard', ARRAY['Raycom Ltd', 'MOOV-0110', '0110', '110']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Raycom Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0110',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Raycom Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Raycom Ltd', 'MOOV-0110', '0110', '110']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Michael kors (DQA1-0017) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DQA1-0017' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('Michael kors') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Michael kors'));
+    AND LOWER(business_name) != LOWER('Michael kors');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Michael kors') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Michael kors'))
+  WHERE LOWER(business_name) = LOWER('Michael kors')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -6234,22 +7229,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Michael kors', 'DQA1-0017', 'DQA1-0017', 'active', 'standard', ARRAY['Michael kors', 'DQA1-0017', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Michael kors', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DQA1-0017',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Michael kors', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Michael kors', 'DQA1-0017', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Vintsreet (Vintsreet) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'Vintsreet' )
-    AND LOWER(business_name) != LOWER('Vintsreet') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Vintsreet'));
+    AND LOWER(business_name) != LOWER('Vintsreet');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Vintsreet') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Vintsreet'))
+  WHERE LOWER(business_name) = LOWER('Vintsreet')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -6265,22 +7265,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Vintsreet', 'Vintsreet', 'Vintsreet', 'active', 'standard', ARRAY['Vintsreet', 'Vintsreet']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Vintsreet', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Vintsreet',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Vintsreet', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Vintsreet', 'Vintsreet']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Efutures Prod Test Account (DD2-0006) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DD2-0006' OR dc_customer_id = '2')
-    AND LOWER(business_name) != LOWER('Efutures Prod Test Account') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Efutures Prod Test Account'));
+    AND LOWER(business_name) != LOWER('Efutures Prod Test Account');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Efutures Prod Test Account') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Efutures Prod Test Account'))
+  WHERE LOWER(business_name) = LOWER('Efutures Prod Test Account')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -6296,22 +7301,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Efutures Prod Test Account', 'DD2-0006', 'DD2-0006', 'active', 'standard', ARRAY['Efutures Prod Test Account', 'DD2-0006', '2']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Efutures Prod Test Account', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DD2-0006',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Efutures Prod Test Account', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Efutures Prod Test Account', 'DD2-0006', '2']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Redo Commerce (Redo Commerce) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'Redo Commerce' )
-    AND LOWER(business_name) != LOWER('Redo Commerce') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Redo Commerce'));
+    AND LOWER(business_name) != LOWER('Redo Commerce');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Redo Commerce') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Redo Commerce'))
+  WHERE LOWER(business_name) = LOWER('Redo Commerce')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -6327,22 +7337,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Redo Commerce', 'Redo Commerce', 'Redo Commerce', 'active', 'standard', ARRAY['Redo Commerce', 'Redo Commerce']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Redo Commerce', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Redo Commerce',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Redo Commerce', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Redo Commerce', 'Redo Commerce']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Empire Printing & Embroidery Ltd (MOOV-0111) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0111' OR dc_customer_id = '0111')
-    AND LOWER(business_name) != LOWER('Empire Printing & Embroidery Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Empire Printing & Embroidery Ltd'));
+    AND LOWER(business_name) != LOWER('Empire Printing & Embroidery Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Empire Printing & Embroidery Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Empire Printing & Embroidery Ltd'))
+  WHERE LOWER(business_name) = LOWER('Empire Printing & Embroidery Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -6358,22 +7373,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Empire Printing & Embroidery Ltd', 'MOOV-0111', 'MOOV-0111', 'active', 'standard', ARRAY['Empire Printing & Embroidery Ltd', 'MOOV-0111', '0111', '111']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Empire Printing & Embroidery Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0111',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Empire Printing & Embroidery Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Empire Printing & Embroidery Ltd', 'MOOV-0111', '0111', '111']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── BARRY CARTER MOTOR PRODUCTS (MOOV-0113) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0113' OR dc_customer_id = '0113')
-    AND LOWER(business_name) != LOWER('BARRY CARTER MOTOR PRODUCTS') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('BARRY CARTER MOTOR PRODUCTS'));
+    AND LOWER(business_name) != LOWER('BARRY CARTER MOTOR PRODUCTS');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('BARRY CARTER MOTOR PRODUCTS') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('BARRY CARTER MOTOR PRODUCTS'))
+  WHERE LOWER(business_name) = LOWER('BARRY CARTER MOTOR PRODUCTS')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -6389,22 +7409,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('BARRY CARTER MOTOR PRODUCTS', 'MOOV-0113', 'MOOV-0113', 'active', 'standard', ARRAY['BARRY CARTER MOTOR PRODUCTS', 'MOOV-0113', '0113', '113']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'BARRY CARTER MOTOR PRODUCTS', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0113',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('BARRY CARTER MOTOR PRODUCTS', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['BARRY CARTER MOTOR PRODUCTS', 'MOOV-0113', '0113', '113']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Cranswick (Cranswick) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'Cranswick' )
-    AND LOWER(business_name) != LOWER('Cranswick') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Cranswick'));
+    AND LOWER(business_name) != LOWER('Cranswick');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Cranswick') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Cranswick'))
+  WHERE LOWER(business_name) = LOWER('Cranswick')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -6420,22 +7445,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Cranswick', 'Cranswick', 'Cranswick', 'active', 'standard', ARRAY['Cranswick', 'Cranswick']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Cranswick', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Cranswick',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Cranswick', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Cranswick', 'Cranswick']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Vint Street Ltd. (MOOV-0114) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0114' OR dc_customer_id = '0114')
-    AND LOWER(business_name) != LOWER('Vint Street Ltd.') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Vint Street Ltd.'));
+    AND LOWER(business_name) != LOWER('Vint Street Ltd.');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Vint Street Ltd.') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Vint Street Ltd.'))
+  WHERE LOWER(business_name) = LOWER('Vint Street Ltd.')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -6451,22 +7481,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Vint Street Ltd.', 'MOOV-0114', 'MOOV-0114', 'active', 'standard', ARRAY['Vint Street Ltd.', 'MOOV-0114', '0114', '114']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Vint Street Ltd.', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0114',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Vint Street Ltd.', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Vint Street Ltd.', 'MOOV-0114', '0114', '114']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Imagin Products Ltd (MOOV-0115) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0115' OR dc_customer_id = '0115')
-    AND LOWER(business_name) != LOWER('Imagin Products Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Imagin Products Ltd'));
+    AND LOWER(business_name) != LOWER('Imagin Products Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Imagin Products Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Imagin Products Ltd'))
+  WHERE LOWER(business_name) = LOWER('Imagin Products Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -6482,22 +7517,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Imagin Products Ltd', 'MOOV-0115', 'MOOV-0115', 'active', 'standard', ARRAY['Imagin Products Ltd', 'MOOV-0115', '0115', '115']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Imagin Products Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0115',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Imagin Products Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Imagin Products Ltd', 'MOOV-0115', '0115', '115']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Efutures Prod Account Two (DD2-0007) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DD2-0007' OR dc_customer_id = '2')
-    AND LOWER(business_name) != LOWER('Efutures Prod Account Two') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Efutures Prod Account Two'));
+    AND LOWER(business_name) != LOWER('Efutures Prod Account Two');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Efutures Prod Account Two') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Efutures Prod Account Two'))
+  WHERE LOWER(business_name) = LOWER('Efutures Prod Account Two')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -6513,22 +7553,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Efutures Prod Account Two', 'DD2-0007', 'DD2-0007', 'active', 'standard', ARRAY['Efutures Prod Account Two', 'DD2-0007', '2']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Efutures Prod Account Two', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DD2-0007',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Efutures Prod Account Two', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Efutures Prod Account Two', 'DD2-0007', '2']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── EZZTECH (MOOV-0116) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0116' OR dc_customer_id = '0116')
-    AND LOWER(business_name) != LOWER('EZZTECH') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('EZZTECH'));
+    AND LOWER(business_name) != LOWER('EZZTECH');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('EZZTECH') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('EZZTECH'))
+  WHERE LOWER(business_name) = LOWER('EZZTECH')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -6544,22 +7589,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('EZZTECH', 'MOOV-0116', 'MOOV-0116', 'active', 'standard', ARRAY['EZZTECH', 'MOOV-0116', '0116', '116']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'EZZTECH', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0116',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('EZZTECH', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['EZZTECH', 'MOOV-0116', '0116', '116']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Tool Hub Ltd (MOOV-0117) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0117' OR dc_customer_id = '0117')
-    AND LOWER(business_name) != LOWER('Tool Hub Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Tool Hub Ltd'));
+    AND LOWER(business_name) != LOWER('Tool Hub Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Tool Hub Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Tool Hub Ltd'))
+  WHERE LOWER(business_name) = LOWER('Tool Hub Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -6575,22 +7625,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Tool Hub Ltd', 'MOOV-0117', 'MOOV-0117', 'active', 'standard', ARRAY['Tool Hub Ltd', 'MOOV-0117', '0117', '117']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Tool Hub Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0117',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Tool Hub Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Tool Hub Ltd', 'MOOV-0117', '0117', '117']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Getplumb Reading Ltd (MOOV-0118) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0118' OR dc_customer_id = '0118')
-    AND LOWER(business_name) != LOWER('Getplumb Reading Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Getplumb Reading Ltd'));
+    AND LOWER(business_name) != LOWER('Getplumb Reading Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Getplumb Reading Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Getplumb Reading Ltd'))
+  WHERE LOWER(business_name) = LOWER('Getplumb Reading Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -6606,22 +7661,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Getplumb Reading Ltd', 'MOOV-0118', 'MOOV-0118', 'active', 'standard', ARRAY['Getplumb Reading Ltd', 'MOOV-0118', '0118', '118']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Getplumb Reading Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0118',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Getplumb Reading Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Getplumb Reading Ltd', 'MOOV-0118', '0118', '118']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Vision Warehouse (MOOV-0112) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0112' OR dc_customer_id = '0112')
-    AND LOWER(business_name) != LOWER('Vision Warehouse') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Vision Warehouse'));
+    AND LOWER(business_name) != LOWER('Vision Warehouse');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Vision Warehouse') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Vision Warehouse'))
+  WHERE LOWER(business_name) = LOWER('Vision Warehouse')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -6637,22 +7697,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Vision Warehouse', 'MOOV-0112', 'MOOV-0112', 'active', 'standard', ARRAY['Vision Warehouse', 'MOOV-0112', '0112', '112']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Vision Warehouse', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0112',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Vision Warehouse', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Vision Warehouse', 'MOOV-0112', '0112', '112']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── 608 Group Ltd (304 Clothing) (MOOV-0119) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0119' OR dc_customer_id = '0119')
-    AND LOWER(business_name) != LOWER('608 Group Ltd (304 Clothing)') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('608 Group Ltd (304 Clothing)'));
+    AND LOWER(business_name) != LOWER('608 Group Ltd (304 Clothing)');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('608 Group Ltd (304 Clothing)') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('608 Group Ltd (304 Clothing)'))
+  WHERE LOWER(business_name) = LOWER('608 Group Ltd (304 Clothing)')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -6668,22 +7733,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('608 Group Ltd (304 Clothing)', 'MOOV-0119', 'MOOV-0119', 'active', 'standard', ARRAY['608 Group Ltd (304 Clothing)', 'MOOV-0119', '0119', '119']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      '608 Group Ltd (304 Clothing)', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0119',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('608 Group Ltd (304 Clothing)', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['608 Group Ltd (304 Clothing)', 'MOOV-0119', '0119', '119']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Sky Chemicals (UK) Ltd (MOOV-0120) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0120' OR dc_customer_id = '0120')
-    AND LOWER(business_name) != LOWER('Sky Chemicals (UK) Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Sky Chemicals (UK) Ltd'));
+    AND LOWER(business_name) != LOWER('Sky Chemicals (UK) Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Sky Chemicals (UK) Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Sky Chemicals (UK) Ltd'))
+  WHERE LOWER(business_name) = LOWER('Sky Chemicals (UK) Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -6699,22 +7769,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Sky Chemicals (UK) Ltd', 'MOOV-0120', 'MOOV-0120', 'active', 'standard', ARRAY['Sky Chemicals (UK) Ltd', 'MOOV-0120', '0120', '120']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Sky Chemicals (UK) Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0120',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Sky Chemicals (UK) Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Sky Chemicals (UK) Ltd', 'MOOV-0120', '0120', '120']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Wedcova Uk Ltd (MOOV-0121) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0121' OR dc_customer_id = '0121')
-    AND LOWER(business_name) != LOWER('Wedcova Uk Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Wedcova Uk Ltd'));
+    AND LOWER(business_name) != LOWER('Wedcova Uk Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Wedcova Uk Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Wedcova Uk Ltd'))
+  WHERE LOWER(business_name) = LOWER('Wedcova Uk Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -6730,22 +7805,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Wedcova Uk Ltd', 'MOOV-0121', 'MOOV-0121', 'active', 'standard', ARRAY['Wedcova Uk Ltd', 'MOOV-0121', '0121', '121']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Wedcova Uk Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0121',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Wedcova Uk Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Wedcova Uk Ltd', 'MOOV-0121', '0121', '121']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Fosseway Parcels Ltd (MOOV-0122) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0122' OR dc_customer_id = '0122')
-    AND LOWER(business_name) != LOWER('Fosseway Parcels Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Fosseway Parcels Ltd'));
+    AND LOWER(business_name) != LOWER('Fosseway Parcels Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Fosseway Parcels Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Fosseway Parcels Ltd'))
+  WHERE LOWER(business_name) = LOWER('Fosseway Parcels Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -6761,22 +7841,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Fosseway Parcels Ltd', 'MOOV-0122', 'MOOV-0122', 'active', 'standard', ARRAY['Fosseway Parcels Ltd', 'MOOV-0122', '0122', '122']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Fosseway Parcels Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0122',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Fosseway Parcels Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Fosseway Parcels Ltd', 'MOOV-0122', '0122', '122']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── ARIMAC (DDJ1-0005) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DDJ1-0005' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('ARIMAC') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('ARIMAC'));
+    AND LOWER(business_name) != LOWER('ARIMAC');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('ARIMAC') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('ARIMAC'))
+  WHERE LOWER(business_name) = LOWER('ARIMAC')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -6792,22 +7877,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('ARIMAC', 'DDJ1-0005', 'DDJ1-0005', 'active', 'standard', ARRAY['ARIMAC', 'DDJ1-0005', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'ARIMAC', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DDJ1-0005',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('ARIMAC', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['ARIMAC', 'DDJ1-0005', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── GPG - Getpersonalisedgifts Limited (MOOV-0123) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0123' OR dc_customer_id = '0123')
-    AND LOWER(business_name) != LOWER('GPG - Getpersonalisedgifts Limited') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('GPG - Getpersonalisedgifts Limited'));
+    AND LOWER(business_name) != LOWER('GPG - Getpersonalisedgifts Limited');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('GPG - Getpersonalisedgifts Limited') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('GPG - Getpersonalisedgifts Limited'))
+  WHERE LOWER(business_name) = LOWER('GPG - Getpersonalisedgifts Limited')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -6823,22 +7913,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('GPG - Getpersonalisedgifts Limited', 'MOOV-0123', 'MOOV-0123', 'active', 'standard', ARRAY['GPG - Getpersonalisedgifts Limited', 'MOOV-0123', '0123', '123']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'GPG - Getpersonalisedgifts Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0123',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('GPG - Getpersonalisedgifts Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['GPG - Getpersonalisedgifts Limited', 'MOOV-0123', '0123', '123']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Thirsty Soft Drinks (MOOV-0124) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0124' OR dc_customer_id = '0124')
-    AND LOWER(business_name) != LOWER('Thirsty Soft Drinks') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Thirsty Soft Drinks'));
+    AND LOWER(business_name) != LOWER('Thirsty Soft Drinks');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Thirsty Soft Drinks') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Thirsty Soft Drinks'))
+  WHERE LOWER(business_name) = LOWER('Thirsty Soft Drinks')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -6854,22 +7949,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Thirsty Soft Drinks', 'MOOV-0124', 'MOOV-0124', 'active', 'standard', ARRAY['Thirsty Soft Drinks', 'MOOV-0124', '0124', '124']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Thirsty Soft Drinks', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0124',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Thirsty Soft Drinks', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Thirsty Soft Drinks', 'MOOV-0124', '0124', '124']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Gifts2Impress (MOOV-0125) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0125' OR dc_customer_id = '0125')
-    AND LOWER(business_name) != LOWER('Gifts2Impress') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Gifts2Impress'));
+    AND LOWER(business_name) != LOWER('Gifts2Impress');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Gifts2Impress') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Gifts2Impress'))
+  WHERE LOWER(business_name) = LOWER('Gifts2Impress')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -6885,22 +7985,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Gifts2Impress', 'MOOV-0125', 'MOOV-0125', 'active', 'standard', ARRAY['Gifts2Impress', 'MOOV-0125', '0125', '125']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Gifts2Impress', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0125',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Gifts2Impress', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Gifts2Impress', 'MOOV-0125', '0125', '125']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Xylo LTD (MOOV-0126) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0126' OR dc_customer_id = '0126')
-    AND LOWER(business_name) != LOWER('Xylo LTD') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Xylo LTD'));
+    AND LOWER(business_name) != LOWER('Xylo LTD');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Xylo LTD') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Xylo LTD'))
+  WHERE LOWER(business_name) = LOWER('Xylo LTD')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -6916,22 +8021,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Xylo LTD', 'MOOV-0126', 'MOOV-0126', 'active', 'standard', ARRAY['Xylo LTD', 'MOOV-0126', '0126', '126']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Xylo LTD', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0126',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Xylo LTD', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Xylo LTD', 'MOOV-0126', '0126', '126']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── The Saddlery Shop Ltd (MOOV-0127) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0127' OR dc_customer_id = '0127')
-    AND LOWER(business_name) != LOWER('The Saddlery Shop Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('The Saddlery Shop Ltd'));
+    AND LOWER(business_name) != LOWER('The Saddlery Shop Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('The Saddlery Shop Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('The Saddlery Shop Ltd'))
+  WHERE LOWER(business_name) = LOWER('The Saddlery Shop Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -6947,22 +8057,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('The Saddlery Shop Ltd', 'MOOV-0127', 'MOOV-0127', 'active', 'standard', ARRAY['The Saddlery Shop Ltd', 'MOOV-0127', '0127', '127']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'The Saddlery Shop Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0127',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('The Saddlery Shop Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['The Saddlery Shop Ltd', 'MOOV-0127', '0127', '127']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── EF TEST QA ACCOUNT (DD2-0008) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DD2-0008' OR dc_customer_id = '2')
-    AND LOWER(business_name) != LOWER('EF TEST QA ACCOUNT') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('EF TEST QA ACCOUNT'));
+    AND LOWER(business_name) != LOWER('EF TEST QA ACCOUNT');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('EF TEST QA ACCOUNT') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('EF TEST QA ACCOUNT'))
+  WHERE LOWER(business_name) = LOWER('EF TEST QA ACCOUNT')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -6978,22 +8093,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('EF TEST QA ACCOUNT', 'DD2-0008', 'DD2-0008', 'active', 'standard', ARRAY['EF TEST QA ACCOUNT', 'DD2-0008', '2']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'EF TEST QA ACCOUNT', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DD2-0008',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('EF TEST QA ACCOUNT', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['EF TEST QA ACCOUNT', 'DD2-0008', '2']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Organax Ltd (MOOV-0128) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0128' OR dc_customer_id = '0128')
-    AND LOWER(business_name) != LOWER('Organax Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Organax Ltd'));
+    AND LOWER(business_name) != LOWER('Organax Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Organax Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Organax Ltd'))
+  WHERE LOWER(business_name) = LOWER('Organax Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -7009,22 +8129,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Organax Ltd', 'MOOV-0128', 'MOOV-0128', 'active', 'standard', ARRAY['Organax Ltd', 'MOOV-0128', '0128', '128']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Organax Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0128',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Organax Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Organax Ltd', 'MOOV-0128', '0128', '128']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Gra Telford LTD (MOOV-0129) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0129' OR dc_customer_id = '0129')
-    AND LOWER(business_name) != LOWER('Gra Telford LTD') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Gra Telford LTD'));
+    AND LOWER(business_name) != LOWER('Gra Telford LTD');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Gra Telford LTD') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Gra Telford LTD'))
+  WHERE LOWER(business_name) = LOWER('Gra Telford LTD')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -7040,22 +8165,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Gra Telford LTD', 'MOOV-0129', 'MOOV-0129', 'active', 'standard', ARRAY['Gra Telford LTD', 'MOOV-0129', '0129', '129']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Gra Telford LTD', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0129',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Gra Telford LTD', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Gra Telford LTD', 'MOOV-0129', '0129', '129']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Attapattu & Sons (123-0005) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = '123-0005' OR dc_customer_id = '123')
-    AND LOWER(business_name) != LOWER('Attapattu & Sons') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Attapattu & Sons'));
+    AND LOWER(business_name) != LOWER('Attapattu & Sons');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Attapattu & Sons') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Attapattu & Sons'))
+  WHERE LOWER(business_name) = LOWER('Attapattu & Sons')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -7071,22 +8201,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Attapattu & Sons', '123-0005', '123-0005', 'active', 'standard', ARRAY['Attapattu & Sons', '123-0005', '123']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Attapattu & Sons', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), '123-0005',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Attapattu & Sons', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Attapattu & Sons', '123-0005', '123']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Jayasuriya & Sons (123-0006) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = '123-0006' OR dc_customer_id = '123')
-    AND LOWER(business_name) != LOWER('Jayasuriya & Sons') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Jayasuriya & Sons'));
+    AND LOWER(business_name) != LOWER('Jayasuriya & Sons');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Jayasuriya & Sons') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Jayasuriya & Sons'))
+  WHERE LOWER(business_name) = LOWER('Jayasuriya & Sons')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -7102,22 +8237,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Jayasuriya & Sons', '123-0006', '123-0006', 'active', 'standard', ARRAY['Jayasuriya & Sons', '123-0006', '123']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Jayasuriya & Sons', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), '123-0006',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Jayasuriya & Sons', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Jayasuriya & Sons', '123-0006', '123']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── The Wall Lighting Company Ltd (MOOV-0130) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0130' OR dc_customer_id = '0130')
-    AND LOWER(business_name) != LOWER('The Wall Lighting Company Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('The Wall Lighting Company Ltd'));
+    AND LOWER(business_name) != LOWER('The Wall Lighting Company Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('The Wall Lighting Company Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('The Wall Lighting Company Ltd'))
+  WHERE LOWER(business_name) = LOWER('The Wall Lighting Company Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -7133,22 +8273,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('The Wall Lighting Company Ltd', 'MOOV-0130', 'MOOV-0130', 'active', 'standard', ARRAY['The Wall Lighting Company Ltd', 'MOOV-0130', '0130', '130']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'The Wall Lighting Company Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0130',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('The Wall Lighting Company Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['The Wall Lighting Company Ltd', 'MOOV-0130', '0130', '130']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Chilli Seating Ltd (MOOV-0131) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0131' OR dc_customer_id = '0131')
-    AND LOWER(business_name) != LOWER('Chilli Seating Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Chilli Seating Ltd'));
+    AND LOWER(business_name) != LOWER('Chilli Seating Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Chilli Seating Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Chilli Seating Ltd'))
+  WHERE LOWER(business_name) = LOWER('Chilli Seating Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -7164,22 +8309,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Chilli Seating Ltd', 'MOOV-0131', 'MOOV-0131', 'active', 'standard', ARRAY['Chilli Seating Ltd', 'MOOV-0131', '0131', '131']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Chilli Seating Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0131',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Chilli Seating Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Chilli Seating Ltd', 'MOOV-0131', '0131', '131']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── ZARA Company (DDJ1-0006) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DDJ1-0006' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('ZARA Company') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('ZARA Company'));
+    AND LOWER(business_name) != LOWER('ZARA Company');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('ZARA Company') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('ZARA Company'))
+  WHERE LOWER(business_name) = LOWER('ZARA Company')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -7195,22 +8345,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('ZARA Company', 'DDJ1-0006', 'DDJ1-0006', 'active', 'standard', ARRAY['ZARA Company', 'DDJ1-0006', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'ZARA Company', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DDJ1-0006',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('ZARA Company', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['ZARA Company', 'DDJ1-0006', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── N70 (123-0007) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = '123-0007' OR dc_customer_id = '123')
-    AND LOWER(business_name) != LOWER('N70') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('N70'));
+    AND LOWER(business_name) != LOWER('N70');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('N70') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('N70'))
+  WHERE LOWER(business_name) = LOWER('N70')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -7226,22 +8381,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('N70', '123-0007', '123-0007', 'active', 'standard', ARRAY['N70', '123-0007', '123']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'N70', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), '123-0007',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('N70', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['N70', '123-0007', '123']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Mahela Co (123-0008) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = '123-0008' OR dc_customer_id = '123')
-    AND LOWER(business_name) != LOWER('Mahela Co') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Mahela Co'));
+    AND LOWER(business_name) != LOWER('Mahela Co');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Mahela Co') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Mahela Co'))
+  WHERE LOWER(business_name) = LOWER('Mahela Co')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -7257,22 +8417,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Mahela Co', '123-0008', '123-0008', 'active', 'standard', ARRAY['Mahela Co', '123-0008', '123']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Mahela Co', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), '123-0008',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Mahela Co', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Mahela Co', '123-0008', '123']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── David Jones (DP1-0048) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DP1-0048' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('David Jones') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('David Jones'));
+    AND LOWER(business_name) != LOWER('David Jones');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('David Jones') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('David Jones'))
+  WHERE LOWER(business_name) = LOWER('David Jones')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -7288,22 +8453,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('David Jones', 'DP1-0048', 'DP1-0048', 'active', 'standard', ARRAY['David Jones', 'DP1-0048', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'David Jones', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0048',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('David Jones', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['David Jones', 'DP1-0048', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Deshi Delights Ltd (MOOV-0132) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0132' OR dc_customer_id = '0132')
-    AND LOWER(business_name) != LOWER('Deshi Delights Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Deshi Delights Ltd'));
+    AND LOWER(business_name) != LOWER('Deshi Delights Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Deshi Delights Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Deshi Delights Ltd'))
+  WHERE LOWER(business_name) = LOWER('Deshi Delights Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -7319,22 +8489,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Deshi Delights Ltd', 'MOOV-0132', 'MOOV-0132', 'active', 'standard', ARRAY['Deshi Delights Ltd', 'MOOV-0132', '0132', '132']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Deshi Delights Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0132',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Deshi Delights Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Deshi Delights Ltd', 'MOOV-0132', '0132', '132']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── EFUTURES TEST COMPANY (DD2-0009) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DD2-0009' OR dc_customer_id = '2')
-    AND LOWER(business_name) != LOWER('EFUTURES TEST COMPANY') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('EFUTURES TEST COMPANY'));
+    AND LOWER(business_name) != LOWER('EFUTURES TEST COMPANY');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('EFUTURES TEST COMPANY') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('EFUTURES TEST COMPANY'))
+  WHERE LOWER(business_name) = LOWER('EFUTURES TEST COMPANY')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -7350,22 +8525,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('EFUTURES TEST COMPANY', 'DD2-0009', 'DD2-0009', 'active', 'standard', ARRAY['EFUTURES TEST COMPANY', 'DD2-0009', '2']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'EFUTURES TEST COMPANY', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DD2-0009',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('EFUTURES TEST COMPANY', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['EFUTURES TEST COMPANY', 'DD2-0009', '2']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Bill''s Tool Store Ltd (MOOV-0133) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0133' OR dc_customer_id = '0133')
-    AND LOWER(business_name) != LOWER('Bill''s Tool Store Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Bill''s Tool Store Ltd'));
+    AND LOWER(business_name) != LOWER('Bill''s Tool Store Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Bill''s Tool Store Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Bill''s Tool Store Ltd'))
+  WHERE LOWER(business_name) = LOWER('Bill''s Tool Store Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -7381,22 +8561,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Bill''s Tool Store Ltd', 'MOOV-0133', 'MOOV-0133', 'active', 'standard', ARRAY['Bill''s Tool Store Ltd', 'MOOV-0133', '0133', '133']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Bill''s Tool Store Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0133',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Bill''s Tool Store Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Bill''s Tool Store Ltd', 'MOOV-0133', '0133', '133']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Jaycee Engineering T/A Jaycee Trophies (MOOV-0134) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0134' OR dc_customer_id = '0134')
-    AND LOWER(business_name) != LOWER('Jaycee Engineering T/A Jaycee Trophies') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Jaycee Engineering T/A Jaycee Trophies'));
+    AND LOWER(business_name) != LOWER('Jaycee Engineering T/A Jaycee Trophies');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Jaycee Engineering T/A Jaycee Trophies') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Jaycee Engineering T/A Jaycee Trophies'))
+  WHERE LOWER(business_name) = LOWER('Jaycee Engineering T/A Jaycee Trophies')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -7412,22 +8597,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Jaycee Engineering T/A Jaycee Trophies', 'MOOV-0134', 'MOOV-0134', 'active', 'standard', ARRAY['Jaycee Engineering T/A Jaycee Trophies', 'MOOV-0134', '0134', '134']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Jaycee Engineering T/A Jaycee Trophies', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0134',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Jaycee Engineering T/A Jaycee Trophies', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Jaycee Engineering T/A Jaycee Trophies', 'MOOV-0134', '0134', '134']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Arden Medical Limited (MOOV-0135) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0135' OR dc_customer_id = '0135')
-    AND LOWER(business_name) != LOWER('Arden Medical Limited') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Arden Medical Limited'));
+    AND LOWER(business_name) != LOWER('Arden Medical Limited');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Arden Medical Limited') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Arden Medical Limited'))
+  WHERE LOWER(business_name) = LOWER('Arden Medical Limited')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -7443,22 +8633,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Arden Medical Limited', 'MOOV-0135', 'MOOV-0135', 'active', 'standard', ARRAY['Arden Medical Limited', 'MOOV-0135', '0135', '135']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Arden Medical Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0135',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Arden Medical Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Arden Medical Limited', 'MOOV-0135', '0135', '135']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── ORIGINAL SOURCE LIMITED (MOOV-0136) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0136' OR dc_customer_id = '0136')
-    AND LOWER(business_name) != LOWER('ORIGINAL SOURCE LIMITED') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('ORIGINAL SOURCE LIMITED'));
+    AND LOWER(business_name) != LOWER('ORIGINAL SOURCE LIMITED');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('ORIGINAL SOURCE LIMITED') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('ORIGINAL SOURCE LIMITED'))
+  WHERE LOWER(business_name) = LOWER('ORIGINAL SOURCE LIMITED')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -7474,22 +8669,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('ORIGINAL SOURCE LIMITED', 'MOOV-0136', 'MOOV-0136', 'active', 'standard', ARRAY['ORIGINAL SOURCE LIMITED', 'MOOV-0136', '0136', '136']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'ORIGINAL SOURCE LIMITED', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0136',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('ORIGINAL SOURCE LIMITED', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['ORIGINAL SOURCE LIMITED', 'MOOV-0136', '0136', '136']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Ransom Publishing Ltd (MOOV-0137) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0137' OR dc_customer_id = '0137')
-    AND LOWER(business_name) != LOWER('Ransom Publishing Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Ransom Publishing Ltd'));
+    AND LOWER(business_name) != LOWER('Ransom Publishing Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Ransom Publishing Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Ransom Publishing Ltd'))
+  WHERE LOWER(business_name) = LOWER('Ransom Publishing Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -7505,22 +8705,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Ransom Publishing Ltd', 'MOOV-0137', 'MOOV-0137', 'active', 'standard', ARRAY['Ransom Publishing Ltd', 'MOOV-0137', '0137', '137']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Ransom Publishing Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0137',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Ransom Publishing Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Ransom Publishing Ltd', 'MOOV-0137', '0137', '137']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Webhook Test (123-0010) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = '123-0010' OR dc_customer_id = '123')
-    AND LOWER(business_name) != LOWER('Webhook Test') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Webhook Test'));
+    AND LOWER(business_name) != LOWER('Webhook Test');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Webhook Test') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Webhook Test'))
+  WHERE LOWER(business_name) = LOWER('Webhook Test')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -7536,22 +8741,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Webhook Test', '123-0010', '123-0010', 'active', 'standard', ARRAY['Webhook Test', '123-0010', '123']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Webhook Test', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), '123-0010',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Webhook Test', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Webhook Test', '123-0010', '123']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Fortec Trading Ltd t/a Glowtopia (Fortec Trading Ltd t/a Glowtopia) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'Fortec Trading Ltd t/a Glowtopia' )
-    AND LOWER(business_name) != LOWER('Fortec Trading Ltd t/a Glowtopia') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Fortec Trading Ltd t/a Glowtopia'));
+    AND LOWER(business_name) != LOWER('Fortec Trading Ltd t/a Glowtopia');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Fortec Trading Ltd t/a Glowtopia') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Fortec Trading Ltd t/a Glowtopia'))
+  WHERE LOWER(business_name) = LOWER('Fortec Trading Ltd t/a Glowtopia')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -7567,22 +8777,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Fortec Trading Ltd t/a Glowtopia', 'Fortec Trading Ltd t/a Glowtopia', 'Fortec Trading Ltd t/a Glowtopia', 'active', 'standard', ARRAY['Fortec Trading Ltd t/a Glowtopia', 'Fortec Trading Ltd t/a Glowtopia']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Fortec Trading Ltd t/a Glowtopia', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Fortec Trading Ltd t/a Glowtopia',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Fortec Trading Ltd t/a Glowtopia', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Fortec Trading Ltd t/a Glowtopia', 'Fortec Trading Ltd t/a Glowtopia']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Alpha Cus (123-0011) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = '123-0011' OR dc_customer_id = '123')
-    AND LOWER(business_name) != LOWER('Alpha Cus') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Alpha Cus'));
+    AND LOWER(business_name) != LOWER('Alpha Cus');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Alpha Cus') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Alpha Cus'))
+  WHERE LOWER(business_name) = LOWER('Alpha Cus')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -7598,22 +8813,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Alpha Cus', '123-0011', '123-0011', 'active', 'standard', ARRAY['Alpha Cus', '123-0011', '123']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Alpha Cus', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), '123-0011',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Alpha Cus', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Alpha Cus', '123-0011', '123']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Beta Cus (123-0012) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = '123-0012' OR dc_customer_id = '123')
-    AND LOWER(business_name) != LOWER('Beta Cus') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Beta Cus'));
+    AND LOWER(business_name) != LOWER('Beta Cus');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Beta Cus') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Beta Cus'))
+  WHERE LOWER(business_name) = LOWER('Beta Cus')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -7629,22 +8849,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Beta Cus', '123-0012', '123-0012', 'active', 'standard', ARRAY['Beta Cus', '123-0012', '123']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Beta Cus', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), '123-0012',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Beta Cus', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Beta Cus', '123-0012', '123']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Vintstreet (Vintstreet) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'Vintstreet' )
-    AND LOWER(business_name) != LOWER('Vintstreet') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Vintstreet'));
+    AND LOWER(business_name) != LOWER('Vintstreet');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Vintstreet') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Vintstreet'))
+  WHERE LOWER(business_name) = LOWER('Vintstreet')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -7660,22 +8885,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Vintstreet', 'Vintstreet', 'Vintstreet', 'active', 'standard', ARRAY['Vintstreet', 'Vintstreet']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Vintstreet', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Vintstreet',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Vintstreet', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Vintstreet', 'Vintstreet']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Westcare Ltd T/A westcare Supply Zone (MOOV-0138) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0138' OR dc_customer_id = '0138')
-    AND LOWER(business_name) != LOWER('Westcare Ltd T/A westcare Supply Zone') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Westcare Ltd T/A westcare Supply Zone'));
+    AND LOWER(business_name) != LOWER('Westcare Ltd T/A westcare Supply Zone');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Westcare Ltd T/A westcare Supply Zone') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Westcare Ltd T/A westcare Supply Zone'))
+  WHERE LOWER(business_name) = LOWER('Westcare Ltd T/A westcare Supply Zone')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -7691,22 +8921,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Westcare Ltd T/A westcare Supply Zone', 'MOOV-0138', 'MOOV-0138', 'active', 'standard', ARRAY['Westcare Ltd T/A westcare Supply Zone', 'MOOV-0138', '0138', '138']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Westcare Ltd T/A westcare Supply Zone', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0138',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Westcare Ltd T/A westcare Supply Zone', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Westcare Ltd T/A westcare Supply Zone', 'MOOV-0138', '0138', '138']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Talpa office products ltd (MOOV-0139) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0139' OR dc_customer_id = '0139')
-    AND LOWER(business_name) != LOWER('Talpa office products ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Talpa office products ltd'));
+    AND LOWER(business_name) != LOWER('Talpa office products ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Talpa office products ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Talpa office products ltd'))
+  WHERE LOWER(business_name) = LOWER('Talpa office products ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -7722,22 +8957,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Talpa office products ltd', 'MOOV-0139', 'MOOV-0139', 'active', 'standard', ARRAY['Talpa office products ltd', 'MOOV-0139', '0139', '139']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Talpa office products ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0139',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Talpa office products ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Talpa office products ltd', 'MOOV-0139', '0139', '139']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── LED Smart Solutions Limited (MOOV-0140) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0140' OR dc_customer_id = '0140')
-    AND LOWER(business_name) != LOWER('LED Smart Solutions Limited') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('LED Smart Solutions Limited'));
+    AND LOWER(business_name) != LOWER('LED Smart Solutions Limited');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('LED Smart Solutions Limited') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('LED Smart Solutions Limited'))
+  WHERE LOWER(business_name) = LOWER('LED Smart Solutions Limited')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -7753,22 +8993,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('LED Smart Solutions Limited', 'MOOV-0140', 'MOOV-0140', 'active', 'standard', ARRAY['LED Smart Solutions Limited', 'MOOV-0140', '0140', '140']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'LED Smart Solutions Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0140',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('LED Smart Solutions Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['LED Smart Solutions Limited', 'MOOV-0140', '0140', '140']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── My Company (HOF-0013) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'HOF-0013' OR dc_customer_id = '0013')
-    AND LOWER(business_name) != LOWER('My Company') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('My Company'));
+    AND LOWER(business_name) != LOWER('My Company');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('My Company') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('My Company'))
+  WHERE LOWER(business_name) = LOWER('My Company')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -7784,22 +9029,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('My Company', 'HOF-0013', 'HOF-0013', 'active', 'standard', ARRAY['My Company', 'HOF-0013', '0013', '13']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'My Company', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'HOF-0013',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('My Company', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['My Company', 'HOF-0013', '0013', '13']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── JST Supplies LTD (MOOV-0141) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0141' OR dc_customer_id = '0141')
-    AND LOWER(business_name) != LOWER('JST Supplies LTD') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('JST Supplies LTD'));
+    AND LOWER(business_name) != LOWER('JST Supplies LTD');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('JST Supplies LTD') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('JST Supplies LTD'))
+  WHERE LOWER(business_name) = LOWER('JST Supplies LTD')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -7815,22 +9065,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('JST Supplies LTD', 'MOOV-0141', 'MOOV-0141', 'active', 'standard', ARRAY['JST Supplies LTD', 'MOOV-0141', '0141', '141']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'JST Supplies LTD', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0141',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('JST Supplies LTD', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['JST Supplies LTD', 'MOOV-0141', '0141', '141']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Moov Diana Demo (MOOV-0142) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0142' OR dc_customer_id = '0142')
-    AND LOWER(business_name) != LOWER('Moov Diana Demo') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Moov Diana Demo'));
+    AND LOWER(business_name) != LOWER('Moov Diana Demo');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Moov Diana Demo') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Moov Diana Demo'))
+  WHERE LOWER(business_name) = LOWER('Moov Diana Demo')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -7846,22 +9101,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Moov Diana Demo', 'MOOV-0142', 'MOOV-0142', 'active', 'standard', ARRAY['Moov Diana Demo', 'MOOV-0142', '0142', '142']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Moov Diana Demo', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0142',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Moov Diana Demo', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Moov Diana Demo', 'MOOV-0142', '0142', '142']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── OliArt Wood LTD (MOOV-0143) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0143' OR dc_customer_id = '0143')
-    AND LOWER(business_name) != LOWER('OliArt Wood LTD') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('OliArt Wood LTD'));
+    AND LOWER(business_name) != LOWER('OliArt Wood LTD');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('OliArt Wood LTD') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('OliArt Wood LTD'))
+  WHERE LOWER(business_name) = LOWER('OliArt Wood LTD')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -7877,22 +9137,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('OliArt Wood LTD', 'MOOV-0143', 'MOOV-0143', 'active', 'standard', ARRAY['OliArt Wood LTD', 'MOOV-0143', '0143', '143']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'OliArt Wood LTD', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0143',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('OliArt Wood LTD', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['OliArt Wood LTD', 'MOOV-0143', '0143', '143']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Bessette LTD (MOOV-0144) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0144' OR dc_customer_id = '0144')
-    AND LOWER(business_name) != LOWER('Bessette LTD') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Bessette LTD'));
+    AND LOWER(business_name) != LOWER('Bessette LTD');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Bessette LTD') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Bessette LTD'))
+  WHERE LOWER(business_name) = LOWER('Bessette LTD')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -7908,22 +9173,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Bessette LTD', 'MOOV-0144', 'MOOV-0144', 'active', 'standard', ARRAY['Bessette LTD', 'MOOV-0144', '0144', '144']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Bessette LTD', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0144',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Bessette LTD', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Bessette LTD', 'MOOV-0144', '0144', '144']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── NDB (DDJ1-0007) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DDJ1-0007' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('NDB') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('NDB'));
+    AND LOWER(business_name) != LOWER('NDB');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('NDB') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('NDB'))
+  WHERE LOWER(business_name) = LOWER('NDB')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -7939,22 +9209,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('NDB', 'DDJ1-0007', 'DDJ1-0007', 'active', 'standard', ARRAY['NDB', 'DDJ1-0007', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'NDB', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DDJ1-0007',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('NDB', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['NDB', 'DDJ1-0007', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── CONTEXT PNEUMATIC SUPPLIES LIMITED (MOOV-0145) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0145' OR dc_customer_id = '0145')
-    AND LOWER(business_name) != LOWER('CONTEXT PNEUMATIC SUPPLIES LIMITED') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('CONTEXT PNEUMATIC SUPPLIES LIMITED'));
+    AND LOWER(business_name) != LOWER('CONTEXT PNEUMATIC SUPPLIES LIMITED');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('CONTEXT PNEUMATIC SUPPLIES LIMITED') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('CONTEXT PNEUMATIC SUPPLIES LIMITED'))
+  WHERE LOWER(business_name) = LOWER('CONTEXT PNEUMATIC SUPPLIES LIMITED')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -7970,22 +9245,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('CONTEXT PNEUMATIC SUPPLIES LIMITED', 'MOOV-0145', 'MOOV-0145', 'active', 'standard', ARRAY['CONTEXT PNEUMATIC SUPPLIES LIMITED', 'MOOV-0145', '0145', '145']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'CONTEXT PNEUMATIC SUPPLIES LIMITED', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0145',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('CONTEXT PNEUMATIC SUPPLIES LIMITED', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['CONTEXT PNEUMATIC SUPPLIES LIMITED', 'MOOV-0145', '0145', '145']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Bentley and Bo Interiors Ltd (MOOV-0146) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0146' OR dc_customer_id = '0146')
-    AND LOWER(business_name) != LOWER('Bentley and Bo Interiors Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Bentley and Bo Interiors Ltd'));
+    AND LOWER(business_name) != LOWER('Bentley and Bo Interiors Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Bentley and Bo Interiors Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Bentley and Bo Interiors Ltd'))
+  WHERE LOWER(business_name) = LOWER('Bentley and Bo Interiors Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -8001,22 +9281,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Bentley and Bo Interiors Ltd', 'MOOV-0146', 'MOOV-0146', 'active', 'standard', ARRAY['Bentley and Bo Interiors Ltd', 'MOOV-0146', '0146', '146']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Bentley and Bo Interiors Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0146',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Bentley and Bo Interiors Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Bentley and Bo Interiors Ltd', 'MOOV-0146', '0146', '146']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── SME IT Solutions Limited (MOOV-0147) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0147' OR dc_customer_id = '0147')
-    AND LOWER(business_name) != LOWER('SME IT Solutions Limited') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('SME IT Solutions Limited'));
+    AND LOWER(business_name) != LOWER('SME IT Solutions Limited');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('SME IT Solutions Limited') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('SME IT Solutions Limited'))
+  WHERE LOWER(business_name) = LOWER('SME IT Solutions Limited')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -8032,22 +9317,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('SME IT Solutions Limited', 'MOOV-0147', 'MOOV-0147', 'active', 'standard', ARRAY['SME IT Solutions Limited', 'MOOV-0147', '0147', '147']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'SME IT Solutions Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0147',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('SME IT Solutions Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['SME IT Solutions Limited', 'MOOV-0147', '0147', '147']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── EFUTURES SMOKE TEST CUSTOMER (MOOV-0148) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0148' OR dc_customer_id = '0148')
-    AND LOWER(business_name) != LOWER('EFUTURES SMOKE TEST CUSTOMER') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('EFUTURES SMOKE TEST CUSTOMER'));
+    AND LOWER(business_name) != LOWER('EFUTURES SMOKE TEST CUSTOMER');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('EFUTURES SMOKE TEST CUSTOMER') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('EFUTURES SMOKE TEST CUSTOMER'))
+  WHERE LOWER(business_name) = LOWER('EFUTURES SMOKE TEST CUSTOMER')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -8063,22 +9353,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('EFUTURES SMOKE TEST CUSTOMER', 'MOOV-0148', 'MOOV-0148', 'active', 'standard', ARRAY['EFUTURES SMOKE TEST CUSTOMER', 'MOOV-0148', '0148', '148']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'EFUTURES SMOKE TEST CUSTOMER', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0148',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('EFUTURES SMOKE TEST CUSTOMER', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['EFUTURES SMOKE TEST CUSTOMER', 'MOOV-0148', '0148', '148']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Buffalo Systems Ltd (MOOV-0149) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0149' OR dc_customer_id = '0149')
-    AND LOWER(business_name) != LOWER('Buffalo Systems Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Buffalo Systems Ltd'));
+    AND LOWER(business_name) != LOWER('Buffalo Systems Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Buffalo Systems Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Buffalo Systems Ltd'))
+  WHERE LOWER(business_name) = LOWER('Buffalo Systems Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -8094,22 +9389,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Buffalo Systems Ltd', 'MOOV-0149', 'MOOV-0149', 'active', 'standard', ARRAY['Buffalo Systems Ltd', 'MOOV-0149', '0149', '149']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Buffalo Systems Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0149',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Buffalo Systems Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Buffalo Systems Ltd', 'MOOV-0149', '0149', '149']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── East London Packaging Supplies Ltd (MOOV-0150) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0150' OR dc_customer_id = '0150')
-    AND LOWER(business_name) != LOWER('East London Packaging Supplies Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('East London Packaging Supplies Ltd'));
+    AND LOWER(business_name) != LOWER('East London Packaging Supplies Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('East London Packaging Supplies Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('East London Packaging Supplies Ltd'))
+  WHERE LOWER(business_name) = LOWER('East London Packaging Supplies Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -8125,22 +9425,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('East London Packaging Supplies Ltd', 'MOOV-0150', 'MOOV-0150', 'active', 'standard', ARRAY['East London Packaging Supplies Ltd', 'MOOV-0150', '0150', '150']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'East London Packaging Supplies Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0150',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('East London Packaging Supplies Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['East London Packaging Supplies Ltd', 'MOOV-0150', '0150', '150']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Metal Polishing Supplies Ltd (MOOV-0151) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0151' OR dc_customer_id = '0151')
-    AND LOWER(business_name) != LOWER('Metal Polishing Supplies Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Metal Polishing Supplies Ltd'));
+    AND LOWER(business_name) != LOWER('Metal Polishing Supplies Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Metal Polishing Supplies Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Metal Polishing Supplies Ltd'))
+  WHERE LOWER(business_name) = LOWER('Metal Polishing Supplies Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -8156,22 +9461,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Metal Polishing Supplies Ltd', 'MOOV-0151', 'MOOV-0151', 'active', 'standard', ARRAY['Metal Polishing Supplies Ltd', 'MOOV-0151', '0151', '151']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Metal Polishing Supplies Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0151',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Metal Polishing Supplies Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Metal Polishing Supplies Ltd', 'MOOV-0151', '0151', '151']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Spokz Ltd (MOOV-0152) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0152' OR dc_customer_id = '0152')
-    AND LOWER(business_name) != LOWER('Spokz Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Spokz Ltd'));
+    AND LOWER(business_name) != LOWER('Spokz Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Spokz Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Spokz Ltd'))
+  WHERE LOWER(business_name) = LOWER('Spokz Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -8187,22 +9497,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Spokz Ltd', 'MOOV-0152', 'MOOV-0152', 'active', 'standard', ARRAY['Spokz Ltd', 'MOOV-0152', '0152', '152']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Spokz Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0152',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Spokz Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Spokz Ltd', 'MOOV-0152', '0152', '152']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Youtheory (123-0013) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = '123-0013' OR dc_customer_id = '123')
-    AND LOWER(business_name) != LOWER('Youtheory') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Youtheory'));
+    AND LOWER(business_name) != LOWER('Youtheory');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Youtheory') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Youtheory'))
+  WHERE LOWER(business_name) = LOWER('Youtheory')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -8218,22 +9533,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Youtheory', '123-0013', '123-0013', 'active', 'standard', ARRAY['Youtheory', '123-0013', '123']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Youtheory', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), '123-0013',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Youtheory', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Youtheory', '123-0013', '123']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── M. Criscuolo & Co Ltd (MOOV-0153) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0153' OR dc_customer_id = '0153')
-    AND LOWER(business_name) != LOWER('M. Criscuolo & Co Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('M. Criscuolo & Co Ltd'));
+    AND LOWER(business_name) != LOWER('M. Criscuolo & Co Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('M. Criscuolo & Co Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('M. Criscuolo & Co Ltd'))
+  WHERE LOWER(business_name) = LOWER('M. Criscuolo & Co Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -8249,22 +9569,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('M. Criscuolo & Co Ltd', 'MOOV-0153', 'MOOV-0153', 'active', 'standard', ARRAY['M. Criscuolo & Co Ltd', 'MOOV-0153', '0153', '153']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'M. Criscuolo & Co Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0153',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('M. Criscuolo & Co Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['M. Criscuolo & Co Ltd', 'MOOV-0153', '0153', '153']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Kettles Pottery Supplies Ltd (MOOV-0154) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0154' OR dc_customer_id = '0154')
-    AND LOWER(business_name) != LOWER('Kettles Pottery Supplies Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Kettles Pottery Supplies Ltd'));
+    AND LOWER(business_name) != LOWER('Kettles Pottery Supplies Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Kettles Pottery Supplies Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Kettles Pottery Supplies Ltd'))
+  WHERE LOWER(business_name) = LOWER('Kettles Pottery Supplies Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -8280,22 +9605,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Kettles Pottery Supplies Ltd', 'MOOV-0154', 'MOOV-0154', 'active', 'standard', ARRAY['Kettles Pottery Supplies Ltd', 'MOOV-0154', '0154', '154']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Kettles Pottery Supplies Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0154',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Kettles Pottery Supplies Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Kettles Pottery Supplies Ltd', 'MOOV-0154', '0154', '154']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── East Coast Creations Ltd (MOOV-0155) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0155' OR dc_customer_id = '0155')
-    AND LOWER(business_name) != LOWER('East Coast Creations Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('East Coast Creations Ltd'));
+    AND LOWER(business_name) != LOWER('East Coast Creations Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('East Coast Creations Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('East Coast Creations Ltd'))
+  WHERE LOWER(business_name) = LOWER('East Coast Creations Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -8311,22 +9641,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('East Coast Creations Ltd', 'MOOV-0155', 'MOOV-0155', 'active', 'standard', ARRAY['East Coast Creations Ltd', 'MOOV-0155', '0155', '155']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'East Coast Creations Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0155',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('East Coast Creations Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['East Coast Creations Ltd', 'MOOV-0155', '0155', '155']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── ETA Solutions Limited (MOOV-0156) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0156' OR dc_customer_id = '0156')
-    AND LOWER(business_name) != LOWER('ETA Solutions Limited') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('ETA Solutions Limited'));
+    AND LOWER(business_name) != LOWER('ETA Solutions Limited');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('ETA Solutions Limited') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('ETA Solutions Limited'))
+  WHERE LOWER(business_name) = LOWER('ETA Solutions Limited')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -8342,22 +9677,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('ETA Solutions Limited', 'MOOV-0156', 'MOOV-0156', 'active', 'standard', ARRAY['ETA Solutions Limited', 'MOOV-0156', '0156', '156']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'ETA Solutions Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0156',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('ETA Solutions Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['ETA Solutions Limited', 'MOOV-0156', '0156', '156']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Security Trade Products Ltd (MOOV-0157) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0157' OR dc_customer_id = '0157')
-    AND LOWER(business_name) != LOWER('Security Trade Products Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Security Trade Products Ltd'));
+    AND LOWER(business_name) != LOWER('Security Trade Products Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Security Trade Products Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Security Trade Products Ltd'))
+  WHERE LOWER(business_name) = LOWER('Security Trade Products Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -8373,22 +9713,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Security Trade Products Ltd', 'MOOV-0157', 'MOOV-0157', 'active', 'standard', ARRAY['Security Trade Products Ltd', 'MOOV-0157', '0157', '157']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Security Trade Products Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0157',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Security Trade Products Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Security Trade Products Ltd', 'MOOV-0157', '0157', '157']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Sarratt Online Ltd (MOOV-0158) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0158' OR dc_customer_id = '0158')
-    AND LOWER(business_name) != LOWER('Sarratt Online Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Sarratt Online Ltd'));
+    AND LOWER(business_name) != LOWER('Sarratt Online Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Sarratt Online Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Sarratt Online Ltd'))
+  WHERE LOWER(business_name) = LOWER('Sarratt Online Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -8404,22 +9749,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Sarratt Online Ltd', 'MOOV-0158', 'MOOV-0158', 'active', 'standard', ARRAY['Sarratt Online Ltd', 'MOOV-0158', '0158', '158']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Sarratt Online Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0158',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Sarratt Online Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Sarratt Online Ltd', 'MOOV-0158', '0158', '158']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Agar Hygiene Ltd (MOOV-0159) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0159' OR dc_customer_id = '0159')
-    AND LOWER(business_name) != LOWER('Agar Hygiene Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Agar Hygiene Ltd'));
+    AND LOWER(business_name) != LOWER('Agar Hygiene Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Agar Hygiene Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Agar Hygiene Ltd'))
+  WHERE LOWER(business_name) = LOWER('Agar Hygiene Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -8435,22 +9785,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Agar Hygiene Ltd', 'MOOV-0159', 'MOOV-0159', 'active', 'standard', ARRAY['Agar Hygiene Ltd', 'MOOV-0159', '0159', '159']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Agar Hygiene Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0159',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Agar Hygiene Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Agar Hygiene Ltd', 'MOOV-0159', '0159', '159']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Lesser Spotted Images Ltd (MOOV-0160) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0160' OR dc_customer_id = '0160')
-    AND LOWER(business_name) != LOWER('Lesser Spotted Images Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Lesser Spotted Images Ltd'));
+    AND LOWER(business_name) != LOWER('Lesser Spotted Images Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Lesser Spotted Images Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Lesser Spotted Images Ltd'))
+  WHERE LOWER(business_name) = LOWER('Lesser Spotted Images Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -8466,22 +9821,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Lesser Spotted Images Ltd', 'MOOV-0160', 'MOOV-0160', 'active', 'standard', ARRAY['Lesser Spotted Images Ltd', 'MOOV-0160', '0160', '160']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Lesser Spotted Images Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0160',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Lesser Spotted Images Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Lesser Spotted Images Ltd', 'MOOV-0160', '0160', '160']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Just Cable Ties (MOOV-0161) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0161' OR dc_customer_id = '0161')
-    AND LOWER(business_name) != LOWER('Just Cable Ties') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Just Cable Ties'));
+    AND LOWER(business_name) != LOWER('Just Cable Ties');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Just Cable Ties') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Just Cable Ties'))
+  WHERE LOWER(business_name) = LOWER('Just Cable Ties')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -8497,22 +9857,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Just Cable Ties', 'MOOV-0161', 'MOOV-0161', 'active', 'standard', ARRAY['Just Cable Ties', 'MOOV-0161', '0161', '161']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Just Cable Ties', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0161',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Just Cable Ties', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Just Cable Ties', 'MOOV-0161', '0161', '161']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Work and Wear Direct Ltd (Work and Wear Direct Ltd) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'Work and Wear Direct Ltd' )
-    AND LOWER(business_name) != LOWER('Work and Wear Direct Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Work and Wear Direct Ltd'));
+    AND LOWER(business_name) != LOWER('Work and Wear Direct Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Work and Wear Direct Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Work and Wear Direct Ltd'))
+  WHERE LOWER(business_name) = LOWER('Work and Wear Direct Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -8528,22 +9893,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Work and Wear Direct Ltd', 'Work and Wear Direct Ltd', 'Work and Wear Direct Ltd', 'active', 'standard', ARRAY['Work and Wear Direct Ltd', 'Work and Wear Direct Ltd']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Work and Wear Direct Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Work and Wear Direct Ltd',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Work and Wear Direct Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Work and Wear Direct Ltd', 'Work and Wear Direct Ltd']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Exhale Boutique (Exhale Boutique) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'Exhale Boutique' )
-    AND LOWER(business_name) != LOWER('Exhale Boutique') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Exhale Boutique'));
+    AND LOWER(business_name) != LOWER('Exhale Boutique');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Exhale Boutique') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Exhale Boutique'))
+  WHERE LOWER(business_name) = LOWER('Exhale Boutique')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -8559,22 +9929,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Exhale Boutique', 'Exhale Boutique', 'Exhale Boutique', 'active', 'standard', ARRAY['Exhale Boutique', 'Exhale Boutique']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Exhale Boutique', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Exhale Boutique',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Exhale Boutique', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Exhale Boutique', 'Exhale Boutique']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Southdown Abrasives & Ind Chemicals Ltd (MOOV-0162) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0162' OR dc_customer_id = '0162')
-    AND LOWER(business_name) != LOWER('Southdown Abrasives & Ind Chemicals Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Southdown Abrasives & Ind Chemicals Ltd'));
+    AND LOWER(business_name) != LOWER('Southdown Abrasives & Ind Chemicals Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Southdown Abrasives & Ind Chemicals Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Southdown Abrasives & Ind Chemicals Ltd'))
+  WHERE LOWER(business_name) = LOWER('Southdown Abrasives & Ind Chemicals Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -8590,22 +9965,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Southdown Abrasives & Ind Chemicals Ltd', 'MOOV-0162', 'MOOV-0162', 'active', 'standard', ARRAY['Southdown Abrasives & Ind Chemicals Ltd', 'MOOV-0162', '0162', '162']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Southdown Abrasives & Ind Chemicals Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0162',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Southdown Abrasives & Ind Chemicals Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Southdown Abrasives & Ind Chemicals Ltd', 'MOOV-0162', '0162', '162']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Tackl (Tackl) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'Tackl' )
-    AND LOWER(business_name) != LOWER('Tackl') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Tackl'));
+    AND LOWER(business_name) != LOWER('Tackl');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Tackl') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Tackl'))
+  WHERE LOWER(business_name) = LOWER('Tackl')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -8621,22 +10001,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Tackl', 'Tackl', 'Tackl', 'active', 'standard', ARRAY['Tackl', 'Tackl']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Tackl', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Tackl',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Tackl', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Tackl', 'Tackl']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Auto Test (Auto) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'Auto' )
-    AND LOWER(business_name) != LOWER('Auto Test') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Auto Test'));
+    AND LOWER(business_name) != LOWER('Auto Test');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Auto Test') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Auto Test'))
+  WHERE LOWER(business_name) = LOWER('Auto Test')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -8652,22 +10037,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Auto Test', 'Auto', 'Auto', 'active', 'standard', ARRAY['Auto Test', 'Auto']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Auto Test', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Auto',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Auto Test', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Auto Test', 'Auto']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── HPSA Ltd (MOOV-0163) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0163' OR dc_customer_id = '0163')
-    AND LOWER(business_name) != LOWER('HPSA Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('HPSA Ltd'));
+    AND LOWER(business_name) != LOWER('HPSA Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('HPSA Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('HPSA Ltd'))
+  WHERE LOWER(business_name) = LOWER('HPSA Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -8683,22 +10073,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('HPSA Ltd', 'MOOV-0163', 'MOOV-0163', 'active', 'standard', ARRAY['HPSA Ltd', 'MOOV-0163', '0163', '163']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'HPSA Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0163',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('HPSA Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['HPSA Ltd', 'MOOV-0163', '0163', '163']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── ceravi (DP1-0051) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DP1-0051' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('ceravi') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('ceravi'));
+    AND LOWER(business_name) != LOWER('ceravi');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('ceravi') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('ceravi'))
+  WHERE LOWER(business_name) = LOWER('ceravi')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -8714,22 +10109,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('ceravi', 'DP1-0051', 'DP1-0051', 'active', 'standard', ARRAY['ceravi', 'DP1-0051', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'ceravi', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0051',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('ceravi', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['ceravi', 'DP1-0051', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── PWS Leeds Ltd (MOOV-0164) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0164' OR dc_customer_id = '0164')
-    AND LOWER(business_name) != LOWER('PWS Leeds Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('PWS Leeds Ltd'));
+    AND LOWER(business_name) != LOWER('PWS Leeds Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('PWS Leeds Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('PWS Leeds Ltd'))
+  WHERE LOWER(business_name) = LOWER('PWS Leeds Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -8745,22 +10145,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('PWS Leeds Ltd', 'MOOV-0164', 'MOOV-0164', 'active', 'standard', ARRAY['PWS Leeds Ltd', 'MOOV-0164', '0164', '164']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'PWS Leeds Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0164',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('PWS Leeds Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['PWS Leeds Ltd', 'MOOV-0164', '0164', '164']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Total Insignia Ltd (MOOV-0165) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0165' OR dc_customer_id = '0165')
-    AND LOWER(business_name) != LOWER('Total Insignia Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Total Insignia Ltd'));
+    AND LOWER(business_name) != LOWER('Total Insignia Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Total Insignia Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Total Insignia Ltd'))
+  WHERE LOWER(business_name) = LOWER('Total Insignia Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -8776,22 +10181,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Total Insignia Ltd', 'MOOV-0165', 'MOOV-0165', 'active', 'standard', ARRAY['Total Insignia Ltd', 'MOOV-0165', '0165', '165']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Total Insignia Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0165',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Total Insignia Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Total Insignia Ltd', 'MOOV-0165', '0165', '165']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── USER (EFD1-0004) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'EFD1-0004' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('USER') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('USER'));
+    AND LOWER(business_name) != LOWER('USER');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('USER') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('USER'))
+  WHERE LOWER(business_name) = LOWER('USER')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -8807,22 +10217,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('USER', 'EFD1-0004', 'EFD1-0004', 'active', 'standard', ARRAY['USER', 'EFD1-0004', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'USER', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'EFD1-0004',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('USER', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['USER', 'EFD1-0004', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── The Wild Meat Company ltd (MOOV-0166) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0166' OR dc_customer_id = '0166')
-    AND LOWER(business_name) != LOWER('The Wild Meat Company ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('The Wild Meat Company ltd'));
+    AND LOWER(business_name) != LOWER('The Wild Meat Company ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('The Wild Meat Company ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('The Wild Meat Company ltd'))
+  WHERE LOWER(business_name) = LOWER('The Wild Meat Company ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -8838,22 +10253,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('The Wild Meat Company ltd', 'MOOV-0166', 'MOOV-0166', 'active', 'standard', ARRAY['The Wild Meat Company ltd', 'MOOV-0166', '0166', '166']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'The Wild Meat Company ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0166',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('The Wild Meat Company ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['The Wild Meat Company ltd', 'MOOV-0166', '0166', '166']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Grace Test Account (MOOV-0167) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0167' OR dc_customer_id = '0167')
-    AND LOWER(business_name) != LOWER('Grace Test Account') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Grace Test Account'));
+    AND LOWER(business_name) != LOWER('Grace Test Account');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Grace Test Account') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Grace Test Account'))
+  WHERE LOWER(business_name) = LOWER('Grace Test Account')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -8869,22 +10289,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Grace Test Account', 'MOOV-0167', 'MOOV-0167', 'active', 'standard', ARRAY['Grace Test Account', 'MOOV-0167', '0167', '167']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Grace Test Account', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0167',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Grace Test Account', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Grace Test Account', 'MOOV-0167', '0167', '167']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Bob AI (MOOV-0168) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0168' OR dc_customer_id = '0168')
-    AND LOWER(business_name) != LOWER('Bob AI') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Bob AI'));
+    AND LOWER(business_name) != LOWER('Bob AI');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Bob AI') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Bob AI'))
+  WHERE LOWER(business_name) = LOWER('Bob AI')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -8900,22 +10325,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Bob AI', 'MOOV-0168', 'MOOV-0168', 'active', 'standard', ARRAY['Bob AI', 'MOOV-0168', '0168', '168']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Bob AI', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0168',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Bob AI', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Bob AI', 'MOOV-0168', '0168', '168']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Xplore Brands (MOOV-0169) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0169' OR dc_customer_id = '0169')
-    AND LOWER(business_name) != LOWER('Xplore Brands') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Xplore Brands'));
+    AND LOWER(business_name) != LOWER('Xplore Brands');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Xplore Brands') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Xplore Brands'))
+  WHERE LOWER(business_name) = LOWER('Xplore Brands')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -8931,22 +10361,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Xplore Brands', 'MOOV-0169', 'MOOV-0169', 'active', 'standard', ARRAY['Xplore Brands', 'MOOV-0169', '0169', '169']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Xplore Brands', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0169',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Xplore Brands', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Xplore Brands', 'MOOV-0169', '0169', '169']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Medicube (DQA1-0018) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DQA1-0018' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('Medicube') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Medicube'));
+    AND LOWER(business_name) != LOWER('Medicube');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Medicube') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Medicube'))
+  WHERE LOWER(business_name) = LOWER('Medicube')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -8962,22 +10397,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Medicube', 'DQA1-0018', 'DQA1-0018', 'active', 'standard', ARRAY['Medicube', 'DQA1-0018', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Medicube', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DQA1-0018',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Medicube', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Medicube', 'DQA1-0018', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Sherwood Wholesale Foods Ltd (MOOV-0170) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0170' OR dc_customer_id = '0170')
-    AND LOWER(business_name) != LOWER('Sherwood Wholesale Foods Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Sherwood Wholesale Foods Ltd'));
+    AND LOWER(business_name) != LOWER('Sherwood Wholesale Foods Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Sherwood Wholesale Foods Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Sherwood Wholesale Foods Ltd'))
+  WHERE LOWER(business_name) = LOWER('Sherwood Wholesale Foods Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -8993,22 +10433,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Sherwood Wholesale Foods Ltd', 'MOOV-0170', 'MOOV-0170', 'active', 'standard', ARRAY['Sherwood Wholesale Foods Ltd', 'MOOV-0170', '0170', '170']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Sherwood Wholesale Foods Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0170',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Sherwood Wholesale Foods Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Sherwood Wholesale Foods Ltd', 'MOOV-0170', '0170', '170']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── 2023 (QDP1-0001) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'QDP1-0001' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('2023') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('2023'));
+    AND LOWER(business_name) != LOWER('2023');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('2023') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('2023'))
+  WHERE LOWER(business_name) = LOWER('2023')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -9024,22 +10469,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('2023', 'QDP1-0001', 'QDP1-0001', 'active', 'standard', ARRAY['2023', 'QDP1-0001', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      '2023', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'QDP1-0001',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('2023', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['2023', 'QDP1-0001', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── PROD EF COMPANY (TDP1-0001) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'TDP1-0001' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('PROD EF COMPANY') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('PROD EF COMPANY'));
+    AND LOWER(business_name) != LOWER('PROD EF COMPANY');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('PROD EF COMPANY') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('PROD EF COMPANY'))
+  WHERE LOWER(business_name) = LOWER('PROD EF COMPANY')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -9055,22 +10505,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('PROD EF COMPANY', 'TDP1-0001', 'TDP1-0001', 'active', 'standard', ARRAY['PROD EF COMPANY', 'TDP1-0001', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'PROD EF COMPANY', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'TDP1-0001',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('PROD EF COMPANY', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['PROD EF COMPANY', 'TDP1-0001', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── EF (DE22-0009) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DE22-0009' OR dc_customer_id = '22')
-    AND LOWER(business_name) != LOWER('EF') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('EF'));
+    AND LOWER(business_name) != LOWER('EF');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('EF') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('EF'))
+  WHERE LOWER(business_name) = LOWER('EF')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -9086,22 +10541,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('EF', 'DE22-0009', 'DE22-0009', 'active', 'standard', ARRAY['EF', 'DE22-0009', '22']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'EF', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DE22-0009',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('EF', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['EF', 'DE22-0009', '22']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── NNU (DE22-0011) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DE22-0011' OR dc_customer_id = '22')
-    AND LOWER(business_name) != LOWER('NNU') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('NNU'));
+    AND LOWER(business_name) != LOWER('NNU');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('NNU') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('NNU'))
+  WHERE LOWER(business_name) = LOWER('NNU')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -9117,22 +10577,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('NNU', 'DE22-0011', 'DE22-0011', 'active', 'standard', ARRAY['NNU', 'DE22-0011', '22']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'NNU', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DE22-0011',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('NNU', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['NNU', 'DE22-0011', '22']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Non Ninja Company (QDP1-0003) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'QDP1-0003' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('Non Ninja Company') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Non Ninja Company'));
+    AND LOWER(business_name) != LOWER('Non Ninja Company');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Non Ninja Company') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Non Ninja Company'))
+  WHERE LOWER(business_name) = LOWER('Non Ninja Company')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -9148,22 +10613,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Non Ninja Company', 'QDP1-0003', 'QDP1-0003', 'active', 'standard', ARRAY['Non Ninja Company', 'QDP1-0003', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Non Ninja Company', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'QDP1-0003',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Non Ninja Company', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Non Ninja Company', 'QDP1-0003', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Test Ninja company (DP1-0053) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DP1-0053' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('Test Ninja company') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Test Ninja company'));
+    AND LOWER(business_name) != LOWER('Test Ninja company');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Test Ninja company') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Test Ninja company'))
+  WHERE LOWER(business_name) = LOWER('Test Ninja company')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -9179,22 +10649,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Test Ninja company', 'DP1-0053', 'DP1-0053', 'active', 'standard', ARRAY['Test Ninja company', 'DP1-0053', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Test Ninja company', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0053',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Test Ninja company', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Test Ninja company', 'DP1-0053', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Efutures Non Ninja company (DE22-0015) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DE22-0015' OR dc_customer_id = '22')
-    AND LOWER(business_name) != LOWER('Efutures Non Ninja company') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Efutures Non Ninja company'));
+    AND LOWER(business_name) != LOWER('Efutures Non Ninja company');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Efutures Non Ninja company') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Efutures Non Ninja company'))
+  WHERE LOWER(business_name) = LOWER('Efutures Non Ninja company')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -9210,22 +10685,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Efutures Non Ninja company', 'DE22-0015', 'DE22-0015', 'active', 'standard', ARRAY['Efutures Non Ninja company', 'DE22-0015', '22']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Efutures Non Ninja company', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DE22-0015',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Efutures Non Ninja company', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Efutures Non Ninja company', 'DE22-0015', '22']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── EFUTURES TEST PORD NINJA COMPANY (TDP1-0005) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'TDP1-0005' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('EFUTURES TEST PORD NINJA COMPANY') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('EFUTURES TEST PORD NINJA COMPANY'));
+    AND LOWER(business_name) != LOWER('EFUTURES TEST PORD NINJA COMPANY');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('EFUTURES TEST PORD NINJA COMPANY') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('EFUTURES TEST PORD NINJA COMPANY'))
+  WHERE LOWER(business_name) = LOWER('EFUTURES TEST PORD NINJA COMPANY')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -9241,22 +10721,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('EFUTURES TEST PORD NINJA COMPANY', 'TDP1-0005', 'TDP1-0005', 'active', 'standard', ARRAY['EFUTURES TEST PORD NINJA COMPANY', 'TDP1-0005', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'EFUTURES TEST PORD NINJA COMPANY', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'TDP1-0005',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('EFUTURES TEST PORD NINJA COMPANY', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['EFUTURES TEST PORD NINJA COMPANY', 'TDP1-0005', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Test Efutures Non Ninja comp (TDP1-0007) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'TDP1-0007' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('Test Efutures Non Ninja comp') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Test Efutures Non Ninja comp'));
+    AND LOWER(business_name) != LOWER('Test Efutures Non Ninja comp');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Test Efutures Non Ninja comp') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Test Efutures Non Ninja comp'))
+  WHERE LOWER(business_name) = LOWER('Test Efutures Non Ninja comp')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -9272,22 +10757,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Test Efutures Non Ninja comp', 'TDP1-0007', 'TDP1-0007', 'active', 'standard', ARRAY['Test Efutures Non Ninja comp', 'TDP1-0007', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Test Efutures Non Ninja comp', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'TDP1-0007',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Test Efutures Non Ninja comp', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Test Efutures Non Ninja comp', 'TDP1-0007', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Jamie Ferments Limited (MOOV-0171) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0171' OR dc_customer_id = '0171')
-    AND LOWER(business_name) != LOWER('Jamie Ferments Limited') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Jamie Ferments Limited'));
+    AND LOWER(business_name) != LOWER('Jamie Ferments Limited');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Jamie Ferments Limited') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Jamie Ferments Limited'))
+  WHERE LOWER(business_name) = LOWER('Jamie Ferments Limited')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -9303,22 +10793,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Jamie Ferments Limited', 'MOOV-0171', 'MOOV-0171', 'active', 'standard', ARRAY['Jamie Ferments Limited', 'MOOV-0171', '0171', '171']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Jamie Ferments Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0171',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Jamie Ferments Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Jamie Ferments Limited', 'MOOV-0171', '0171', '171']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Jezaya UK Limited (MOOV-0172) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0172' OR dc_customer_id = '0172')
-    AND LOWER(business_name) != LOWER('Jezaya UK Limited') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Jezaya UK Limited'));
+    AND LOWER(business_name) != LOWER('Jezaya UK Limited');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Jezaya UK Limited') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Jezaya UK Limited'))
+  WHERE LOWER(business_name) = LOWER('Jezaya UK Limited')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -9334,22 +10829,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Jezaya UK Limited', 'MOOV-0172', 'MOOV-0172', 'active', 'standard', ARRAY['Jezaya UK Limited', 'MOOV-0172', '0172', '172']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Jezaya UK Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0172',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Jezaya UK Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Jezaya UK Limited', 'MOOV-0172', '0172', '172']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Wine Buffs Ltd (MOOV-0173) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0173' OR dc_customer_id = '0173')
-    AND LOWER(business_name) != LOWER('Wine Buffs Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Wine Buffs Ltd'));
+    AND LOWER(business_name) != LOWER('Wine Buffs Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Wine Buffs Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Wine Buffs Ltd'))
+  WHERE LOWER(business_name) = LOWER('Wine Buffs Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -9365,22 +10865,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Wine Buffs Ltd', 'MOOV-0173', 'MOOV-0173', 'active', 'standard', ARRAY['Wine Buffs Ltd', 'MOOV-0173', '0173', '173']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Wine Buffs Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0173',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Wine Buffs Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Wine Buffs Ltd', 'MOOV-0173', '0173', '173']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Doran Packaging Ltd (MOOV-0174) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0174' OR dc_customer_id = '0174')
-    AND LOWER(business_name) != LOWER('Doran Packaging Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Doran Packaging Ltd'));
+    AND LOWER(business_name) != LOWER('Doran Packaging Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Doran Packaging Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Doran Packaging Ltd'))
+  WHERE LOWER(business_name) = LOWER('Doran Packaging Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -9396,22 +10901,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Doran Packaging Ltd', 'MOOV-0174', 'MOOV-0174', 'active', 'standard', ARRAY['Doran Packaging Ltd', 'MOOV-0174', '0174', '174']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Doran Packaging Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0174',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Doran Packaging Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Doran Packaging Ltd', 'MOOV-0174', '0174', '174']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Purozo Limited (MOOV-0175) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0175' OR dc_customer_id = '0175')
-    AND LOWER(business_name) != LOWER('Purozo Limited') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Purozo Limited'));
+    AND LOWER(business_name) != LOWER('Purozo Limited');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Purozo Limited') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Purozo Limited'))
+  WHERE LOWER(business_name) = LOWER('Purozo Limited')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -9427,22 +10937,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Purozo Limited', 'MOOV-0175', 'MOOV-0175', 'active', 'standard', ARRAY['Purozo Limited', 'MOOV-0175', '0175', '175']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Purozo Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0175',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Purozo Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Purozo Limited', 'MOOV-0175', '0175', '175']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Wosi Wosi Foods Limited (MOOV-0176) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0176' OR dc_customer_id = '0176')
-    AND LOWER(business_name) != LOWER('Wosi Wosi Foods Limited') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Wosi Wosi Foods Limited'));
+    AND LOWER(business_name) != LOWER('Wosi Wosi Foods Limited');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Wosi Wosi Foods Limited') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Wosi Wosi Foods Limited'))
+  WHERE LOWER(business_name) = LOWER('Wosi Wosi Foods Limited')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -9458,22 +10973,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Wosi Wosi Foods Limited', 'MOOV-0176', 'MOOV-0176', 'active', 'standard', ARRAY['Wosi Wosi Foods Limited', 'MOOV-0176', '0176', '176', 'wasi wasi', 'wasiwasi', 'wosi wosi', 'wosiwosi', '0176']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Wosi Wosi Foods Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0176',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Wosi Wosi Foods Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Wosi Wosi Foods Limited', 'MOOV-0176', '0176', '176', 'wasi wasi', 'wasiwasi', 'wosi wosi', 'wosiwosi', '0176']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── My Shadow Ltd (MOOV-0177) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0177' OR dc_customer_id = '0177')
-    AND LOWER(business_name) != LOWER('My Shadow Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('My Shadow Ltd'));
+    AND LOWER(business_name) != LOWER('My Shadow Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('My Shadow Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('My Shadow Ltd'))
+  WHERE LOWER(business_name) = LOWER('My Shadow Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -9489,22 +11009,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('My Shadow Ltd', 'MOOV-0177', 'MOOV-0177', 'active', 'standard', ARRAY['My Shadow Ltd', 'MOOV-0177', '0177', '177']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'My Shadow Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0177',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('My Shadow Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['My Shadow Ltd', 'MOOV-0177', '0177', '177']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── U-Telecom Ltd (MOOV-0178) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0178' OR dc_customer_id = '0178')
-    AND LOWER(business_name) != LOWER('U-Telecom Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('U-Telecom Ltd'));
+    AND LOWER(business_name) != LOWER('U-Telecom Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('U-Telecom Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('U-Telecom Ltd'))
+  WHERE LOWER(business_name) = LOWER('U-Telecom Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -9520,22 +11045,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('U-Telecom Ltd', 'MOOV-0178', 'MOOV-0178', 'active', 'standard', ARRAY['U-Telecom Ltd', 'MOOV-0178', '0178', '178']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'U-Telecom Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0178',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('U-Telecom Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['U-Telecom Ltd', 'MOOV-0178', '0178', '178']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Mala Leather (MOOV-0179) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0179' OR dc_customer_id = '0179')
-    AND LOWER(business_name) != LOWER('Mala Leather') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Mala Leather'));
+    AND LOWER(business_name) != LOWER('Mala Leather');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Mala Leather') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Mala Leather'))
+  WHERE LOWER(business_name) = LOWER('Mala Leather')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -9551,22 +11081,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Mala Leather', 'MOOV-0179', 'MOOV-0179', 'active', 'standard', ARRAY['Mala Leather', 'MOOV-0179', '0179', '179']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Mala Leather', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0179',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Mala Leather', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Mala Leather', 'MOOV-0179', '0179', '179']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── CT Inc (DP1-0003) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DP1-0003' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('CT Inc') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('CT Inc'));
+    AND LOWER(business_name) != LOWER('CT Inc');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('CT Inc') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('CT Inc'))
+  WHERE LOWER(business_name) = LOWER('CT Inc')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -9582,22 +11117,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('CT Inc', 'DP1-0003', 'DP1-0003', 'active', 'standard', ARRAY['CT Inc', 'DP1-0003', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'CT Inc', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0003',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('CT Inc', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['CT Inc', 'DP1-0003', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Golf and Baby Limited (MOOV-0180) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0180' OR dc_customer_id = '0180')
-    AND LOWER(business_name) != LOWER('Golf and Baby Limited') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Golf and Baby Limited'));
+    AND LOWER(business_name) != LOWER('Golf and Baby Limited');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Golf and Baby Limited') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Golf and Baby Limited'))
+  WHERE LOWER(business_name) = LOWER('Golf and Baby Limited')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -9613,22 +11153,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Golf and Baby Limited', 'MOOV-0180', 'MOOV-0180', 'active', 'standard', ARRAY['Golf and Baby Limited', 'MOOV-0180', '0180', '180']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Golf and Baby Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0180',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Golf and Baby Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Golf and Baby Limited', 'MOOV-0180', '0180', '180']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── IMEX China Trade Ltd (MOOV-0181) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0181' OR dc_customer_id = '0181')
-    AND LOWER(business_name) != LOWER('IMEX China Trade Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('IMEX China Trade Ltd'));
+    AND LOWER(business_name) != LOWER('IMEX China Trade Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('IMEX China Trade Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('IMEX China Trade Ltd'))
+  WHERE LOWER(business_name) = LOWER('IMEX China Trade Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -9644,22 +11189,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('IMEX China Trade Ltd', 'MOOV-0181', 'MOOV-0181', 'active', 'standard', ARRAY['IMEX China Trade Ltd', 'MOOV-0181', '0181', '181']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'IMEX China Trade Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0181',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('IMEX China Trade Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['IMEX China Trade Ltd', 'MOOV-0181', '0181', '181']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Tanalia Ltd (MOOV-0182) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0182' OR dc_customer_id = '0182')
-    AND LOWER(business_name) != LOWER('Tanalia Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Tanalia Ltd'));
+    AND LOWER(business_name) != LOWER('Tanalia Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Tanalia Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Tanalia Ltd'))
+  WHERE LOWER(business_name) = LOWER('Tanalia Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -9675,22 +11225,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Tanalia Ltd', 'MOOV-0182', 'MOOV-0182', 'active', 'standard', ARRAY['Tanalia Ltd', 'MOOV-0182', '0182', '182']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Tanalia Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0182',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Tanalia Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Tanalia Ltd', 'MOOV-0182', '0182', '182']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Saturn Display Ltd (MOOV-0183) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0183' OR dc_customer_id = '0183')
-    AND LOWER(business_name) != LOWER('Saturn Display Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Saturn Display Ltd'));
+    AND LOWER(business_name) != LOWER('Saturn Display Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Saturn Display Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Saturn Display Ltd'))
+  WHERE LOWER(business_name) = LOWER('Saturn Display Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -9706,22 +11261,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Saturn Display Ltd', 'MOOV-0183', 'MOOV-0183', 'active', 'standard', ARRAY['Saturn Display Ltd', 'MOOV-0183', '0183', '183']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Saturn Display Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0183',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Saturn Display Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Saturn Display Ltd', 'MOOV-0183', '0183', '183']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Fun Stickers Ltd (MOOV-0184) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0184' OR dc_customer_id = '0184')
-    AND LOWER(business_name) != LOWER('Fun Stickers Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Fun Stickers Ltd'));
+    AND LOWER(business_name) != LOWER('Fun Stickers Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Fun Stickers Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Fun Stickers Ltd'))
+  WHERE LOWER(business_name) = LOWER('Fun Stickers Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -9737,22 +11297,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Fun Stickers Ltd', 'MOOV-0184', 'MOOV-0184', 'active', 'standard', ARRAY['Fun Stickers Ltd', 'MOOV-0184', '0184', '184']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Fun Stickers Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0184',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Fun Stickers Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Fun Stickers Ltd', 'MOOV-0184', '0184', '184']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Perex Group Ltd (MOOV-0185) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0185' OR dc_customer_id = '0185')
-    AND LOWER(business_name) != LOWER('Perex Group Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Perex Group Ltd'));
+    AND LOWER(business_name) != LOWER('Perex Group Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Perex Group Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Perex Group Ltd'))
+  WHERE LOWER(business_name) = LOWER('Perex Group Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -9768,22 +11333,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Perex Group Ltd', 'MOOV-0185', 'MOOV-0185', 'active', 'standard', ARRAY['Perex Group Ltd', 'MOOV-0185', '0185', '185']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Perex Group Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0185',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Perex Group Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Perex Group Ltd', 'MOOV-0185', '0185', '185']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── TT Proturf Ltd (MOOV-0186) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0186' OR dc_customer_id = '0186')
-    AND LOWER(business_name) != LOWER('TT Proturf Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('TT Proturf Ltd'));
+    AND LOWER(business_name) != LOWER('TT Proturf Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('TT Proturf Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('TT Proturf Ltd'))
+  WHERE LOWER(business_name) = LOWER('TT Proturf Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -9799,22 +11369,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('TT Proturf Ltd', 'MOOV-0186', 'MOOV-0186', 'active', 'standard', ARRAY['TT Proturf Ltd', 'MOOV-0186', '0186', '186']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'TT Proturf Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0186',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('TT Proturf Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['TT Proturf Ltd', 'MOOV-0186', '0186', '186']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Decorative Gardens Ltd (MOOV-0187) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0187' OR dc_customer_id = '0187')
-    AND LOWER(business_name) != LOWER('Decorative Gardens Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Decorative Gardens Ltd'));
+    AND LOWER(business_name) != LOWER('Decorative Gardens Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Decorative Gardens Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Decorative Gardens Ltd'))
+  WHERE LOWER(business_name) = LOWER('Decorative Gardens Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -9830,22 +11405,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Decorative Gardens Ltd', 'MOOV-0187', 'MOOV-0187', 'active', 'standard', ARRAY['Decorative Gardens Ltd', 'MOOV-0187', '0187', '187']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Decorative Gardens Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0187',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Decorative Gardens Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Decorative Gardens Ltd', 'MOOV-0187', '0187', '187']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Isoclean Ltd (MOOV-0188) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0188' OR dc_customer_id = '0188')
-    AND LOWER(business_name) != LOWER('Isoclean Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Isoclean Ltd'));
+    AND LOWER(business_name) != LOWER('Isoclean Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Isoclean Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Isoclean Ltd'))
+  WHERE LOWER(business_name) = LOWER('Isoclean Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -9861,22 +11441,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Isoclean Ltd', 'MOOV-0188', 'MOOV-0188', 'active', 'standard', ARRAY['Isoclean Ltd', 'MOOV-0188', '0188', '188']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Isoclean Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0188',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Isoclean Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Isoclean Ltd', 'MOOV-0188', '0188', '188']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── C Com (DP1-0054) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'DP1-0054' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('C Com') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('C Com'));
+    AND LOWER(business_name) != LOWER('C Com');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('C Com') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('C Com'))
+  WHERE LOWER(business_name) = LOWER('C Com')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -9892,22 +11477,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('C Com', 'DP1-0054', 'DP1-0054', 'active', 'standard', ARRAY['C Com', 'DP1-0054', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'C Com', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0054',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('C Com', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['C Com', 'DP1-0054', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Bodri Ltd (MOOV-0189) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0189' OR dc_customer_id = '0189')
-    AND LOWER(business_name) != LOWER('Bodri Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Bodri Ltd'));
+    AND LOWER(business_name) != LOWER('Bodri Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Bodri Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Bodri Ltd'))
+  WHERE LOWER(business_name) = LOWER('Bodri Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -9923,22 +11513,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Bodri Ltd', 'MOOV-0189', 'MOOV-0189', 'active', 'standard', ARRAY['Bodri Ltd', 'MOOV-0189', '0189', '189']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Bodri Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0189',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Bodri Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Bodri Ltd', 'MOOV-0189', '0189', '189']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── 1st Class Uniforms & Workwear Ltd (MOOV-0190) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0190' OR dc_customer_id = '0190')
-    AND LOWER(business_name) != LOWER('1st Class Uniforms & Workwear Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('1st Class Uniforms & Workwear Ltd'));
+    AND LOWER(business_name) != LOWER('1st Class Uniforms & Workwear Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('1st Class Uniforms & Workwear Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('1st Class Uniforms & Workwear Ltd'))
+  WHERE LOWER(business_name) = LOWER('1st Class Uniforms & Workwear Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -9954,22 +11549,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('1st Class Uniforms & Workwear Ltd', 'MOOV-0190', 'MOOV-0190', 'active', 'standard', ARRAY['1st Class Uniforms & Workwear Ltd', 'MOOV-0190', '0190', '190']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      '1st Class Uniforms & Workwear Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0190',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('1st Class Uniforms & Workwear Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['1st Class Uniforms & Workwear Ltd', 'MOOV-0190', '0190', '190']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Carp Junky (MOOV-0191) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0191' OR dc_customer_id = '0191')
-    AND LOWER(business_name) != LOWER('Carp Junky') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Carp Junky'));
+    AND LOWER(business_name) != LOWER('Carp Junky');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Carp Junky') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Carp Junky'))
+  WHERE LOWER(business_name) = LOWER('Carp Junky')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -9985,22 +11585,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Carp Junky', 'MOOV-0191', 'MOOV-0191', 'active', 'standard', ARRAY['Carp Junky', 'MOOV-0191', '0191', '191']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Carp Junky', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0191',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Carp Junky', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Carp Junky', 'MOOV-0191', '0191', '191']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Mackemshop Ltd (MOOV-0192) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0192' OR dc_customer_id = '0192')
-    AND LOWER(business_name) != LOWER('Mackemshop Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Mackemshop Ltd'));
+    AND LOWER(business_name) != LOWER('Mackemshop Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Mackemshop Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Mackemshop Ltd'))
+  WHERE LOWER(business_name) = LOWER('Mackemshop Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -10016,22 +11621,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Mackemshop Ltd', 'MOOV-0192', 'MOOV-0192', 'active', 'standard', ARRAY['Mackemshop Ltd', 'MOOV-0192', '0192', '192']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Mackemshop Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0192',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Mackemshop Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Mackemshop Ltd', 'MOOV-0192', '0192', '192']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Test company CHN (TDP1-0009) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'TDP1-0009' OR dc_customer_id = '1')
-    AND LOWER(business_name) != LOWER('Test company CHN') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Test company CHN'));
+    AND LOWER(business_name) != LOWER('Test company CHN');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Test company CHN') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Test company CHN'))
+  WHERE LOWER(business_name) = LOWER('Test company CHN')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -10047,22 +11657,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Test company CHN', 'TDP1-0009', 'TDP1-0009', 'active', 'standard', ARRAY['Test company CHN', 'TDP1-0009', '1']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Test company CHN', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'TDP1-0009',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Test company CHN', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Test company CHN', 'TDP1-0009', '1']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── UK Wedding Favours Ltd (MOOV-0193) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0193' OR dc_customer_id = '0193')
-    AND LOWER(business_name) != LOWER('UK Wedding Favours Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('UK Wedding Favours Ltd'));
+    AND LOWER(business_name) != LOWER('UK Wedding Favours Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('UK Wedding Favours Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('UK Wedding Favours Ltd'))
+  WHERE LOWER(business_name) = LOWER('UK Wedding Favours Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -10078,22 +11693,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('UK Wedding Favours Ltd', 'MOOV-0193', 'MOOV-0193', 'active', 'standard', ARRAY['UK Wedding Favours Ltd', 'MOOV-0193', '0193', '193']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'UK Wedding Favours Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0193',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('UK Wedding Favours Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['UK Wedding Favours Ltd', 'MOOV-0193', '0193', '193']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Pure Crimson Design Limited (MOOV-0194) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0194' OR dc_customer_id = '0194')
-    AND LOWER(business_name) != LOWER('Pure Crimson Design Limited') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Pure Crimson Design Limited'));
+    AND LOWER(business_name) != LOWER('Pure Crimson Design Limited');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Pure Crimson Design Limited') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Pure Crimson Design Limited'))
+  WHERE LOWER(business_name) = LOWER('Pure Crimson Design Limited')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -10109,22 +11729,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Pure Crimson Design Limited', 'MOOV-0194', 'MOOV-0194', 'active', 'standard', ARRAY['Pure Crimson Design Limited', 'MOOV-0194', '0194', '194']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Pure Crimson Design Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0194',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Pure Crimson Design Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Pure Crimson Design Limited', 'MOOV-0194', '0194', '194']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── ID Dance school sport & leisure wear limited (MOOV-0195) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0195' OR dc_customer_id = '0195')
-    AND LOWER(business_name) != LOWER('ID Dance school sport & leisure wear limited') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('ID Dance school sport & leisure wear limited'));
+    AND LOWER(business_name) != LOWER('ID Dance school sport & leisure wear limited');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('ID Dance school sport & leisure wear limited') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('ID Dance school sport & leisure wear limited'))
+  WHERE LOWER(business_name) = LOWER('ID Dance school sport & leisure wear limited')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -10140,22 +11765,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('ID Dance school sport & leisure wear limited', 'MOOV-0195', 'MOOV-0195', 'active', 'standard', ARRAY['ID Dance school sport & leisure wear limited', 'MOOV-0195', '0195', '195']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'ID Dance school sport & leisure wear limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0195',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('ID Dance school sport & leisure wear limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['ID Dance school sport & leisure wear limited', 'MOOV-0195', '0195', '195']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Smilax Ltd (MOOV-0196) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0196' OR dc_customer_id = '0196')
-    AND LOWER(business_name) != LOWER('Smilax Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Smilax Ltd'));
+    AND LOWER(business_name) != LOWER('Smilax Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Smilax Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Smilax Ltd'))
+  WHERE LOWER(business_name) = LOWER('Smilax Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -10171,22 +11801,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Smilax Ltd', 'MOOV-0196', 'MOOV-0196', 'active', 'standard', ARRAY['Smilax Ltd', 'MOOV-0196', '0196', '196']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Smilax Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0196',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Smilax Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Smilax Ltd', 'MOOV-0196', '0196', '196']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Slumba London (MOOV-0197) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0197' OR dc_customer_id = '0197')
-    AND LOWER(business_name) != LOWER('Slumba London') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Slumba London'));
+    AND LOWER(business_name) != LOWER('Slumba London');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Slumba London') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Slumba London'))
+  WHERE LOWER(business_name) = LOWER('Slumba London')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -10202,22 +11837,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Slumba London', 'MOOV-0197', 'MOOV-0197', 'active', 'standard', ARRAY['Slumba London', 'MOOV-0197', '0197', '197']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Slumba London', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0197',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Slumba London', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Slumba London', 'MOOV-0197', '0197', '197']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Amba Hydraulics Ltd (MOOV-0198) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0198' OR dc_customer_id = '0198')
-    AND LOWER(business_name) != LOWER('Amba Hydraulics Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Amba Hydraulics Ltd'));
+    AND LOWER(business_name) != LOWER('Amba Hydraulics Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Amba Hydraulics Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Amba Hydraulics Ltd'))
+  WHERE LOWER(business_name) = LOWER('Amba Hydraulics Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -10233,22 +11873,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Amba Hydraulics Ltd', 'MOOV-0198', 'MOOV-0198', 'active', 'standard', ARRAY['Amba Hydraulics Ltd', 'MOOV-0198', '0198', '198']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Amba Hydraulics Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0198',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Amba Hydraulics Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Amba Hydraulics Ltd', 'MOOV-0198', '0198', '198']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Ayurvedic Nature Care Ltd (MOOV-0199) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0199' OR dc_customer_id = '0199')
-    AND LOWER(business_name) != LOWER('Ayurvedic Nature Care Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Ayurvedic Nature Care Ltd'));
+    AND LOWER(business_name) != LOWER('Ayurvedic Nature Care Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Ayurvedic Nature Care Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Ayurvedic Nature Care Ltd'))
+  WHERE LOWER(business_name) = LOWER('Ayurvedic Nature Care Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -10264,22 +11909,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Ayurvedic Nature Care Ltd', 'MOOV-0199', 'MOOV-0199', 'active', 'standard', ARRAY['Ayurvedic Nature Care Ltd', 'MOOV-0199', '0199', '199']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Ayurvedic Nature Care Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0199',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Ayurvedic Nature Care Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Ayurvedic Nature Care Ltd', 'MOOV-0199', '0199', '199']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Chopra Brothers Intl Group Ltd (MOOV-0200) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0200' OR dc_customer_id = '0200')
-    AND LOWER(business_name) != LOWER('Chopra Brothers Intl Group Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Chopra Brothers Intl Group Ltd'));
+    AND LOWER(business_name) != LOWER('Chopra Brothers Intl Group Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Chopra Brothers Intl Group Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Chopra Brothers Intl Group Ltd'))
+  WHERE LOWER(business_name) = LOWER('Chopra Brothers Intl Group Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -10295,22 +11945,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Chopra Brothers Intl Group Ltd', 'MOOV-0200', 'MOOV-0200', 'active', 'standard', ARRAY['Chopra Brothers Intl Group Ltd', 'MOOV-0200', '0200', '200']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Chopra Brothers Intl Group Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0200',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Chopra Brothers Intl Group Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Chopra Brothers Intl Group Ltd', 'MOOV-0200', '0200', '200']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Sofa Scene Ltd (MOOV-0201) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0201' OR dc_customer_id = '0201')
-    AND LOWER(business_name) != LOWER('Sofa Scene Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Sofa Scene Ltd'));
+    AND LOWER(business_name) != LOWER('Sofa Scene Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Sofa Scene Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Sofa Scene Ltd'))
+  WHERE LOWER(business_name) = LOWER('Sofa Scene Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -10326,22 +11981,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Sofa Scene Ltd', 'MOOV-0201', 'MOOV-0201', 'active', 'standard', ARRAY['Sofa Scene Ltd', 'MOOV-0201', '0201', '201']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Sofa Scene Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0201',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Sofa Scene Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Sofa Scene Ltd', 'MOOV-0201', '0201', '201']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Metal Work Supplies Ltd (MOOV-0202) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0202' OR dc_customer_id = '0202')
-    AND LOWER(business_name) != LOWER('Metal Work Supplies Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Metal Work Supplies Ltd'));
+    AND LOWER(business_name) != LOWER('Metal Work Supplies Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Metal Work Supplies Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Metal Work Supplies Ltd'))
+  WHERE LOWER(business_name) = LOWER('Metal Work Supplies Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -10357,22 +12017,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Metal Work Supplies Ltd', 'MOOV-0202', 'MOOV-0202', 'active', 'standard', ARRAY['Metal Work Supplies Ltd', 'MOOV-0202', '0202', '202']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Metal Work Supplies Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0202',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Metal Work Supplies Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Metal Work Supplies Ltd', 'MOOV-0202', '0202', '202']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Meilleure Decor Ltd (MOOV-0203) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0203' OR dc_customer_id = '0203')
-    AND LOWER(business_name) != LOWER('Meilleure Decor Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Meilleure Decor Ltd'));
+    AND LOWER(business_name) != LOWER('Meilleure Decor Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Meilleure Decor Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Meilleure Decor Ltd'))
+  WHERE LOWER(business_name) = LOWER('Meilleure Decor Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -10388,22 +12053,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Meilleure Decor Ltd', 'MOOV-0203', 'MOOV-0203', 'active', 'standard', ARRAY['Meilleure Decor Ltd', 'MOOV-0203', '0203', '203']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Meilleure Decor Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0203',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Meilleure Decor Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Meilleure Decor Ltd', 'MOOV-0203', '0203', '203']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Taunton Trailers (MOOV-0204) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0204' OR dc_customer_id = '0204')
-    AND LOWER(business_name) != LOWER('Taunton Trailers') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Taunton Trailers'));
+    AND LOWER(business_name) != LOWER('Taunton Trailers');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Taunton Trailers') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Taunton Trailers'))
+  WHERE LOWER(business_name) = LOWER('Taunton Trailers')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -10419,22 +12089,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Taunton Trailers', 'MOOV-0204', 'MOOV-0204', 'active', 'standard', ARRAY['Taunton Trailers', 'MOOV-0204', '0204', '204']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Taunton Trailers', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0204',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Taunton Trailers', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Taunton Trailers', 'MOOV-0204', '0204', '204']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Kitloop (Kitloop) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'Kitloop' )
-    AND LOWER(business_name) != LOWER('Kitloop') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Kitloop'));
+    AND LOWER(business_name) != LOWER('Kitloop');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Kitloop') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Kitloop'))
+  WHERE LOWER(business_name) = LOWER('Kitloop')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -10450,22 +12125,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Kitloop', 'Kitloop', 'Kitloop', 'active', 'standard', ARRAY['Kitloop', 'Kitloop']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Kitloop', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Kitloop',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Kitloop', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Kitloop', 'Kitloop']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Frith Holdings Ltd (MOOV-0205) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0205' OR dc_customer_id = '0205')
-    AND LOWER(business_name) != LOWER('Frith Holdings Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Frith Holdings Ltd'));
+    AND LOWER(business_name) != LOWER('Frith Holdings Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Frith Holdings Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Frith Holdings Ltd'))
+  WHERE LOWER(business_name) = LOWER('Frith Holdings Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -10481,22 +12161,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Frith Holdings Ltd', 'MOOV-0205', 'MOOV-0205', 'active', 'standard', ARRAY['Frith Holdings Ltd', 'MOOV-0205', '0205', '205']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Frith Holdings Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0205',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Frith Holdings Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Frith Holdings Ltd', 'MOOV-0205', '0205', '205']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── 24Up Ltd (MOOV-0206) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0206' OR dc_customer_id = '0206')
-    AND LOWER(business_name) != LOWER('24Up Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('24Up Ltd'));
+    AND LOWER(business_name) != LOWER('24Up Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('24Up Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('24Up Ltd'))
+  WHERE LOWER(business_name) = LOWER('24Up Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -10512,22 +12197,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('24Up Ltd', 'MOOV-0206', 'MOOV-0206', 'active', 'standard', ARRAY['24Up Ltd', 'MOOV-0206', '0206', '206']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      '24Up Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0206',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('24Up Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['24Up Ltd', 'MOOV-0206', '0206', '206']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Scarlet Ltd (MOOV-0207) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0207' OR dc_customer_id = '0207')
-    AND LOWER(business_name) != LOWER('Scarlet Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Scarlet Ltd'));
+    AND LOWER(business_name) != LOWER('Scarlet Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Scarlet Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Scarlet Ltd'))
+  WHERE LOWER(business_name) = LOWER('Scarlet Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -10543,22 +12233,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Scarlet Ltd', 'MOOV-0207', 'MOOV-0207', 'active', 'standard', ARRAY['Scarlet Ltd', 'MOOV-0207', '0207', '207']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Scarlet Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0207',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Scarlet Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Scarlet Ltd', 'MOOV-0207', '0207', '207']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── J Adams Ltd (MOOV-0208) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0208' OR dc_customer_id = '0208')
-    AND LOWER(business_name) != LOWER('J Adams Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('J Adams Ltd'));
+    AND LOWER(business_name) != LOWER('J Adams Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('J Adams Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('J Adams Ltd'))
+  WHERE LOWER(business_name) = LOWER('J Adams Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -10574,22 +12269,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('J Adams Ltd', 'MOOV-0208', 'MOOV-0208', 'active', 'standard', ARRAY['J Adams Ltd', 'MOOV-0208', '0208', '208']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'J Adams Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0208',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('J Adams Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['J Adams Ltd', 'MOOV-0208', '0208', '208']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Scarlet Ltd (Scarlet Ltd) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'Scarlet Ltd' )
-    AND LOWER(business_name) != LOWER('Scarlet Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Scarlet Ltd'));
+    AND LOWER(business_name) != LOWER('Scarlet Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Scarlet Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Scarlet Ltd'))
+  WHERE LOWER(business_name) = LOWER('Scarlet Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -10605,22 +12305,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Scarlet Ltd', 'Scarlet Ltd', 'Scarlet Ltd', 'active', 'standard', ARRAY['Scarlet Ltd', 'Scarlet Ltd']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Scarlet Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Scarlet Ltd',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Scarlet Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Scarlet Ltd', 'Scarlet Ltd']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Wolf Cycles Limited (MOOV-0209) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0209' OR dc_customer_id = '0209')
-    AND LOWER(business_name) != LOWER('Wolf Cycles Limited') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Wolf Cycles Limited'));
+    AND LOWER(business_name) != LOWER('Wolf Cycles Limited');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Wolf Cycles Limited') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Wolf Cycles Limited'))
+  WHERE LOWER(business_name) = LOWER('Wolf Cycles Limited')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -10636,22 +12341,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Wolf Cycles Limited', 'MOOV-0209', 'MOOV-0209', 'active', 'standard', ARRAY['Wolf Cycles Limited', 'MOOV-0209', '0209', '209']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Wolf Cycles Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0209',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Wolf Cycles Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Wolf Cycles Limited', 'MOOV-0209', '0209', '209']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Hilltop Boarding Kennels and Cat Hotel Ltd (MOOV-0210) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0210' OR dc_customer_id = '0210')
-    AND LOWER(business_name) != LOWER('Hilltop Boarding Kennels and Cat Hotel Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Hilltop Boarding Kennels and Cat Hotel Ltd'));
+    AND LOWER(business_name) != LOWER('Hilltop Boarding Kennels and Cat Hotel Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Hilltop Boarding Kennels and Cat Hotel Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Hilltop Boarding Kennels and Cat Hotel Ltd'))
+  WHERE LOWER(business_name) = LOWER('Hilltop Boarding Kennels and Cat Hotel Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -10667,22 +12377,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Hilltop Boarding Kennels and Cat Hotel Ltd', 'MOOV-0210', 'MOOV-0210', 'active', 'standard', ARRAY['Hilltop Boarding Kennels and Cat Hotel Ltd', 'MOOV-0210', '0210', '210']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Hilltop Boarding Kennels and Cat Hotel Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0210',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Hilltop Boarding Kennels and Cat Hotel Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Hilltop Boarding Kennels and Cat Hotel Ltd', 'MOOV-0210', '0210', '210']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Tam Demo Account (MOOV-0211) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0211' OR dc_customer_id = '0211')
-    AND LOWER(business_name) != LOWER('Tam Demo Account') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Tam Demo Account'));
+    AND LOWER(business_name) != LOWER('Tam Demo Account');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Tam Demo Account') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Tam Demo Account'))
+  WHERE LOWER(business_name) = LOWER('Tam Demo Account')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -10698,22 +12413,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Tam Demo Account', 'MOOV-0211', 'MOOV-0211', 'active', 'standard', ARRAY['Tam Demo Account', 'MOOV-0211', '0211', '211']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Tam Demo Account', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0211',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Tam Demo Account', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Tam Demo Account', 'MOOV-0211', '0211', '211']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Truck Cranes Ltd (MOOV-0212) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0212' OR dc_customer_id = '0212')
-    AND LOWER(business_name) != LOWER('Truck Cranes Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Truck Cranes Ltd'));
+    AND LOWER(business_name) != LOWER('Truck Cranes Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Truck Cranes Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Truck Cranes Ltd'))
+  WHERE LOWER(business_name) = LOWER('Truck Cranes Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -10729,22 +12449,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Truck Cranes Ltd', 'MOOV-0212', 'MOOV-0212', 'active', 'standard', ARRAY['Truck Cranes Ltd', 'MOOV-0212', '0212', '212']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Truck Cranes Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0212',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Truck Cranes Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Truck Cranes Ltd', 'MOOV-0212', '0212', '212']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Simple Camper Vans Limited (MOOV-0213) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0213' OR dc_customer_id = '0213')
-    AND LOWER(business_name) != LOWER('Simple Camper Vans Limited') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Simple Camper Vans Limited'));
+    AND LOWER(business_name) != LOWER('Simple Camper Vans Limited');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Simple Camper Vans Limited') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Simple Camper Vans Limited'))
+  WHERE LOWER(business_name) = LOWER('Simple Camper Vans Limited')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -10760,22 +12485,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Simple Camper Vans Limited', 'MOOV-0213', 'MOOV-0213', 'active', 'standard', ARRAY['Simple Camper Vans Limited', 'MOOV-0213', '0213', '213']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Simple Camper Vans Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0213',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Simple Camper Vans Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Simple Camper Vans Limited', 'MOOV-0213', '0213', '213']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Direct Imaging Supplies Limited (MOOV-0214) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0214' OR dc_customer_id = '0214')
-    AND LOWER(business_name) != LOWER('Direct Imaging Supplies Limited') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Direct Imaging Supplies Limited'));
+    AND LOWER(business_name) != LOWER('Direct Imaging Supplies Limited');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Direct Imaging Supplies Limited') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Direct Imaging Supplies Limited'))
+  WHERE LOWER(business_name) = LOWER('Direct Imaging Supplies Limited')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -10791,22 +12521,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Direct Imaging Supplies Limited', 'MOOV-0214', 'MOOV-0214', 'active', 'standard', ARRAY['Direct Imaging Supplies Limited', 'MOOV-0214', '0214', '214']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Direct Imaging Supplies Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0214',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Direct Imaging Supplies Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Direct Imaging Supplies Limited', 'MOOV-0214', '0214', '214']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Bodies-in-Motion Dancewear (MOOV-0215) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0215' OR dc_customer_id = '0215')
-    AND LOWER(business_name) != LOWER('Bodies-in-Motion Dancewear') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Bodies-in-Motion Dancewear'));
+    AND LOWER(business_name) != LOWER('Bodies-in-Motion Dancewear');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Bodies-in-Motion Dancewear') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Bodies-in-Motion Dancewear'))
+  WHERE LOWER(business_name) = LOWER('Bodies-in-Motion Dancewear')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -10822,22 +12557,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Bodies-in-Motion Dancewear', 'MOOV-0215', 'MOOV-0215', 'active', 'standard', ARRAY['Bodies-in-Motion Dancewear', 'MOOV-0215', '0215', '215']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Bodies-in-Motion Dancewear', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0215',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Bodies-in-Motion Dancewear', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Bodies-in-Motion Dancewear', 'MOOV-0215', '0215', '215']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Marvellous Mushrooms (MOOV-0216) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0216' OR dc_customer_id = '0216')
-    AND LOWER(business_name) != LOWER('Marvellous Mushrooms') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Marvellous Mushrooms'));
+    AND LOWER(business_name) != LOWER('Marvellous Mushrooms');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Marvellous Mushrooms') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Marvellous Mushrooms'))
+  WHERE LOWER(business_name) = LOWER('Marvellous Mushrooms')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -10853,22 +12593,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Marvellous Mushrooms', 'MOOV-0216', 'MOOV-0216', 'active', 'standard', ARRAY['Marvellous Mushrooms', 'MOOV-0216', '0216', '216']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Marvellous Mushrooms', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0216',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Marvellous Mushrooms', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Marvellous Mushrooms', 'MOOV-0216', '0216', '216']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Blaze''s Bistro (MOOV-0217) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0217' OR dc_customer_id = '0217')
-    AND LOWER(business_name) != LOWER('Blaze''s Bistro') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Blaze''s Bistro'));
+    AND LOWER(business_name) != LOWER('Blaze''s Bistro');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Blaze''s Bistro') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Blaze''s Bistro'))
+  WHERE LOWER(business_name) = LOWER('Blaze''s Bistro')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -10884,22 +12629,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Blaze''s Bistro', 'MOOV-0217', 'MOOV-0217', 'active', 'standard', ARRAY['Blaze''s Bistro', 'MOOV-0217', '0217', '217']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Blaze''s Bistro', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0217',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Blaze''s Bistro', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Blaze''s Bistro', 'MOOV-0217', '0217', '217']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Triumph Dorset Ltd (MOOV-0218) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0218' OR dc_customer_id = '0218')
-    AND LOWER(business_name) != LOWER('Triumph Dorset Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Triumph Dorset Ltd'));
+    AND LOWER(business_name) != LOWER('Triumph Dorset Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Triumph Dorset Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Triumph Dorset Ltd'))
+  WHERE LOWER(business_name) = LOWER('Triumph Dorset Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -10915,22 +12665,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Triumph Dorset Ltd', 'MOOV-0218', 'MOOV-0218', 'active', 'standard', ARRAY['Triumph Dorset Ltd', 'MOOV-0218', '0218', '218']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Triumph Dorset Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0218',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Triumph Dorset Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Triumph Dorset Ltd', 'MOOV-0218', '0218', '218']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Cold Case Investigation Unit (MOOV-0219) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0219' OR dc_customer_id = '0219')
-    AND LOWER(business_name) != LOWER('Cold Case Investigation Unit') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Cold Case Investigation Unit'));
+    AND LOWER(business_name) != LOWER('Cold Case Investigation Unit');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Cold Case Investigation Unit') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Cold Case Investigation Unit'))
+  WHERE LOWER(business_name) = LOWER('Cold Case Investigation Unit')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -10946,22 +12701,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Cold Case Investigation Unit', 'MOOV-0219', 'MOOV-0219', 'active', 'standard', ARRAY['Cold Case Investigation Unit', 'MOOV-0219', '0219', '219']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Cold Case Investigation Unit', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0219',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Cold Case Investigation Unit', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Cold Case Investigation Unit', 'MOOV-0219', '0219', '219']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── WPC Supplies Ltd (MOOV-0220) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0220' OR dc_customer_id = '0220')
-    AND LOWER(business_name) != LOWER('WPC Supplies Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('WPC Supplies Ltd'));
+    AND LOWER(business_name) != LOWER('WPC Supplies Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('WPC Supplies Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('WPC Supplies Ltd'))
+  WHERE LOWER(business_name) = LOWER('WPC Supplies Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -10977,22 +12737,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('WPC Supplies Ltd', 'MOOV-0220', 'MOOV-0220', 'active', 'standard', ARRAY['WPC Supplies Ltd', 'MOOV-0220', '0220', '220']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'WPC Supplies Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0220',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('WPC Supplies Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['WPC Supplies Ltd', 'MOOV-0220', '0220', '220']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── IOI Trading Ltd (MOOV-0221) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0221' OR dc_customer_id = '0221')
-    AND LOWER(business_name) != LOWER('IOI Trading Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('IOI Trading Ltd'));
+    AND LOWER(business_name) != LOWER('IOI Trading Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('IOI Trading Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('IOI Trading Ltd'))
+  WHERE LOWER(business_name) = LOWER('IOI Trading Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -11008,22 +12773,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('IOI Trading Ltd', 'MOOV-0221', 'MOOV-0221', 'active', 'standard', ARRAY['IOI Trading Ltd', 'MOOV-0221', '0221', '221']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'IOI Trading Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0221',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('IOI Trading Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['IOI Trading Ltd', 'MOOV-0221', '0221', '221']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Trembling Madness Ltd (MOOV-0222) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0222' OR dc_customer_id = '0222')
-    AND LOWER(business_name) != LOWER('Trembling Madness Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Trembling Madness Ltd'));
+    AND LOWER(business_name) != LOWER('Trembling Madness Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Trembling Madness Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Trembling Madness Ltd'))
+  WHERE LOWER(business_name) = LOWER('Trembling Madness Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -11039,22 +12809,27 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Trembling Madness Ltd', 'MOOV-0222', 'MOOV-0222', 'active', 'standard', ARRAY['Trembling Madness Ltd', 'MOOV-0222', '0222', '222']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Trembling Madness Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0222',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Trembling Madness Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Trembling Madness Ltd', 'MOOV-0222', '0222', '222']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
   -- ── Ashley House Printing Co Ltd (MOOV-0224) ──
-  -- Clear conflict on any customer with a different name
   UPDATE customers 
   SET dc_customer_id = NULL 
   WHERE (dc_customer_id = 'MOOV-0224' OR dc_customer_id = '0224')
-    AND LOWER(business_name) != LOWER('Ashley House Printing Co Ltd') 
-    AND (trading_name IS NULL OR LOWER(trading_name) != LOWER('Ashley House Printing Co Ltd'));
+    AND LOWER(business_name) != LOWER('Ashley House Printing Co Ltd');
 
-  -- Find target customer
   SELECT id INTO v_cust_id FROM customers 
-  WHERE LOWER(business_name) = LOWER('Ashley House Printing Co Ltd') 
-     OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER('Ashley House Printing Co Ltd'))
+  WHERE LOWER(business_name) = LOWER('Ashley House Printing Co Ltd')
   LIMIT 1;
 
   IF v_cust_id IS NULL THEN
@@ -11070,8 +12845,17 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   ELSE
-    INSERT INTO customers (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
-    VALUES ('Ashley House Printing Co Ltd', 'MOOV-0224', 'MOOV-0224', 'active', 'standard', ARRAY['Ashley House Printing Co Ltd', 'MOOV-0224', '0224', '224']);
+    INSERT INTO customers (
+      business_name, account_number, dc_customer_id, 
+      registered_address, postcode, phone_number, primary_email,
+      account_status, tier, billing_aliases
+    )
+    VALUES (
+      'Ashley House Printing Co Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0224',
+      'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Ashley House Printing Co Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
+      'active', 'standard', ARRAY['Ashley House Printing Co Ltd', 'MOOV-0224', '0224', '224']
+    )
+    ON CONFLICT (account_number) DO NOTHING;
   END IF;
 
 END $$;
