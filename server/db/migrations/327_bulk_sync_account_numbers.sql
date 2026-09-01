@@ -1,6 +1,6 @@
 -- Migration 327: Synchronise account_number and dc_customer_id on existing customers
 -- Strictly updates existing customers. Sets account_number = dc_customer_id = target_id.
--- Zero inserts, leaves existing billing_aliases untouched.
+-- Safely reassigns conflicting account_numbers to temporary MOS numbers to avoid UNIQUE constraint violations.
 
 DO $$
 DECLARE
@@ -29,10 +29,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = '1'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = '1' OR account_number = '1')
+    WHERE dc_customer_id = '1'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -65,10 +71,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'Cloud9'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'Cloud9' OR account_number = 'Cloud9')
+    WHERE dc_customer_id = 'Cloud9'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -101,10 +113,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'WXM-0004'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'WXM-0004' OR account_number = 'WXM-0004')
+    WHERE dc_customer_id = 'WXM-0004'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -137,10 +155,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'WXM-0005'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'WXM-0005' OR account_number = 'WXM-0005')
+    WHERE dc_customer_id = 'WXM-0005'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -173,10 +197,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'FLOSHIP'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'FLOSHIP' OR account_number = 'FLOSHIP')
+    WHERE dc_customer_id = 'FLOSHIP'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -209,10 +239,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DP1-0201'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DP1-0201' OR account_number = 'DP1-0201')
+    WHERE dc_customer_id = 'DP1-0201'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -245,10 +281,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'HOF-0031'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'HOF-0031' OR account_number = 'HOF-0031')
+    WHERE dc_customer_id = 'HOF-0031'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -281,10 +323,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'Dep2-0006'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'Dep2-0006' OR account_number = 'Dep2-0006')
+    WHERE dc_customer_id = 'Dep2-0006'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -317,10 +365,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = '001-0002'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = '001-0002' OR account_number = '001-0002')
+    WHERE dc_customer_id = '001-0002'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -353,10 +407,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'HOF-0054'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'HOF-0054' OR account_number = 'HOF-0054')
+    WHERE dc_customer_id = 'HOF-0054'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -389,10 +449,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'HOF-0055'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'HOF-0055' OR account_number = 'HOF-0055')
+    WHERE dc_customer_id = 'HOF-0055'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -425,10 +491,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'HOF-0056'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'HOF-0056' OR account_number = 'HOF-0056')
+    WHERE dc_customer_id = 'HOF-0056'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -461,10 +533,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DD2-0003'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DD2-0003' OR account_number = 'DD2-0003')
+    WHERE dc_customer_id = 'DD2-0003'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -497,10 +575,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'HOF-0008'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'HOF-0008' OR account_number = 'HOF-0008')
+    WHERE dc_customer_id = 'HOF-0008'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -533,10 +617,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'HOF-GONE'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'HOF-GONE' OR account_number = 'HOF-GONE')
+    WHERE dc_customer_id = 'HOF-GONE'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -569,10 +659,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'HOF-0009'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'HOF-0009' OR account_number = 'HOF-0009')
+    WHERE dc_customer_id = 'HOF-0009'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -605,10 +701,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'HOF-0010'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'HOF-0010' OR account_number = 'HOF-0010')
+    WHERE dc_customer_id = 'HOF-0010'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -641,10 +743,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'HOF-0011'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'HOF-0011' OR account_number = 'HOF-0011')
+    WHERE dc_customer_id = 'HOF-0011'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -677,10 +785,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'HOF-0012'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'HOF-0012' OR account_number = 'HOF-0012')
+    WHERE dc_customer_id = 'HOF-0012'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -713,10 +827,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0002'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0002' OR account_number = 'MOOV-0002')
+    WHERE dc_customer_id = 'MOOV-0002'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -749,10 +869,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0003'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0003' OR account_number = 'MOOV-0003')
+    WHERE dc_customer_id = 'MOOV-0003'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -785,10 +911,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0004'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0004' OR account_number = 'MOOV-0004')
+    WHERE dc_customer_id = 'MOOV-0004'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -821,10 +953,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0005'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0005' OR account_number = 'MOOV-0005')
+    WHERE dc_customer_id = 'MOOV-0005'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -857,10 +995,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DF1-0004'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DF1-0004' OR account_number = 'DF1-0004')
+    WHERE dc_customer_id = 'DF1-0004'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -893,10 +1037,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0006'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0006' OR account_number = 'MOOV-0006')
+    WHERE dc_customer_id = 'MOOV-0006'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -929,10 +1079,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0007'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0007' OR account_number = 'MOOV-0007')
+    WHERE dc_customer_id = 'MOOV-0007'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -965,10 +1121,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0008'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0008' OR account_number = 'MOOV-0008')
+    WHERE dc_customer_id = 'MOOV-0008'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -1001,10 +1163,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0009'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0009' OR account_number = 'MOOV-0009')
+    WHERE dc_customer_id = 'MOOV-0009'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -1037,10 +1205,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0010'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0010' OR account_number = 'MOOV-0010')
+    WHERE dc_customer_id = 'MOOV-0010'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -1073,10 +1247,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0011'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0011' OR account_number = 'MOOV-0011')
+    WHERE dc_customer_id = 'MOOV-0011'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -1109,10 +1289,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0012'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0012' OR account_number = 'MOOV-0012')
+    WHERE dc_customer_id = 'MOOV-0012'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -1145,10 +1331,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0013'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0013' OR account_number = 'MOOV-0013')
+    WHERE dc_customer_id = 'MOOV-0013'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -1181,10 +1373,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0014'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0014' OR account_number = 'MOOV-0014')
+    WHERE dc_customer_id = 'MOOV-0014'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -1217,10 +1415,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0015'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0015' OR account_number = 'MOOV-0015')
+    WHERE dc_customer_id = 'MOOV-0015'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -1253,10 +1457,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DP1-0011'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DP1-0011' OR account_number = 'DP1-0011')
+    WHERE dc_customer_id = 'DP1-0011'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -1289,10 +1499,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = '1233-0001'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = '1233-0001' OR account_number = '1233-0001')
+    WHERE dc_customer_id = '1233-0001'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -1325,10 +1541,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DF1-0007'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DF1-0007' OR account_number = 'DF1-0007')
+    WHERE dc_customer_id = 'DF1-0007'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -1361,10 +1583,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0016'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0016' OR account_number = 'MOOV-0016')
+    WHERE dc_customer_id = 'MOOV-0016'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -1397,10 +1625,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0017'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0017' OR account_number = 'MOOV-0017')
+    WHERE dc_customer_id = 'MOOV-0017'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -1433,10 +1667,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DF1-0008'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DF1-0008' OR account_number = 'DF1-0008')
+    WHERE dc_customer_id = 'DF1-0008'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -1469,10 +1709,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0018'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0018' OR account_number = 'MOOV-0018')
+    WHERE dc_customer_id = 'MOOV-0018'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -1505,10 +1751,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0019'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0019' OR account_number = 'MOOV-0019')
+    WHERE dc_customer_id = 'MOOV-0019'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -1541,10 +1793,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DF1-0009'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DF1-0009' OR account_number = 'DF1-0009')
+    WHERE dc_customer_id = 'DF1-0009'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -1577,10 +1835,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = '1233-0002'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = '1233-0002' OR account_number = '1233-0002')
+    WHERE dc_customer_id = '1233-0002'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -1613,10 +1877,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0020'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0020' OR account_number = 'MOOV-0020')
+    WHERE dc_customer_id = 'MOOV-0020'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -1649,10 +1919,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DP1-0014'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DP1-0014' OR account_number = 'DP1-0014')
+    WHERE dc_customer_id = 'DP1-0014'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -1685,10 +1961,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0021'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0021' OR account_number = 'MOOV-0021')
+    WHERE dc_customer_id = 'MOOV-0021'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -1721,10 +2003,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DD2-0005'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DD2-0005' OR account_number = 'DD2-0005')
+    WHERE dc_customer_id = 'DD2-0005'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -1757,10 +2045,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0022'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0022' OR account_number = 'MOOV-0022')
+    WHERE dc_customer_id = 'MOOV-0022'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -1793,10 +2087,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0023'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0023' OR account_number = 'MOOV-0023')
+    WHERE dc_customer_id = 'MOOV-0023'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -1829,10 +2129,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0024'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0024' OR account_number = 'MOOV-0024')
+    WHERE dc_customer_id = 'MOOV-0024'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -1865,10 +2171,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0025'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0025' OR account_number = 'MOOV-0025')
+    WHERE dc_customer_id = 'MOOV-0025'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -1901,10 +2213,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0026'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0026' OR account_number = 'MOOV-0026')
+    WHERE dc_customer_id = 'MOOV-0026'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -1937,10 +2255,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DF1-0010'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DF1-0010' OR account_number = 'DF1-0010')
+    WHERE dc_customer_id = 'DF1-0010'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -1973,10 +2297,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'Uni4mers'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'Uni4mers' OR account_number = 'Uni4mers')
+    WHERE dc_customer_id = 'Uni4mers'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -2009,10 +2339,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DP1-0016'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DP1-0016' OR account_number = 'DP1-0016')
+    WHERE dc_customer_id = 'DP1-0016'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -2045,10 +2381,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DP1-0017'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DP1-0017' OR account_number = 'DP1-0017')
+    WHERE dc_customer_id = 'DP1-0017'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -2081,10 +2423,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0027'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0027' OR account_number = 'MOOV-0027')
+    WHERE dc_customer_id = 'MOOV-0027'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -2117,10 +2465,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DDJ1-0001'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DDJ1-0001' OR account_number = 'DDJ1-0001')
+    WHERE dc_customer_id = 'DDJ1-0001'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -2153,10 +2507,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0028'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0028' OR account_number = 'MOOV-0028')
+    WHERE dc_customer_id = 'MOOV-0028'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -2189,10 +2549,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0029'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0029' OR account_number = 'MOOV-0029')
+    WHERE dc_customer_id = 'MOOV-0029'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -2225,10 +2591,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DP1-0019'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DP1-0019' OR account_number = 'DP1-0019')
+    WHERE dc_customer_id = 'DP1-0019'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -2261,10 +2633,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DP1-0021'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DP1-0021' OR account_number = 'DP1-0021')
+    WHERE dc_customer_id = 'DP1-0021'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -2297,10 +2675,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0030'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0030' OR account_number = 'MOOV-0030')
+    WHERE dc_customer_id = 'MOOV-0030'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -2333,10 +2717,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DP1-0024'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DP1-0024' OR account_number = 'DP1-0024')
+    WHERE dc_customer_id = 'DP1-0024'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -2369,10 +2759,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0031'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0031' OR account_number = 'MOOV-0031')
+    WHERE dc_customer_id = 'MOOV-0031'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -2405,10 +2801,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0032'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0032' OR account_number = 'MOOV-0032')
+    WHERE dc_customer_id = 'MOOV-0032'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -2441,10 +2843,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0033'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0033' OR account_number = 'MOOV-0033')
+    WHERE dc_customer_id = 'MOOV-0033'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -2477,10 +2885,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DP1-0025'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DP1-0025' OR account_number = 'DP1-0025')
+    WHERE dc_customer_id = 'DP1-0025'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -2513,10 +2927,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'AJP1'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'AJP1' OR account_number = 'AJP1')
+    WHERE dc_customer_id = 'AJP1'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -2549,10 +2969,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'AJP2'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'AJP2' OR account_number = 'AJP2')
+    WHERE dc_customer_id = 'AJP2'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -2585,10 +3011,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'AJP3'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'AJP3' OR account_number = 'AJP3')
+    WHERE dc_customer_id = 'AJP3'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -2621,10 +3053,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'AJP4'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'AJP4' OR account_number = 'AJP4')
+    WHERE dc_customer_id = 'AJP4'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -2657,10 +3095,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'AJP5'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'AJP5' OR account_number = 'AJP5')
+    WHERE dc_customer_id = 'AJP5'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -2693,10 +3137,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0034'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0034' OR account_number = 'MOOV-0034')
+    WHERE dc_customer_id = 'MOOV-0034'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -2729,10 +3179,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DP1-0027'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DP1-0027' OR account_number = 'DP1-0027')
+    WHERE dc_customer_id = 'DP1-0027'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -2765,10 +3221,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0035'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0035' OR account_number = 'MOOV-0035')
+    WHERE dc_customer_id = 'MOOV-0035'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -2801,10 +3263,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DP1-0028'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DP1-0028' OR account_number = 'DP1-0028')
+    WHERE dc_customer_id = 'DP1-0028'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -2837,10 +3305,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0036'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0036' OR account_number = 'MOOV-0036')
+    WHERE dc_customer_id = 'MOOV-0036'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -2873,10 +3347,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DDPL'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DDPL' OR account_number = 'DDPL')
+    WHERE dc_customer_id = 'DDPL'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -2909,10 +3389,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'Aglory MERCHANT ENTERPRISES LIMITED'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'Aglory MERCHANT ENTERPRISES LIMITED' OR account_number = 'Aglory MERCHANT ENTERPRISES LIMITED')
+    WHERE dc_customer_id = 'Aglory MERCHANT ENTERPRISES LIMITED'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -2945,10 +3431,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DP1-0029'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DP1-0029' OR account_number = 'DP1-0029')
+    WHERE dc_customer_id = 'DP1-0029'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -2981,10 +3473,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DP1-0030'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DP1-0030' OR account_number = 'DP1-0030')
+    WHERE dc_customer_id = 'DP1-0030'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -3017,10 +3515,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'E Square'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'E Square' OR account_number = 'E Square')
+    WHERE dc_customer_id = 'E Square'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -3053,10 +3557,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0037'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0037' OR account_number = 'MOOV-0037')
+    WHERE dc_customer_id = 'MOOV-0037'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -3089,10 +3599,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0038'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0038' OR account_number = 'MOOV-0038')
+    WHERE dc_customer_id = 'MOOV-0038'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -3125,10 +3641,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0039'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0039' OR account_number = 'MOOV-0039')
+    WHERE dc_customer_id = 'MOOV-0039'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -3161,10 +3683,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = '8ack'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = '8ack' OR account_number = '8ack')
+    WHERE dc_customer_id = '8ack'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -3197,10 +3725,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0040'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0040' OR account_number = 'MOOV-0040')
+    WHERE dc_customer_id = 'MOOV-0040'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -3233,10 +3767,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0041'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0041' OR account_number = 'MOOV-0041')
+    WHERE dc_customer_id = 'MOOV-0041'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -3269,10 +3809,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'Megway Parcels'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'Megway Parcels' OR account_number = 'Megway Parcels')
+    WHERE dc_customer_id = 'Megway Parcels'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -3305,10 +3851,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0042'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0042' OR account_number = 'MOOV-0042')
+    WHERE dc_customer_id = 'MOOV-0042'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -3341,10 +3893,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0043'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0043' OR account_number = 'MOOV-0043')
+    WHERE dc_customer_id = 'MOOV-0043'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -3377,10 +3935,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0045'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0045' OR account_number = 'MOOV-0045')
+    WHERE dc_customer_id = 'MOOV-0045'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -3413,10 +3977,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0046'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0046' OR account_number = 'MOOV-0046')
+    WHERE dc_customer_id = 'MOOV-0046'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -3449,10 +4019,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'Oriental Mart'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'Oriental Mart' OR account_number = 'Oriental Mart')
+    WHERE dc_customer_id = 'Oriental Mart'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -3485,10 +4061,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0047'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0047' OR account_number = 'MOOV-0047')
+    WHERE dc_customer_id = 'MOOV-0047'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -3521,10 +4103,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0048'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0048' OR account_number = 'MOOV-0048')
+    WHERE dc_customer_id = 'MOOV-0048'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -3557,10 +4145,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'Andersen EV'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'Andersen EV' OR account_number = 'Andersen EV')
+    WHERE dc_customer_id = 'Andersen EV'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -3593,10 +4187,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0050'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0050' OR account_number = 'MOOV-0050')
+    WHERE dc_customer_id = 'MOOV-0050'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -3629,10 +4229,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0051'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0051' OR account_number = 'MOOV-0051')
+    WHERE dc_customer_id = 'MOOV-0051'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -3665,10 +4271,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DF1-0012'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DF1-0012' OR account_number = 'DF1-0012')
+    WHERE dc_customer_id = 'DF1-0012'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -3701,10 +4313,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DF1-0013'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DF1-0013' OR account_number = 'DF1-0013')
+    WHERE dc_customer_id = 'DF1-0013'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -3737,10 +4355,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DF1-0014'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DF1-0014' OR account_number = 'DF1-0014')
+    WHERE dc_customer_id = 'DF1-0014'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -3773,10 +4397,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DQA1-0001'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DQA1-0001' OR account_number = 'DQA1-0001')
+    WHERE dc_customer_id = 'DQA1-0001'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -3809,10 +4439,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0053'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0053' OR account_number = 'MOOV-0053')
+    WHERE dc_customer_id = 'MOOV-0053'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -3845,10 +4481,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0054'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0054' OR account_number = 'MOOV-0054')
+    WHERE dc_customer_id = 'MOOV-0054'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -3881,10 +4523,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0056'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0056' OR account_number = 'MOOV-0056')
+    WHERE dc_customer_id = 'MOOV-0056'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -3917,10 +4565,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0057'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0057' OR account_number = 'MOOV-0057')
+    WHERE dc_customer_id = 'MOOV-0057'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -3953,10 +4607,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0058'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0058' OR account_number = 'MOOV-0058')
+    WHERE dc_customer_id = 'MOOV-0058'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -3989,10 +4649,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DF1-0015'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DF1-0015' OR account_number = 'DF1-0015')
+    WHERE dc_customer_id = 'DF1-0015'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -4025,10 +4691,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DP1-0034'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DP1-0034' OR account_number = 'DP1-0034')
+    WHERE dc_customer_id = 'DP1-0034'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -4061,10 +4733,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'LQT'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'LQT' OR account_number = 'LQT')
+    WHERE dc_customer_id = 'LQT'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -4097,10 +4775,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0059'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0059' OR account_number = 'MOOV-0059')
+    WHERE dc_customer_id = 'MOOV-0059'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -4133,10 +4817,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0060'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0060' OR account_number = 'MOOV-0060')
+    WHERE dc_customer_id = 'MOOV-0060'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -4169,10 +4859,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DP1-0037'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DP1-0037' OR account_number = 'DP1-0037')
+    WHERE dc_customer_id = 'DP1-0037'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -4205,10 +4901,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DP1-0038'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DP1-0038' OR account_number = 'DP1-0038')
+    WHERE dc_customer_id = 'DP1-0038'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -4241,10 +4943,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0061'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0061' OR account_number = 'MOOV-0061')
+    WHERE dc_customer_id = 'MOOV-0061'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -4277,10 +4985,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0062'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0062' OR account_number = 'MOOV-0062')
+    WHERE dc_customer_id = 'MOOV-0062'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -4313,10 +5027,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0063'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0063' OR account_number = 'MOOV-0063')
+    WHERE dc_customer_id = 'MOOV-0063'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -4349,10 +5069,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0064'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0064' OR account_number = 'MOOV-0064')
+    WHERE dc_customer_id = 'MOOV-0064'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -4385,10 +5111,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'TCS'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'TCS' OR account_number = 'TCS')
+    WHERE dc_customer_id = 'TCS'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -4421,10 +5153,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0066'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0066' OR account_number = 'MOOV-0066')
+    WHERE dc_customer_id = 'MOOV-0066'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -4457,10 +5195,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0067'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0067' OR account_number = 'MOOV-0067')
+    WHERE dc_customer_id = 'MOOV-0067'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -4493,10 +5237,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = '1233-0003'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = '1233-0003' OR account_number = '1233-0003')
+    WHERE dc_customer_id = '1233-0003'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -4529,10 +5279,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0068'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0068' OR account_number = 'MOOV-0068')
+    WHERE dc_customer_id = 'MOOV-0068'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -4565,10 +5321,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0069'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0069' OR account_number = 'MOOV-0069')
+    WHERE dc_customer_id = 'MOOV-0069'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -4601,10 +5363,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0070'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0070' OR account_number = 'MOOV-0070')
+    WHERE dc_customer_id = 'MOOV-0070'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -4637,10 +5405,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0071'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0071' OR account_number = 'MOOV-0071')
+    WHERE dc_customer_id = 'MOOV-0071'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -4673,10 +5447,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DQA1-0005'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DQA1-0005' OR account_number = 'DQA1-0005')
+    WHERE dc_customer_id = 'DQA1-0005'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -4709,10 +5489,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DP1-0043'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DP1-0043' OR account_number = 'DP1-0043')
+    WHERE dc_customer_id = 'DP1-0043'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -4745,10 +5531,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DDK1-0002'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DDK1-0002' OR account_number = 'DDK1-0002')
+    WHERE dc_customer_id = 'DDK1-0002'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -4781,10 +5573,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DQA1-0007'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DQA1-0007' OR account_number = 'DQA1-0007')
+    WHERE dc_customer_id = 'DQA1-0007'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -4817,10 +5615,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DQA1-0009'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DQA1-0009' OR account_number = 'DQA1-0009')
+    WHERE dc_customer_id = 'DQA1-0009'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -4853,10 +5657,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DQA1-0011'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DQA1-0011' OR account_number = 'DQA1-0011')
+    WHERE dc_customer_id = 'DQA1-0011'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -4889,10 +5699,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DQA1-0012'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DQA1-0012' OR account_number = 'DQA1-0012')
+    WHERE dc_customer_id = 'DQA1-0012'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -4925,10 +5741,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DQA1-0013'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DQA1-0013' OR account_number = 'DQA1-0013')
+    WHERE dc_customer_id = 'DQA1-0013'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -4961,10 +5783,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0072'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0072' OR account_number = 'MOOV-0072')
+    WHERE dc_customer_id = 'MOOV-0072'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -4997,10 +5825,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0073'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0073' OR account_number = 'MOOV-0073')
+    WHERE dc_customer_id = 'MOOV-0073'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -5033,10 +5867,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0074'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0074' OR account_number = 'MOOV-0074')
+    WHERE dc_customer_id = 'MOOV-0074'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -5069,10 +5909,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0065'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0065' OR account_number = 'MOOV-0065')
+    WHERE dc_customer_id = 'MOOV-0065'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -5105,10 +5951,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'Europa'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'Europa' OR account_number = 'Europa')
+    WHERE dc_customer_id = 'Europa'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -5141,10 +5993,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DQA1-0014'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DQA1-0014' OR account_number = 'DQA1-0014')
+    WHERE dc_customer_id = 'DQA1-0014'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -5177,10 +6035,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DQA1-0015'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DQA1-0015' OR account_number = 'DQA1-0015')
+    WHERE dc_customer_id = 'DQA1-0015'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -5213,10 +6077,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'Barry AI'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'Barry AI' OR account_number = 'Barry AI')
+    WHERE dc_customer_id = 'Barry AI'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -5249,10 +6119,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0075'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0075' OR account_number = 'MOOV-0075')
+    WHERE dc_customer_id = 'MOOV-0075'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -5285,10 +6161,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'HOF-0007'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'HOF-0007' OR account_number = 'HOF-0007')
+    WHERE dc_customer_id = 'HOF-0007'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -5321,10 +6203,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'HOF-0003'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'HOF-0003' OR account_number = 'HOF-0003')
+    WHERE dc_customer_id = 'HOF-0003'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -5357,10 +6245,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DD2-0002'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DD2-0002' OR account_number = 'DD2-0002')
+    WHERE dc_customer_id = 'DD2-0002'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -5393,10 +6287,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'HOF-0002'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'HOF-0002' OR account_number = 'HOF-0002')
+    WHERE dc_customer_id = 'HOF-0002'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -5429,10 +6329,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'HOF-0001'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'HOF-0001' OR account_number = 'HOF-0001')
+    WHERE dc_customer_id = 'HOF-0001'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -5465,10 +6371,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DP1-0001'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DP1-0001' OR account_number = 'DP1-0001')
+    WHERE dc_customer_id = 'DP1-0001'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -5501,10 +6413,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0076'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0076' OR account_number = 'MOOV-0076')
+    WHERE dc_customer_id = 'MOOV-0076'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -5537,10 +6455,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0077'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0077' OR account_number = 'MOOV-0077')
+    WHERE dc_customer_id = 'MOOV-0077'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -5573,10 +6497,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0078'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0078' OR account_number = 'MOOV-0078')
+    WHERE dc_customer_id = 'MOOV-0078'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -5609,10 +6539,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0079'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0079' OR account_number = 'MOOV-0079')
+    WHERE dc_customer_id = 'MOOV-0079'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -5645,10 +6581,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0080'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0080' OR account_number = 'MOOV-0080')
+    WHERE dc_customer_id = 'MOOV-0080'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -5681,10 +6623,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'Iglu Meal Prep'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'Iglu Meal Prep' OR account_number = 'Iglu Meal Prep')
+    WHERE dc_customer_id = 'Iglu Meal Prep'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -5717,10 +6665,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'Yourbookstore'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'Yourbookstore' OR account_number = 'Yourbookstore')
+    WHERE dc_customer_id = 'Yourbookstore'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -5753,10 +6707,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0081'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0081' OR account_number = 'MOOV-0081')
+    WHERE dc_customer_id = 'MOOV-0081'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -5789,10 +6749,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0082'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0082' OR account_number = 'MOOV-0082')
+    WHERE dc_customer_id = 'MOOV-0082'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -5825,10 +6791,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0083'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0083' OR account_number = 'MOOV-0083')
+    WHERE dc_customer_id = 'MOOV-0083'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -5861,10 +6833,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0084'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0084' OR account_number = 'MOOV-0084')
+    WHERE dc_customer_id = 'MOOV-0084'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -5897,10 +6875,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0085'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0085' OR account_number = 'MOOV-0085')
+    WHERE dc_customer_id = 'MOOV-0085'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -5933,10 +6917,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DP1-0044'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DP1-0044' OR account_number = 'DP1-0044')
+    WHERE dc_customer_id = 'DP1-0044'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -5969,10 +6959,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DP1-0045'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DP1-0045' OR account_number = 'DP1-0045')
+    WHERE dc_customer_id = 'DP1-0045'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -6005,10 +7001,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DP2-0001'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DP2-0001' OR account_number = 'DP2-0001')
+    WHERE dc_customer_id = 'DP2-0001'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -6041,10 +7043,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DDJ1-0002'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DDJ1-0002' OR account_number = 'DDJ1-0002')
+    WHERE dc_customer_id = 'DDJ1-0002'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -6077,10 +7085,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0087'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0087' OR account_number = 'MOOV-0087')
+    WHERE dc_customer_id = 'MOOV-0087'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -6113,10 +7127,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0088'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0088' OR account_number = 'MOOV-0088')
+    WHERE dc_customer_id = 'MOOV-0088'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -6149,10 +7169,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0089'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0089' OR account_number = 'MOOV-0089')
+    WHERE dc_customer_id = 'MOOV-0089'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -6185,10 +7211,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DP1-0046'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DP1-0046' OR account_number = 'DP1-0046')
+    WHERE dc_customer_id = 'DP1-0046'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -6221,10 +7253,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0090'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0090' OR account_number = 'MOOV-0090')
+    WHERE dc_customer_id = 'MOOV-0090'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -6257,10 +7295,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DQA1-0016'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DQA1-0016' OR account_number = 'DQA1-0016')
+    WHERE dc_customer_id = 'DQA1-0016'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -6293,10 +7337,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0091'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0091' OR account_number = 'MOOV-0091')
+    WHERE dc_customer_id = 'MOOV-0091'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -6329,10 +7379,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DDJ1-0003'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DDJ1-0003' OR account_number = 'DDJ1-0003')
+    WHERE dc_customer_id = 'DDJ1-0003'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -6365,10 +7421,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0092'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0092' OR account_number = 'MOOV-0092')
+    WHERE dc_customer_id = 'MOOV-0092'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -6401,10 +7463,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0093'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0093' OR account_number = 'MOOV-0093')
+    WHERE dc_customer_id = 'MOOV-0093'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -6437,10 +7505,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0094'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0094' OR account_number = 'MOOV-0094')
+    WHERE dc_customer_id = 'MOOV-0094'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -6473,10 +7547,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0095'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0095' OR account_number = 'MOOV-0095')
+    WHERE dc_customer_id = 'MOOV-0095'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -6509,10 +7589,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0097'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0097' OR account_number = 'MOOV-0097')
+    WHERE dc_customer_id = 'MOOV-0097'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -6545,10 +7631,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0098'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0098' OR account_number = 'MOOV-0098')
+    WHERE dc_customer_id = 'MOOV-0098'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -6581,10 +7673,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0099'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0099' OR account_number = 'MOOV-0099')
+    WHERE dc_customer_id = 'MOOV-0099'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -6617,10 +7715,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0101'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0101' OR account_number = 'MOOV-0101')
+    WHERE dc_customer_id = 'MOOV-0101'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -6653,10 +7757,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0102'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0102' OR account_number = 'MOOV-0102')
+    WHERE dc_customer_id = 'MOOV-0102'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -6689,10 +7799,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0103'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0103' OR account_number = 'MOOV-0103')
+    WHERE dc_customer_id = 'MOOV-0103'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -6725,10 +7841,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0105'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0105' OR account_number = 'MOOV-0105')
+    WHERE dc_customer_id = 'MOOV-0105'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -6761,10 +7883,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0106'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0106' OR account_number = 'MOOV-0106')
+    WHERE dc_customer_id = 'MOOV-0106'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -6797,10 +7925,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = '123-0001'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = '123-0001' OR account_number = '123-0001')
+    WHERE dc_customer_id = '123-0001'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -6833,10 +7967,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = '11-2002'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = '11-2002' OR account_number = '11-2002')
+    WHERE dc_customer_id = '11-2002'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -6869,10 +8009,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = '123-0002'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = '123-0002' OR account_number = '123-0002')
+    WHERE dc_customer_id = '123-0002'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -6905,10 +8051,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = '123-0003'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = '123-0003' OR account_number = '123-0003')
+    WHERE dc_customer_id = '123-0003'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -6941,10 +8093,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = '123-0004'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = '123-0004' OR account_number = '123-0004')
+    WHERE dc_customer_id = '123-0004'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -6977,10 +8135,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = '11-2001'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = '11-2001' OR account_number = '11-2001')
+    WHERE dc_customer_id = '11-2001'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -7013,10 +8177,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0107'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0107' OR account_number = 'MOOV-0107')
+    WHERE dc_customer_id = 'MOOV-0107'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -7049,10 +8219,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DP1-0047'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DP1-0047' OR account_number = 'DP1-0047')
+    WHERE dc_customer_id = 'DP1-0047'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -7085,10 +8261,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0108'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0108' OR account_number = 'MOOV-0108')
+    WHERE dc_customer_id = 'MOOV-0108'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -7121,10 +8303,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DDJ1-0004'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DDJ1-0004' OR account_number = 'DDJ1-0004')
+    WHERE dc_customer_id = 'DDJ1-0004'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -7157,10 +8345,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0109'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0109' OR account_number = 'MOOV-0109')
+    WHERE dc_customer_id = 'MOOV-0109'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -7193,10 +8387,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0110'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0110' OR account_number = 'MOOV-0110')
+    WHERE dc_customer_id = 'MOOV-0110'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -7229,10 +8429,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DQA1-0017'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DQA1-0017' OR account_number = 'DQA1-0017')
+    WHERE dc_customer_id = 'DQA1-0017'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -7265,10 +8471,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'Vintsreet'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'Vintsreet' OR account_number = 'Vintsreet')
+    WHERE dc_customer_id = 'Vintsreet'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -7301,10 +8513,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DD2-0006'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DD2-0006' OR account_number = 'DD2-0006')
+    WHERE dc_customer_id = 'DD2-0006'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -7337,10 +8555,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'Redo Commerce'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'Redo Commerce' OR account_number = 'Redo Commerce')
+    WHERE dc_customer_id = 'Redo Commerce'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -7373,10 +8597,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0111'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0111' OR account_number = 'MOOV-0111')
+    WHERE dc_customer_id = 'MOOV-0111'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -7409,10 +8639,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0113'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0113' OR account_number = 'MOOV-0113')
+    WHERE dc_customer_id = 'MOOV-0113'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -7445,10 +8681,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'Cranswick'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'Cranswick' OR account_number = 'Cranswick')
+    WHERE dc_customer_id = 'Cranswick'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -7481,10 +8723,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0114'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0114' OR account_number = 'MOOV-0114')
+    WHERE dc_customer_id = 'MOOV-0114'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -7517,10 +8765,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0115'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0115' OR account_number = 'MOOV-0115')
+    WHERE dc_customer_id = 'MOOV-0115'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -7553,10 +8807,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DD2-0007'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DD2-0007' OR account_number = 'DD2-0007')
+    WHERE dc_customer_id = 'DD2-0007'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -7589,10 +8849,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0116'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0116' OR account_number = 'MOOV-0116')
+    WHERE dc_customer_id = 'MOOV-0116'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -7625,10 +8891,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0117'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0117' OR account_number = 'MOOV-0117')
+    WHERE dc_customer_id = 'MOOV-0117'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -7661,10 +8933,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0118'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0118' OR account_number = 'MOOV-0118')
+    WHERE dc_customer_id = 'MOOV-0118'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -7697,10 +8975,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0112'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0112' OR account_number = 'MOOV-0112')
+    WHERE dc_customer_id = 'MOOV-0112'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -7733,10 +9017,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0119'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0119' OR account_number = 'MOOV-0119')
+    WHERE dc_customer_id = 'MOOV-0119'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -7769,10 +9059,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0120'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0120' OR account_number = 'MOOV-0120')
+    WHERE dc_customer_id = 'MOOV-0120'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -7805,10 +9101,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0121'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0121' OR account_number = 'MOOV-0121')
+    WHERE dc_customer_id = 'MOOV-0121'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -7841,10 +9143,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0122'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0122' OR account_number = 'MOOV-0122')
+    WHERE dc_customer_id = 'MOOV-0122'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -7877,10 +9185,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DDJ1-0005'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DDJ1-0005' OR account_number = 'DDJ1-0005')
+    WHERE dc_customer_id = 'DDJ1-0005'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -7913,10 +9227,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0123'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0123' OR account_number = 'MOOV-0123')
+    WHERE dc_customer_id = 'MOOV-0123'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -7949,10 +9269,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0124'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0124' OR account_number = 'MOOV-0124')
+    WHERE dc_customer_id = 'MOOV-0124'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -7985,10 +9311,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0125'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0125' OR account_number = 'MOOV-0125')
+    WHERE dc_customer_id = 'MOOV-0125'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -8021,10 +9353,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0126'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0126' OR account_number = 'MOOV-0126')
+    WHERE dc_customer_id = 'MOOV-0126'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -8057,10 +9395,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0127'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0127' OR account_number = 'MOOV-0127')
+    WHERE dc_customer_id = 'MOOV-0127'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -8093,10 +9437,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DD2-0008'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DD2-0008' OR account_number = 'DD2-0008')
+    WHERE dc_customer_id = 'DD2-0008'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -8129,10 +9479,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0128'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0128' OR account_number = 'MOOV-0128')
+    WHERE dc_customer_id = 'MOOV-0128'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -8165,10 +9521,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0129'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0129' OR account_number = 'MOOV-0129')
+    WHERE dc_customer_id = 'MOOV-0129'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -8201,10 +9563,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = '123-0005'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = '123-0005' OR account_number = '123-0005')
+    WHERE dc_customer_id = '123-0005'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -8237,10 +9605,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = '123-0006'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = '123-0006' OR account_number = '123-0006')
+    WHERE dc_customer_id = '123-0006'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -8273,10 +9647,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0130'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0130' OR account_number = 'MOOV-0130')
+    WHERE dc_customer_id = 'MOOV-0130'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -8309,10 +9689,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0131'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0131' OR account_number = 'MOOV-0131')
+    WHERE dc_customer_id = 'MOOV-0131'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -8345,10 +9731,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DDJ1-0006'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DDJ1-0006' OR account_number = 'DDJ1-0006')
+    WHERE dc_customer_id = 'DDJ1-0006'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -8381,10 +9773,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = '123-0007'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = '123-0007' OR account_number = '123-0007')
+    WHERE dc_customer_id = '123-0007'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -8417,10 +9815,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = '123-0008'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = '123-0008' OR account_number = '123-0008')
+    WHERE dc_customer_id = '123-0008'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -8453,10 +9857,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DP1-0048'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DP1-0048' OR account_number = 'DP1-0048')
+    WHERE dc_customer_id = 'DP1-0048'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -8489,10 +9899,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0132'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0132' OR account_number = 'MOOV-0132')
+    WHERE dc_customer_id = 'MOOV-0132'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -8525,10 +9941,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DD2-0009'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DD2-0009' OR account_number = 'DD2-0009')
+    WHERE dc_customer_id = 'DD2-0009'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -8561,10 +9983,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0133'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0133' OR account_number = 'MOOV-0133')
+    WHERE dc_customer_id = 'MOOV-0133'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -8597,10 +10025,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0134'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0134' OR account_number = 'MOOV-0134')
+    WHERE dc_customer_id = 'MOOV-0134'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -8633,10 +10067,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0135'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0135' OR account_number = 'MOOV-0135')
+    WHERE dc_customer_id = 'MOOV-0135'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -8669,10 +10109,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0136'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0136' OR account_number = 'MOOV-0136')
+    WHERE dc_customer_id = 'MOOV-0136'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -8705,10 +10151,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0137'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0137' OR account_number = 'MOOV-0137')
+    WHERE dc_customer_id = 'MOOV-0137'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -8741,10 +10193,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = '123-0010'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = '123-0010' OR account_number = '123-0010')
+    WHERE dc_customer_id = '123-0010'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -8777,10 +10235,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'Fortec Trading Ltd t/a Glowtopia'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'Fortec Trading Ltd t/a Glowtopia' OR account_number = 'Fortec Trading Ltd t/a Glowtopia')
+    WHERE dc_customer_id = 'Fortec Trading Ltd t/a Glowtopia'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -8813,10 +10277,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = '123-0011'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = '123-0011' OR account_number = '123-0011')
+    WHERE dc_customer_id = '123-0011'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -8849,10 +10319,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = '123-0012'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = '123-0012' OR account_number = '123-0012')
+    WHERE dc_customer_id = '123-0012'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -8885,10 +10361,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'Vintstreet'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'Vintstreet' OR account_number = 'Vintstreet')
+    WHERE dc_customer_id = 'Vintstreet'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -8921,10 +10403,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0138'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0138' OR account_number = 'MOOV-0138')
+    WHERE dc_customer_id = 'MOOV-0138'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -8957,10 +10445,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0139'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0139' OR account_number = 'MOOV-0139')
+    WHERE dc_customer_id = 'MOOV-0139'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -8993,10 +10487,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0140'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0140' OR account_number = 'MOOV-0140')
+    WHERE dc_customer_id = 'MOOV-0140'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -9029,10 +10529,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'HOF-0013'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'HOF-0013' OR account_number = 'HOF-0013')
+    WHERE dc_customer_id = 'HOF-0013'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -9065,10 +10571,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0141'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0141' OR account_number = 'MOOV-0141')
+    WHERE dc_customer_id = 'MOOV-0141'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -9101,10 +10613,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0142'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0142' OR account_number = 'MOOV-0142')
+    WHERE dc_customer_id = 'MOOV-0142'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -9137,10 +10655,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0143'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0143' OR account_number = 'MOOV-0143')
+    WHERE dc_customer_id = 'MOOV-0143'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -9173,10 +10697,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0144'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0144' OR account_number = 'MOOV-0144')
+    WHERE dc_customer_id = 'MOOV-0144'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -9209,10 +10739,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DDJ1-0007'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DDJ1-0007' OR account_number = 'DDJ1-0007')
+    WHERE dc_customer_id = 'DDJ1-0007'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -9245,10 +10781,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0145'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0145' OR account_number = 'MOOV-0145')
+    WHERE dc_customer_id = 'MOOV-0145'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -9281,10 +10823,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0146'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0146' OR account_number = 'MOOV-0146')
+    WHERE dc_customer_id = 'MOOV-0146'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -9317,10 +10865,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0147'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0147' OR account_number = 'MOOV-0147')
+    WHERE dc_customer_id = 'MOOV-0147'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -9353,10 +10907,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0148'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0148' OR account_number = 'MOOV-0148')
+    WHERE dc_customer_id = 'MOOV-0148'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -9389,10 +10949,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0149'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0149' OR account_number = 'MOOV-0149')
+    WHERE dc_customer_id = 'MOOV-0149'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -9425,10 +10991,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0150'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0150' OR account_number = 'MOOV-0150')
+    WHERE dc_customer_id = 'MOOV-0150'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -9461,10 +11033,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0151'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0151' OR account_number = 'MOOV-0151')
+    WHERE dc_customer_id = 'MOOV-0151'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -9497,10 +11075,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0152'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0152' OR account_number = 'MOOV-0152')
+    WHERE dc_customer_id = 'MOOV-0152'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -9533,10 +11117,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = '123-0013'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = '123-0013' OR account_number = '123-0013')
+    WHERE dc_customer_id = '123-0013'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -9569,10 +11159,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0153'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0153' OR account_number = 'MOOV-0153')
+    WHERE dc_customer_id = 'MOOV-0153'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -9605,10 +11201,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0154'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0154' OR account_number = 'MOOV-0154')
+    WHERE dc_customer_id = 'MOOV-0154'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -9641,10 +11243,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0155'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0155' OR account_number = 'MOOV-0155')
+    WHERE dc_customer_id = 'MOOV-0155'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -9677,10 +11285,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0156'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0156' OR account_number = 'MOOV-0156')
+    WHERE dc_customer_id = 'MOOV-0156'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -9713,10 +11327,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0157'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0157' OR account_number = 'MOOV-0157')
+    WHERE dc_customer_id = 'MOOV-0157'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -9749,10 +11369,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0158'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0158' OR account_number = 'MOOV-0158')
+    WHERE dc_customer_id = 'MOOV-0158'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -9785,10 +11411,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0159'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0159' OR account_number = 'MOOV-0159')
+    WHERE dc_customer_id = 'MOOV-0159'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -9821,10 +11453,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0160'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0160' OR account_number = 'MOOV-0160')
+    WHERE dc_customer_id = 'MOOV-0160'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -9857,10 +11495,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0161'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0161' OR account_number = 'MOOV-0161')
+    WHERE dc_customer_id = 'MOOV-0161'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -9893,10 +11537,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'Work and Wear Direct Ltd'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'Work and Wear Direct Ltd' OR account_number = 'Work and Wear Direct Ltd')
+    WHERE dc_customer_id = 'Work and Wear Direct Ltd'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -9929,10 +11579,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'Exhale Boutique'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'Exhale Boutique' OR account_number = 'Exhale Boutique')
+    WHERE dc_customer_id = 'Exhale Boutique'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -9965,10 +11621,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0162'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0162' OR account_number = 'MOOV-0162')
+    WHERE dc_customer_id = 'MOOV-0162'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -10001,10 +11663,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'Tackl'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'Tackl' OR account_number = 'Tackl')
+    WHERE dc_customer_id = 'Tackl'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -10037,10 +11705,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'Auto'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'Auto' OR account_number = 'Auto')
+    WHERE dc_customer_id = 'Auto'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -10073,10 +11747,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0163'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0163' OR account_number = 'MOOV-0163')
+    WHERE dc_customer_id = 'MOOV-0163'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -10109,10 +11789,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DP1-0051'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DP1-0051' OR account_number = 'DP1-0051')
+    WHERE dc_customer_id = 'DP1-0051'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -10145,10 +11831,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0164'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0164' OR account_number = 'MOOV-0164')
+    WHERE dc_customer_id = 'MOOV-0164'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -10181,10 +11873,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0165'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0165' OR account_number = 'MOOV-0165')
+    WHERE dc_customer_id = 'MOOV-0165'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -10217,10 +11915,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'EFD1-0004'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'EFD1-0004' OR account_number = 'EFD1-0004')
+    WHERE dc_customer_id = 'EFD1-0004'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -10253,10 +11957,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0166'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0166' OR account_number = 'MOOV-0166')
+    WHERE dc_customer_id = 'MOOV-0166'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -10289,10 +11999,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0167'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0167' OR account_number = 'MOOV-0167')
+    WHERE dc_customer_id = 'MOOV-0167'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -10325,10 +12041,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0168'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0168' OR account_number = 'MOOV-0168')
+    WHERE dc_customer_id = 'MOOV-0168'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -10361,10 +12083,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0169'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0169' OR account_number = 'MOOV-0169')
+    WHERE dc_customer_id = 'MOOV-0169'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -10397,10 +12125,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DQA1-0018'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DQA1-0018' OR account_number = 'DQA1-0018')
+    WHERE dc_customer_id = 'DQA1-0018'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -10433,10 +12167,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0170'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0170' OR account_number = 'MOOV-0170')
+    WHERE dc_customer_id = 'MOOV-0170'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -10469,10 +12209,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'QDP1-0001'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'QDP1-0001' OR account_number = 'QDP1-0001')
+    WHERE dc_customer_id = 'QDP1-0001'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -10505,10 +12251,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'TDP1-0001'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'TDP1-0001' OR account_number = 'TDP1-0001')
+    WHERE dc_customer_id = 'TDP1-0001'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -10541,10 +12293,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DE22-0009'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DE22-0009' OR account_number = 'DE22-0009')
+    WHERE dc_customer_id = 'DE22-0009'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -10577,10 +12335,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DE22-0011'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DE22-0011' OR account_number = 'DE22-0011')
+    WHERE dc_customer_id = 'DE22-0011'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -10613,10 +12377,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'QDP1-0003'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'QDP1-0003' OR account_number = 'QDP1-0003')
+    WHERE dc_customer_id = 'QDP1-0003'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -10649,10 +12419,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DP1-0053'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DP1-0053' OR account_number = 'DP1-0053')
+    WHERE dc_customer_id = 'DP1-0053'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -10685,10 +12461,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DE22-0015'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DE22-0015' OR account_number = 'DE22-0015')
+    WHERE dc_customer_id = 'DE22-0015'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -10721,10 +12503,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'TDP1-0005'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'TDP1-0005' OR account_number = 'TDP1-0005')
+    WHERE dc_customer_id = 'TDP1-0005'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -10757,10 +12545,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'TDP1-0007'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'TDP1-0007' OR account_number = 'TDP1-0007')
+    WHERE dc_customer_id = 'TDP1-0007'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -10793,10 +12587,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0171'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0171' OR account_number = 'MOOV-0171')
+    WHERE dc_customer_id = 'MOOV-0171'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -10829,10 +12629,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0172'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0172' OR account_number = 'MOOV-0172')
+    WHERE dc_customer_id = 'MOOV-0172'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -10865,10 +12671,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0173'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0173' OR account_number = 'MOOV-0173')
+    WHERE dc_customer_id = 'MOOV-0173'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -10901,10 +12713,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0174'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0174' OR account_number = 'MOOV-0174')
+    WHERE dc_customer_id = 'MOOV-0174'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -10937,10 +12755,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0175'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0175' OR account_number = 'MOOV-0175')
+    WHERE dc_customer_id = 'MOOV-0175'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -10973,10 +12797,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0177'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0177' OR account_number = 'MOOV-0177')
+    WHERE dc_customer_id = 'MOOV-0177'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -11009,10 +12839,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0178'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0178' OR account_number = 'MOOV-0178')
+    WHERE dc_customer_id = 'MOOV-0178'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -11045,10 +12881,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0179'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0179' OR account_number = 'MOOV-0179')
+    WHERE dc_customer_id = 'MOOV-0179'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -11081,10 +12923,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DP1-0003'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DP1-0003' OR account_number = 'DP1-0003')
+    WHERE dc_customer_id = 'DP1-0003'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -11117,10 +12965,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0180'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0180' OR account_number = 'MOOV-0180')
+    WHERE dc_customer_id = 'MOOV-0180'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -11153,10 +13007,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0181'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0181' OR account_number = 'MOOV-0181')
+    WHERE dc_customer_id = 'MOOV-0181'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -11189,10 +13049,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0182'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0182' OR account_number = 'MOOV-0182')
+    WHERE dc_customer_id = 'MOOV-0182'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -11225,10 +13091,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0183'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0183' OR account_number = 'MOOV-0183')
+    WHERE dc_customer_id = 'MOOV-0183'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -11261,10 +13133,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0184'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0184' OR account_number = 'MOOV-0184')
+    WHERE dc_customer_id = 'MOOV-0184'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -11297,10 +13175,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0185'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0185' OR account_number = 'MOOV-0185')
+    WHERE dc_customer_id = 'MOOV-0185'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -11333,10 +13217,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0186'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0186' OR account_number = 'MOOV-0186')
+    WHERE dc_customer_id = 'MOOV-0186'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -11369,10 +13259,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0187'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0187' OR account_number = 'MOOV-0187')
+    WHERE dc_customer_id = 'MOOV-0187'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -11405,10 +13301,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0188'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0188' OR account_number = 'MOOV-0188')
+    WHERE dc_customer_id = 'MOOV-0188'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -11441,10 +13343,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'DP1-0054'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'DP1-0054' OR account_number = 'DP1-0054')
+    WHERE dc_customer_id = 'DP1-0054'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -11477,10 +13385,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0189'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0189' OR account_number = 'MOOV-0189')
+    WHERE dc_customer_id = 'MOOV-0189'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -11513,10 +13427,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0190'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0190' OR account_number = 'MOOV-0190')
+    WHERE dc_customer_id = 'MOOV-0190'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -11549,10 +13469,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0191'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0191' OR account_number = 'MOOV-0191')
+    WHERE dc_customer_id = 'MOOV-0191'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -11585,10 +13511,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0192'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0192' OR account_number = 'MOOV-0192')
+    WHERE dc_customer_id = 'MOOV-0192'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -11621,10 +13553,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'TDP1-0009'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'TDP1-0009' OR account_number = 'TDP1-0009')
+    WHERE dc_customer_id = 'TDP1-0009'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -11657,10 +13595,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0193'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0193' OR account_number = 'MOOV-0193')
+    WHERE dc_customer_id = 'MOOV-0193'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -11693,10 +13637,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0194'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0194' OR account_number = 'MOOV-0194')
+    WHERE dc_customer_id = 'MOOV-0194'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -11729,10 +13679,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0195'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0195' OR account_number = 'MOOV-0195')
+    WHERE dc_customer_id = 'MOOV-0195'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -11765,10 +13721,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0196'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0196' OR account_number = 'MOOV-0196')
+    WHERE dc_customer_id = 'MOOV-0196'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -11801,10 +13763,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0197'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0197' OR account_number = 'MOOV-0197')
+    WHERE dc_customer_id = 'MOOV-0197'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -11837,10 +13805,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0198'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0198' OR account_number = 'MOOV-0198')
+    WHERE dc_customer_id = 'MOOV-0198'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -11873,10 +13847,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0199'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0199' OR account_number = 'MOOV-0199')
+    WHERE dc_customer_id = 'MOOV-0199'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -11909,10 +13889,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0200'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0200' OR account_number = 'MOOV-0200')
+    WHERE dc_customer_id = 'MOOV-0200'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -11945,10 +13931,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0201'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0201' OR account_number = 'MOOV-0201')
+    WHERE dc_customer_id = 'MOOV-0201'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -11981,10 +13973,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0202'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0202' OR account_number = 'MOOV-0202')
+    WHERE dc_customer_id = 'MOOV-0202'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -12017,10 +14015,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0203'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0203' OR account_number = 'MOOV-0203')
+    WHERE dc_customer_id = 'MOOV-0203'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -12053,10 +14057,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0204'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0204' OR account_number = 'MOOV-0204')
+    WHERE dc_customer_id = 'MOOV-0204'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -12089,10 +14099,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'Kitloop'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'Kitloop' OR account_number = 'Kitloop')
+    WHERE dc_customer_id = 'Kitloop'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -12125,10 +14141,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0205'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0205' OR account_number = 'MOOV-0205')
+    WHERE dc_customer_id = 'MOOV-0205'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -12161,10 +14183,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0206'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0206' OR account_number = 'MOOV-0206')
+    WHERE dc_customer_id = 'MOOV-0206'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -12197,10 +14225,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0207'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0207' OR account_number = 'MOOV-0207')
+    WHERE dc_customer_id = 'MOOV-0207'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -12233,10 +14267,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0208'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0208' OR account_number = 'MOOV-0208')
+    WHERE dc_customer_id = 'MOOV-0208'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -12269,10 +14309,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'Scarlet Ltd'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'Scarlet Ltd' OR account_number = 'Scarlet Ltd')
+    WHERE dc_customer_id = 'Scarlet Ltd'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -12305,10 +14351,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0209'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0209' OR account_number = 'MOOV-0209')
+    WHERE dc_customer_id = 'MOOV-0209'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -12341,10 +14393,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0210'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0210' OR account_number = 'MOOV-0210')
+    WHERE dc_customer_id = 'MOOV-0210'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -12377,10 +14435,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0211'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0211' OR account_number = 'MOOV-0211')
+    WHERE dc_customer_id = 'MOOV-0211'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -12413,10 +14477,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0212'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0212' OR account_number = 'MOOV-0212')
+    WHERE dc_customer_id = 'MOOV-0212'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -12449,10 +14519,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0213'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0213' OR account_number = 'MOOV-0213')
+    WHERE dc_customer_id = 'MOOV-0213'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -12485,10 +14561,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0214'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0214' OR account_number = 'MOOV-0214')
+    WHERE dc_customer_id = 'MOOV-0214'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -12521,10 +14603,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0215'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0215' OR account_number = 'MOOV-0215')
+    WHERE dc_customer_id = 'MOOV-0215'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -12557,10 +14645,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0216'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0216' OR account_number = 'MOOV-0216')
+    WHERE dc_customer_id = 'MOOV-0216'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -12593,10 +14687,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0217'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0217' OR account_number = 'MOOV-0217')
+    WHERE dc_customer_id = 'MOOV-0217'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -12629,10 +14729,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0218'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0218' OR account_number = 'MOOV-0218')
+    WHERE dc_customer_id = 'MOOV-0218'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -12665,10 +14771,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0219'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0219' OR account_number = 'MOOV-0219')
+    WHERE dc_customer_id = 'MOOV-0219'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -12701,10 +14813,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0220'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0220' OR account_number = 'MOOV-0220')
+    WHERE dc_customer_id = 'MOOV-0220'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -12737,10 +14855,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0221'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0221' OR account_number = 'MOOV-0221')
+    WHERE dc_customer_id = 'MOOV-0221'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -12773,10 +14897,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0222'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0222' OR account_number = 'MOOV-0222')
+    WHERE dc_customer_id = 'MOOV-0222'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -12809,10 +14939,16 @@ BEGIN
 
   -- Step 2: Update existing customer ONLY
   IF v_cust_id IS NOT NULL THEN
-    -- Clear target ID from any other record to avoid duplicate conflicts
+    -- Clear target account_number from any other record to prevent UNIQUE constraint violation
+    UPDATE customers 
+    SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+    WHERE account_number = 'MOOV-0224'
+      AND id != v_cust_id;
+
+    -- Clear target dc_customer_id from any other record
     UPDATE customers 
     SET dc_customer_id = NULL 
-    WHERE (dc_customer_id = 'MOOV-0224' OR account_number = 'MOOV-0224')
+    WHERE dc_customer_id = 'MOOV-0224'
       AND id != v_cust_id;
 
     -- Set both account_number and dc_customer_id to the exact target ID
@@ -12822,6 +14958,12 @@ BEGIN
         updated_at = NOW()
     WHERE id = v_cust_id;
   END IF;
+
+  -- Reassign conflicting 'Europa' account_number from non-Europa customers
+  UPDATE customers 
+  SET account_number = 'MOS-' || SUBSTRING(id::TEXT, 1, 8)
+  WHERE account_number = 'Europa'
+    AND LOWER(business_name) NOT LIKE '%europa%';
 
   -- Ensure Europa PLC is explicitly set to 'Europa'
   UPDATE customers 
