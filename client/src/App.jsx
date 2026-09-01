@@ -16,6 +16,7 @@ import XeroSettings from './pages/settings/XeroSettings';
 import VolumetricSettings from './pages/settings/VolumetricSettings';
 import EmailSettings from './pages/settings/EmailSettings';
 import GmailSettings from './pages/settings/GmailSettings';
+import TrackingSettings from './pages/settings/TrackingSettings';
 import CarrierManagement from './pages/carriers/CarrierManagement';
 import TrackingPage from './pages/tracking/TrackingPage';
 import TasksPage from './pages/tasks/TasksPage';
@@ -128,6 +129,7 @@ function AppRoutes() {
           <Route path="onboarding-templates" element={<OnboardingTemplates />} />
           <Route path="comms-templates" element={<CommsTemplates />} />
           <Route path="switchboard"     element={<AutomationRules />} />
+          <Route path="tracking"    element={<TrackingSettings />} />
           <Route path="volumetric"  element={<VolumetricSettings />} />
           <Route path="billing"     element={<BillingSettings />} />
           <Route path="xero"        element={<XeroSettings />} />

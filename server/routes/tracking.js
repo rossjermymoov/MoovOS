@@ -648,11 +648,16 @@ router.get('/stats', async (req, res, next) => {
 
 router.get('/', async (req, res, next) => {
   try {
-    const {
-      search, status, courier_code, customer_id,
-      date_from, date_to,
-      limit = 50, offset = 0,
-    } = req.query;
+    const search = req.query.search || req.query.q || '';
+    const status = req.query.status || '';
+    const courier_code = req.query.courier_code || req.query.courier || '';
+    const customer_id = req.query.customer_id || '';
+    const date_from = req.query.date_from || req.query.from || '';
+    const date_to = req.query.date_to || req.query.to || '';
+    const limit = parseInt(req.query.limit || 50, 10);
+    const offset = req.query.offset !== undefined
+      ? parseInt(req.query.offset, 10)
+      : (req.query.page ? parseInt(req.query.page, 10) * limit : 0);
 
     const conditions = [];
     const values     = [];

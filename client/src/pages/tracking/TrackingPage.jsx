@@ -11,13 +11,163 @@ import {
   ShieldAlert, RotateCcw, Package, ChevronRight, MapPin,
   RefreshCw, Store, Calendar, Plane, PackageX,
   Warehouse, OctagonX, Navigation, Copy, Check, ExternalLink,
-  Globe, Scale, Building2
+  Globe, Scale, Building2, Settings, SlidersHorizontal, CheckSquare, Square
 } from 'lucide-react';
 import axios from 'axios';
 import { startOfDay, endOfDay, startOfMonth, subDays, format } from 'date-fns';
 import { getCourierLogo } from '../../utils/courierLogos';
 
 const api = axios.create({ baseURL: '/api' });
+
+// ─── Status Registry with Courier Status Codes (authoritative DC codes) ────────
+export const TRACKING_STATUS_DEFINITIONS = [
+  {
+    code: 16,
+    key: 'damaged',
+    label: 'Damaged',
+    category: 'exception',
+    isDefaultException: true,
+    description: 'Parcel reported damaged in courier transit or sorting network',
+  },
+  {
+    code: 18,
+    key: 'customs_hold',
+    label: 'Customs Hold',
+    category: 'exception',
+    isDefaultException: true,
+    description: 'Held by customs authority for documentation, duties, or inspection',
+  },
+  {
+    code: 10,
+    key: 'returned',
+    label: 'Return to Sender',
+    category: 'exception',
+    isDefaultException: true,
+    description: 'Parcel undeliverable and returning / returned back to sender',
+  },
+  {
+    code: 9,
+    key: 'exception',
+    label: 'Address Issue / Exception',
+    category: 'exception',
+    isDefaultException: true,
+    description: 'Address query, incorrect postcode, or premises access issue',
+  },
+  {
+    code: 6,
+    key: 'failed_delivery',
+    label: 'Failed Attempt',
+    category: 'exception',
+    isDefaultException: true,
+    description: 'Courier attempted delivery but recipient was unavailable or closed',
+  },
+  {
+    code: 8,
+    key: 'on_hold',
+    label: 'On Hold',
+    category: 'exception',
+    isDefaultException: true,
+    description: 'Held in courier dispatch guide awaiting shipper or customer instructions',
+  },
+  {
+    code: 11,
+    key: 'tracking_expired',
+    label: 'Tracking Expired',
+    category: 'exception',
+    isDefaultException: false,
+    description: 'Tracking number expired with no recent courier telemetry updates',
+  },
+  {
+    code: 12,
+    key: 'cancelled',
+    label: 'Cancelled',
+    category: 'exception',
+    isDefaultException: false,
+    description: 'Consignment booking or tracking cancelled',
+  },
+  {
+    code: 4,
+    key: 'in_transit',
+    label: 'In Transit',
+    category: 'standard',
+    isDefaultException: false,
+    description: 'Moving through courier linehaul or air cargo network',
+  },
+  {
+    code: 5,
+    key: 'out_for_delivery',
+    label: 'Out for Delivery',
+    category: 'standard',
+    isDefaultException: false,
+    description: 'Loaded onto courier delivery vehicle for final delivery run',
+  },
+  {
+    code: 3,
+    key: 'at_depot',
+    label: 'At Hub / Depot',
+    category: 'standard',
+    isDefaultException: false,
+    description: 'Scanned at courier sorting hub, depot, or transfer facility',
+  },
+  {
+    code: 2,
+    key: 'collected',
+    label: 'Collected',
+    category: 'standard',
+    isDefaultException: false,
+    description: 'Collected from sender or handed to carrier drop-off depot',
+  },
+  {
+    code: 1,
+    key: 'booked',
+    label: 'Booked',
+    category: 'standard',
+    isDefaultException: false,
+    description: 'Shipping label created / manifested, awaiting collection',
+  },
+  {
+    code: 13,
+    key: 'awaiting_collection',
+    label: 'Awaiting Collection',
+    category: 'standard',
+    isDefaultException: false,
+    description: 'Ready for customer pickup at local parcel shop or courier depot',
+  },
+  {
+    code: 7,
+    key: 'delivered',
+    label: 'Delivered',
+    category: 'standard',
+    isDefaultException: false,
+    description: 'Successfully delivered and signed for / photo proof captured',
+  },
+];
+
+export const DEFAULT_EXCEPTION_STATUSES = ['damaged', 'customs_hold', 'returned', 'exception', 'failed_delivery', 'on_hold'];
+export const TOP_EXCEPTION_STATUSES = ['damaged', 'customs_hold', 'returned'];
+export const ALL_ISSUE_STATUSES = ['damaged', 'customs_hold', 'returned', 'exception', 'failed_delivery', 'on_hold', 'tracking_expired', 'cancelled'];
+export const STORAGE_KEY_EXCEPTIONS = 'moov_tracking_exception_statuses';
+
+export function getStoredExceptionStatuses() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_EXCEPTIONS);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch (e) {
+    // fallback
+  }
+  return DEFAULT_EXCEPTION_STATUSES;
+}
+
+export function saveStoredExceptionStatuses(statuses) {
+  try {
+    localStorage.setItem(STORAGE_KEY_EXCEPTIONS, JSON.stringify(statuses));
+  } catch (e) {
+    // ignore
+  }
+}
 
 // Country ISO to Full Name lookup
 const COUNTRY_MAP = {
@@ -813,6 +963,313 @@ function ParcelDrawer({ consignment, onClose }) {
   );
 }
 
+// ─── Exceptions Configuration Modal ───────────────────────────
+function ExceptionSettingsModal({ isOpen, onClose, selectedStatuses, onSave, statusCounts = {} }) {
+  const [localSelected, setLocalSelected] = useState(selectedStatuses || DEFAULT_EXCEPTION_STATUSES);
+
+  useEffect(() => {
+    if (isOpen) {
+      setLocalSelected(selectedStatuses || DEFAULT_EXCEPTION_STATUSES);
+    }
+  }, [isOpen, selectedStatuses]);
+
+  if (!isOpen) return null;
+
+  const toggle = (key) => {
+    setLocalSelected(prev =>
+      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+    );
+  };
+
+  const applyPreset = (presetList) => {
+    setLocalSelected(presetList);
+  };
+
+  const handleSave = () => {
+    onSave(localSelected);
+    onClose();
+  };
+
+  const exceptionItems = TRACKING_STATUS_DEFINITIONS.filter(d => d.category === 'exception');
+  const standardItems = TRACKING_STATUS_DEFINITIONS.filter(d => d.category === 'standard');
+
+  const totalMatchingParcels = localSelected.reduce((sum, key) => sum + (statusCounts[key] || 0), 0);
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      {/* Backdrop */}
+      <div
+        onClick={onClose}
+        style={{ position: 'fixed', inset: 0, background: 'rgba(32,30,29,0.5)', backdropFilter: 'blur(2px)' }}
+      />
+
+      {/* Modal Dialog */}
+      <div
+        style={{
+          position: 'relative',
+          background: 'var(--mv-bg)',
+          width: '100%',
+          maxWidth: 680,
+          maxHeight: '90vh',
+          display: 'flex',
+          flexDirection: 'column',
+          border: '1px solid var(--mv-hairline-2)',
+          boxShadow: '0 20px 40px rgba(0,0,0,0.18)',
+          zIndex: 501,
+          overflow: 'hidden',
+        }}
+      >
+        {/* Header */}
+        <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--mv-hairline-2)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 32, height: 32, borderRadius: 6, background: 'rgba(233,30,140,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--mv-magenta-deep)' }}>
+              <AlertTriangle size={16} />
+            </div>
+            <div>
+              <h2 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: 'var(--mv-ink)' }}>Configure Exceptions &amp; Issues</h2>
+              <p style={{ fontSize: 12, color: 'var(--mv-ink-52)', margin: '2px 0 0' }}>
+                Select which carrier telemetry codes are classified as exceptions on your tracking dashboard.
+              </p>
+            </div>
+          </div>
+          <button onClick={onClose} className="mv-btn-ghost" style={{ padding: 6, borderRadius: 4 }}>
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Quick Presets Bar */}
+        <div style={{ padding: '12px 24px', background: 'var(--mv-surface)', borderBottom: '1px solid var(--mv-hairline)', display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--mv-ink-52)' }}>Presets:</span>
+          <button
+            type="button"
+            className="mv-chip"
+            style={{ fontSize: 11.5, padding: '3px 8px' }}
+            onClick={() => applyPreset(TOP_EXCEPTION_STATUSES)}
+          >
+            🔥 Top 3 (Damaged, Customs, RTS)
+          </button>
+          <button
+            type="button"
+            className="mv-chip"
+            style={{ fontSize: 11.5, padding: '3px 8px' }}
+            onClick={() => applyPreset(DEFAULT_EXCEPTION_STATUSES)}
+          >
+            Standard Issues (6 Codes)
+          </button>
+          <button
+            type="button"
+            className="mv-chip"
+            style={{ fontSize: 11.5, padding: '3px 8px' }}
+            onClick={() => applyPreset(ALL_ISSUE_STATUSES)}
+          >
+            All Issues (+ Expired / Cancelled)
+          </button>
+          <button
+            type="button"
+            className="mv-chip"
+            style={{ fontSize: 11.5, padding: '3px 8px' }}
+            onClick={() => applyPreset(TRACKING_STATUS_DEFINITIONS.map(d => d.key))}
+          >
+            Select All
+          </button>
+          <button
+            type="button"
+            className="mv-chip"
+            style={{ fontSize: 11.5, padding: '3px 8px' }}
+            onClick={() => applyPreset([])}
+          >
+            Clear All
+          </button>
+        </div>
+
+        {/* Scrollable list */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px' }}>
+          {/* Section 1: Exceptions & Issues */}
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 11.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--mv-magenta-deep)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span>Exception &amp; Incident Status Codes</span>
+              <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--mv-ink-45)' }}>({exceptionItems.filter(i => localSelected.includes(i.key)).length}/{exceptionItems.length} selected)</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {exceptionItems.map(item => {
+                const isSelected = localSelected.includes(item.key);
+                const count = statusCounts[item.key] || 0;
+                return (
+                  <div
+                    key={item.key}
+                    onClick={() => toggle(item.key)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      padding: '10px 14px',
+                      background: isSelected ? 'rgba(233,30,140,0.04)' : 'var(--mv-surface)',
+                      border: `1px solid ${isSelected ? 'rgba(233,30,140,0.3)' : 'var(--mv-hairline-2)'}`,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => {}}
+                      style={{ cursor: 'pointer', width: 16, height: 16, accentColor: 'var(--mv-magenta)' }}
+                    />
+                    <span
+                      className="mv-num"
+                      style={{
+                        fontFamily: 'monospace',
+                        fontWeight: 700,
+                        fontSize: 11.5,
+                        padding: '2px 6px',
+                        background: 'var(--mv-bg)',
+                        border: '1px solid var(--mv-hairline-2)',
+                        color: 'var(--mv-ink)',
+                        minWidth: 26,
+                        textAlign: 'center',
+                      }}
+                    >
+                      {item.code}
+                    </span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontWeight: 700, fontSize: 13, color: isSelected ? 'var(--mv-magenta-deep)' : 'var(--mv-ink)' }}>
+                          {item.label}
+                        </span>
+                        <StatusBadge status={item.key} />
+                      </div>
+                      <div style={{ fontSize: 11.5, color: 'var(--mv-ink-52)', marginTop: 2 }}>
+                        {item.description}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      <span
+                        className="mv-num"
+                        style={{
+                          fontSize: 12,
+                          fontWeight: count > 0 ? 700 : 500,
+                          color: count > 0 ? 'var(--mv-magenta-deep)' : 'var(--mv-ink-45)',
+                          padding: '2px 8px',
+                          background: count > 0 ? 'rgba(233,30,140,0.1)' : 'transparent',
+                          border: count > 0 ? '1px solid rgba(233,30,140,0.2)' : 'none',
+                        }}
+                      >
+                        {count.toLocaleString()} parcel{count !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Section 2: Standard Movement & Delivery Statuses */}
+          <div>
+            <div style={{ fontSize: 11.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--mv-ink-62)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span>Standard Movement &amp; Lifecycle Statuses</span>
+              <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--mv-ink-45)' }}>({standardItems.filter(i => localSelected.includes(i.key)).length}/{standardItems.length} selected)</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {standardItems.map(item => {
+                const isSelected = localSelected.includes(item.key);
+                const count = statusCounts[item.key] || 0;
+                return (
+                  <div
+                    key={item.key}
+                    onClick={() => toggle(item.key)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      padding: '10px 14px',
+                      background: isSelected ? 'rgba(123,47,190,0.04)' : 'var(--mv-surface)',
+                      border: `1px solid ${isSelected ? 'rgba(123,47,190,0.3)' : 'var(--mv-hairline-2)'}`,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => {}}
+                      style={{ cursor: 'pointer', width: 16, height: 16, accentColor: 'var(--mv-purple)' }}
+                    />
+                    <span
+                      className="mv-num"
+                      style={{
+                        fontFamily: 'monospace',
+                        fontWeight: 700,
+                        fontSize: 11.5,
+                        padding: '2px 6px',
+                        background: 'var(--mv-bg)',
+                        border: '1px solid var(--mv-hairline-2)',
+                        color: 'var(--mv-ink)',
+                        minWidth: 26,
+                        textAlign: 'center',
+                      }}
+                    >
+                      {item.code}
+                    </span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontWeight: 700, fontSize: 13, color: isSelected ? 'var(--mv-purple)' : 'var(--mv-ink)' }}>
+                          {item.label}
+                        </span>
+                        <StatusBadge status={item.key} />
+                      </div>
+                      <div style={{ fontSize: 11.5, color: 'var(--mv-ink-52)', marginTop: 2 }}>
+                        {item.description}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      <span
+                        className="mv-num"
+                        style={{
+                          fontSize: 12,
+                          fontWeight: count > 0 ? 700 : 500,
+                          color: count > 0 ? 'var(--mv-ink)' : 'var(--mv-ink-45)',
+                          padding: '2px 8px',
+                        }}
+                      >
+                        {count.toLocaleString()} parcel{count !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{ padding: '14px 24px', borderTop: '1px solid var(--mv-hairline-2)', background: 'var(--mv-surface)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ fontSize: 12, color: 'var(--mv-ink-62)' }}>
+            <strong>{localSelected.length}</strong> codes selected &middot; <span className="mv-num" style={{ fontWeight: 700, color: 'var(--mv-magenta-deep)' }}>{totalMatchingParcels.toLocaleString()}</span> active parcels currently match
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button
+              type="button"
+              className="mv-btn-ghost"
+              onClick={() => setLocalSelected(DEFAULT_EXCEPTION_STATUSES)}
+              style={{ fontSize: 12.5, padding: '7px 12px' }}
+            >
+              Reset to Defaults
+            </button>
+            <button
+              type="button"
+              className="mv-btn-primary"
+              onClick={handleSave}
+              style={{ fontSize: 12.5, padding: '7px 18px', background: 'var(--mv-ink)', color: 'var(--mv-bg)' }}
+            >
+              Save &amp; Apply
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Tracking Page ───────────────────────────────────────
 const DATE_PRESETS = [
   { label: 'Today',      getFrom: () => startOfDay(new Date()),                     getTo: () => endOfDay(new Date()) },
@@ -838,6 +1295,10 @@ export default function TrackingPage() {
   const [dateTo, setDateTo]                 = useState('');
   const [staleRunning, setStaleRunning]     = useState(false);
   const [staleResult, setStaleResult]       = useState(null);
+  const [showConfigModal, setShowConfigModal] = useState(false);
+
+  // Configurable exception status codes
+  const [exceptionStatuses, setExceptionStatuses] = useState(getStoredExceptionStatuses);
 
   const searchRef = useRef(null);
 
@@ -853,16 +1314,26 @@ export default function TrackingPage() {
     refetchInterval: 30000,
   });
 
+  const bs = stats?.by_status || {};
+
+  // Compute dynamic exception count across all active monitored exception statuses
+  const exceptionCount = exceptionStatuses.reduce((acc, st) => acc + (bs[st] || 0), 0);
+
+  // Effective status query parameter passed to backend
+  const effectiveStatusParam = statusFilter === 'exceptions_group'
+    ? (exceptionStatuses.length ? exceptionStatuses.join(',') : DEFAULT_EXCEPTION_STATUSES.join(','))
+    : statusFilter;
+
   // Query parcel list
   const { data: listData, isLoading, refetch: refetchList } = useQuery({
-    queryKey: ['tracking-parcels', debouncedSearch, customerFilter, statusFilter, courierFilter, dateFrom, dateTo, page],
+    queryKey: ['tracking-parcels', debouncedSearch, customerFilter, effectiveStatusParam, courierFilter, dateFrom, dateTo, page],
     queryFn: () => {
       const p = new URLSearchParams({
         page,
         limit: 50,
         ...(debouncedSearch && { q: debouncedSearch }),
         ...(customerFilter  && { customer_id: customerFilter }),
-        ...(statusFilter    && { status: statusFilter }),
+        ...(effectiveStatusParam && { status: effectiveStatusParam }),
         ...(courierFilter   && { courier: courierFilter }),
         ...(dateFrom        && { from: dateFrom }),
         ...(dateTo          && { to: dateTo }),
@@ -909,12 +1380,30 @@ export default function TrackingPage() {
     setPage(0);
   }
 
+  function toggleExceptionFilter() {
+    setStatusFilter(prev => prev === 'exceptions_group' ? '' : 'exceptions_group');
+    setPage(0);
+  }
+
+  function handleSaveExceptions(newStatuses) {
+    setExceptionStatuses(newStatuses);
+    saveStoredExceptionStatuses(newStatuses);
+    setPage(0);
+  }
+
   const parcels  = listData?.parcels || [];
   const total    = listData?.total || 0;
   const pages    = Math.ceil(total / 50);
-  const bs       = stats?.by_status || {};
   const customers= listData?.filter_options?.customers || [];
   const couriers = listData?.filter_options?.couriers || [];
+
+  // Formatted names of active exception statuses for display
+  const activeExceptionDefinitions = TRACKING_STATUS_DEFINITIONS.filter(d => exceptionStatuses.includes(d.key));
+  const activeExceptionSummary = activeExceptionDefinitions.length === 0
+    ? 'None selected'
+    : activeExceptionDefinitions.length <= 3
+    ? activeExceptionDefinitions.map(d => d.label).join(', ')
+    : `${activeExceptionDefinitions.slice(0, 3).map(d => d.label).join(', ')} +${activeExceptionDefinitions.length - 3} more`;
 
   return (
     <div className="mv-page">
@@ -929,6 +1418,14 @@ export default function TrackingPage() {
             </p>
           </div>
           <div className="mv-actions">
+            <button
+              onClick={() => setShowConfigModal(true)}
+              className="mv-btn-ghost"
+              style={{ padding: '8px 14px', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}
+              title="Configure which carrier status codes are classified as exceptions"
+            >
+              <Settings size={13} /> Exception Settings
+            </button>
             <button onClick={refresh} className="mv-btn-ghost" style={{ padding: '8px 14px', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}>
               <RefreshCw size={13} /> Refresh
             </button>
@@ -969,13 +1466,45 @@ export default function TrackingPage() {
           </div>
 
           <div
-            className={`mv-kpi is-clickable ${statusFilter === 'exception' ? 'is-active' : ''}`}
-            onClick={() => toggleStatus('exception')}
+            className={`mv-kpi is-clickable ${statusFilter === 'exceptions_group' ? 'is-active' : ''}`}
+            onClick={toggleExceptionFilter}
+            style={{ position: 'relative' }}
           >
-            <div className="mv-kpi-label">Exceptions & Issues</div>
-            <div className="mv-kpi-value mv-num is-attention">{((bs.exception || 0) + (bs.failed_delivery || 0) + (bs.damaged || 0)).toLocaleString()}</div>
-            <div className="mv-kpi-sub">Needs human review</div>
-            <div className="mv-kpi-go">Show exceptions →</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div className="mv-kpi-label">Exceptions &amp; Issues</div>
+              <button
+                type="button"
+                title="Configure exception status codes"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowConfigModal(true);
+                }}
+                className="mv-btn-ghost"
+                style={{
+                  padding: '2px 6px',
+                  fontSize: 11,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  border: '1px solid var(--mv-hairline-2)',
+                  borderRadius: 4,
+                  background: 'var(--mv-surface)',
+                  color: 'var(--mv-ink-62)',
+                  cursor: 'pointer',
+                }}
+              >
+                <Settings size={11} /> Settings
+              </button>
+            </div>
+            <div className="mv-kpi-value mv-num is-attention">
+              {exceptionCount.toLocaleString()}
+            </div>
+            <div className="mv-kpi-sub">
+              {exceptionStatuses.length} status code{exceptionStatuses.length !== 1 ? 's' : ''} monitored
+            </div>
+            <div className="mv-kpi-go">
+              {statusFilter === 'exceptions_group' ? 'Clear filter ✕' : 'Show exceptions →'}
+            </div>
           </div>
 
           <div
@@ -996,7 +1525,7 @@ export default function TrackingPage() {
         </div>
 
         {/* ── Filters & Search ───────────────────────────────────── */}
-        <div className="mv-chips" style={{ marginTop: 22 }}>
+        <div className="mv-chips" style={{ marginTop: 22, alignItems: 'center' }}>
           <span className="mv-filter-label">Timeframe</span>
           {DATE_PRESETS.map(p => (
             <button
@@ -1008,11 +1537,19 @@ export default function TrackingPage() {
             </button>
           ))}
 
-          {statusFilter && (
-            <button className="mv-chip is-on" onClick={() => setStatusFilter('')}>
-              Status: {statusFilter} <X size={11} style={{ marginLeft: 4 }} />
-            </button>
-          )}
+          {/* Quick Exceptions Filter Toggle */}
+          <button
+            className={`mv-chip ${statusFilter === 'exceptions_group' ? 'is-on' : ''}`}
+            style={{
+              borderColor: statusFilter === 'exceptions_group' ? 'var(--mv-magenta)' : undefined,
+              background: statusFilter === 'exceptions_group' ? 'var(--mv-magenta-deep)' : undefined,
+              color: statusFilter === 'exceptions_group' ? '#fff' : undefined,
+            }}
+            onClick={toggleExceptionFilter}
+          >
+            <AlertTriangle size={12} style={{ marginRight: 4 }} />
+            Exceptions ({exceptionCount})
+          </button>
 
           <span style={{ flex: 1 }} />
 
@@ -1039,6 +1576,190 @@ export default function TrackingPage() {
             {total.toLocaleString()} parcel{total !== 1 ? 's' : ''}
           </span>
         </div>
+
+        {/* ── Active Filter Badges Bar (Replaced Black Box) ───────── */}
+        {(statusFilter || search || customerFilter || courierFilter || datePreset) && (
+          <div style={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            gap: 8,
+            marginTop: 12,
+            padding: '8px 12px',
+            background: 'var(--mv-surface)',
+            border: '1px solid var(--mv-hairline-2)',
+            borderRadius: 6,
+          }}>
+            <span style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--mv-ink-52)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Active Filters:
+            </span>
+
+            {/* Exceptions & Issues Active Filter Badge */}
+            {statusFilter === 'exceptions_group' && (
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '4px 10px',
+                background: 'rgba(233,30,140,0.08)',
+                border: '1px solid rgba(233,30,140,0.3)',
+                borderRadius: 4,
+                color: 'var(--mv-magenta-deep)',
+                fontSize: 12,
+                fontWeight: 600,
+              }}>
+                <AlertTriangle size={13} />
+                <span>Exceptions &amp; Issues:</span>
+                <span style={{ fontWeight: 500, color: 'var(--mv-ink)' }}>
+                  {activeExceptionSummary}
+                </span>
+                <span
+                  className="mv-num"
+                  style={{
+                    padding: '1px 6px',
+                    background: 'rgba(233,30,140,0.15)',
+                    borderRadius: 3,
+                    fontSize: 11,
+                    fontWeight: 700,
+                  }}
+                >
+                  {total.toLocaleString()} found
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowConfigModal(true)}
+                  title="Configure which codes are included"
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '2px 4px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 3,
+                    fontSize: 11,
+                    color: 'var(--mv-magenta-deep)',
+                    textDecoration: 'underline',
+                  }}
+                >
+                  <Settings size={11} /> Edit Codes
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter('')}
+                  title="Remove filter"
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '2px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    color: 'var(--mv-magenta-deep)',
+                  }}
+                >
+                  <X size={13} />
+                </button>
+              </div>
+            )}
+
+            {/* Standard Status Filter Badge */}
+            {statusFilter && statusFilter !== 'exceptions_group' && (
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '4px 10px',
+                background: 'var(--mv-bg)',
+                border: '1px solid var(--mv-hairline-2)',
+                borderRadius: 4,
+                fontSize: 12,
+                fontWeight: 600,
+                color: 'var(--mv-ink)',
+              }}>
+                <span className={`mv-mark mv-mark--${getStatusState(statusFilter).mark}`} />
+                <span>Status: {getStatusState(statusFilter).label}</span>
+                <button
+                  type="button"
+                  onClick={() => setStatusFilter('')}
+                  title="Remove status filter"
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '2px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    color: 'var(--mv-ink-45)',
+                  }}
+                >
+                  <X size={13} />
+                </button>
+              </div>
+            )}
+
+            {/* Search Filter Badge */}
+            {search && (
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '4px 10px',
+                background: 'var(--mv-bg)',
+                border: '1px solid var(--mv-hairline-2)',
+                borderRadius: 4,
+                fontSize: 12,
+                fontWeight: 500,
+                color: 'var(--mv-ink)',
+              }}>
+                <Search size={11} style={{ color: 'var(--mv-ink-45)' }} />
+                <span>Search: &ldquo;{search}&rdquo;</span>
+                <button
+                  type="button"
+                  onClick={() => setSearch('')}
+                  title="Clear search"
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '2px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    color: 'var(--mv-ink-45)',
+                  }}
+                >
+                  <X size={13} />
+                </button>
+              </div>
+            )}
+
+            {/* Clear All Filters */}
+            <button
+              type="button"
+              onClick={() => {
+                setStatusFilter('');
+                setSearch('');
+                setDatePreset('');
+                setDateFrom('');
+                setDateTo('');
+                setCustomerFilter('');
+                setCourierFilter('');
+                setPage(0);
+              }}
+              style={{
+                marginLeft: 'auto',
+                background: 'none',
+                border: 'none',
+                fontSize: 11.5,
+                color: 'var(--mv-ink-52)',
+                cursor: 'pointer',
+                textDecoration: 'underline',
+              }}
+            >
+              Reset all filters
+            </button>
+          </div>
+        )}
 
         {/* ── Parcel Table ───────────────────────────────────────── */}
         <div style={{ marginTop: 18, overflowX: 'auto' }}>
@@ -1146,6 +1867,17 @@ export default function TrackingPage() {
               Next →
             </button>
           </div>
+        )}
+
+        {/* ── Exceptions Configuration Modal ─────────────────────── */}
+        {showConfigModal && (
+          <ExceptionSettingsModal
+            isOpen={showConfigModal}
+            onClose={() => setShowConfigModal(false)}
+            selectedStatuses={exceptionStatuses}
+            onSave={handleSaveExceptions}
+            statusCounts={bs}
+          />
         )}
 
         {/* ── Detail Drawer ──────────────────────────────────────── */}
