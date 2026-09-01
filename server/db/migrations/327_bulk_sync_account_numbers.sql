@@ -1,6 +1,7 @@
 -- Migration 327: Synchronise account_number and dc_customer_id on existing customers
--- Strictly updates existing customers. Sets account_number = dc_customer_id = target_id.
--- Safely reassigns conflicting account_numbers to temporary MOS numbers to avoid UNIQUE constraint violations.
+-- 1. Expand account_number and dc_customer_id columns to VARCHAR(255)
+ALTER TABLE customers ALTER COLUMN account_number TYPE VARCHAR(255);
+ALTER TABLE customers ALTER COLUMN dc_customer_id TYPE VARCHAR(255);
 
 DO $$
 DECLARE
