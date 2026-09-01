@@ -106,10 +106,7 @@ export default function ShipmentsPage() {
   const [pagination, setPagination] = useState({ total: 0, pages: 1 });
   const [summaryStats, setSummaryStats] = useState(null);
   
-  // Modals
-  const [showInjectModal, setShowInjectModal] = useState(false);
-  const [selectedCustomerId, setSelectedCustomerId] = useState('');
-  const [injecting, setInjecting] = useState(false);
+  // Modals & Actions
   const [repricingAll, setRepricingAll] = useState(false);
   const [selectedShipment, setSelectedShipment] = useState(null);
   const [activeModalTab, setActiveModalTab] = useState('pricing'); // 'pricing' | 'response' | 'raw'
@@ -236,34 +233,6 @@ export default function ShipmentsPage() {
     }
   }
 
-  async function handleInjectSample() {
-    if (!selectedCustomerId) {
-      alert('Please select a customer to assign the test shipments to.');
-      return;
-    }
-    setInjecting(true);
-    try {
-      const res = await fetch('/api/shipments/simulate-dpd-sample', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customer_id: selectedCustomerId }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setShowInjectModal(false);
-        fetchShipments();
-        alert(`Successfully injected ${data.count} test shipments for ${data.customer_name}!`);
-      } else {
-        const err = await res.json();
-        alert(`Error: ${err.error || 'Failed to inject sample shipments'}`);
-      }
-    } catch (e) {
-      alert(`Error: ${e.message}`);
-    } finally {
-      setInjecting(false);
-    }
-  }
-
   async function handleDeleteShipment(id) {
     if (!confirm('Are you sure you want to delete this shipment record?')) return;
     try {
@@ -292,36 +261,6 @@ export default function ShipmentsPage() {
       alert('Error purging historical shipments: ' + e.message);
     }
   }
-
-  async function handlePurgeGhosts() {
-    if (!confirm('Purge all empty ghost shipments (records with no tracking codes, customer, or recipient address)?')) return;
-    try {
-      const res = await fetch('/api/shipments/purge-ghosts', { method: 'POST' });
-      const data = await res.json();
-      if (res.ok) {
-        alert(`Purged ${data.deleted || 0} ghost shipments!`);
-        fetchShipments();
-      } else {
-        alert(data.error || 'Failed to purge ghost shipments');
-      }
-    } catch (e) {
-      alert('Error purging ghost shipments: ' + e.message);
-    }
-  }
-
-  async function handleClearSimulated() {
-    if (!confirm('Clear all simulated test shipments?')) return;
-    try {
-      const res = await fetch('/api/shipments/clear-simulated', { method: 'POST' });
-      if (res.ok) {
-        fetchShipments();
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  }
-
-  const simulatedCount = shipments.filter(s => s.raw_payload?.simulated).length;
 
   // Compute metrics from current page if summaryStats not yet loaded
   const computedStats = shipments.reduce((acc, s) => {
@@ -380,30 +319,6 @@ export default function ShipmentsPage() {
             title="Recalculate prices for all unpriced shipments using the latest rate cards"
           >
             <Calculator size={14} /> Reprice All
-          </button>
-          <button
-            onClick={handlePurgeGhosts}
-            className="mv-btn-danger"
-            style={{ padding: '8px 14px', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}
-            title="Delete all empty ghost shipments"
-          >
-            <Trash2 size={14} /> Purge Ghost Records
-          </button>
-          {simulatedCount > 0 && (
-            <button
-              onClick={handleClearSimulated}
-              className="mv-btn-danger"
-              style={{ padding: '8px 14px', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}
-            >
-              <Trash2 size={14} /> Clear Test Shipments ({simulatedCount})
-            </button>
-          )}
-          <button
-            onClick={() => setShowInjectModal(true)}
-            className="mv-btn"
-            style={{ padding: '8px 14px', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}
-          >
-            <Plus size={14} /> Inject DPD Test Shipments
           </button>
           <button
             onClick={fetchShipments}
@@ -752,62 +667,6 @@ export default function ShipmentsPage() {
            </div>
          </div>
        </div>
-
-       {/* ── Inject Sample Modal ─────────────────────────────────────────── */}
-       {showInjectModal && (
-         <div style={{
-           position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
-           display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
-         }}>
-           <div style={{
-             background: '#fff', width: 560, border: '2px solid var(--mv-divider)',
-             padding: 24, boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
-           }}>
-             <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 8px 0' }}>
-               Inject DPD Invoice Test Shipments
-             </h2>
-             <p style={{ fontSize: 13, color: 'var(--mv-ink-60)', margin: '0 0 16px 0', lineHeight: 1.5 }}>
-               This tool creates sample parcel shipments matching the DPD invoice lines and assigns them to a chosen customer.
-             </p>
-
-             <div style={{ marginBottom: 20 }}>
-               <label style={{ display: 'block', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', marginBottom: 6 }}>
-                 Select Customer Account
-               </label>
-               <select
-                 value={selectedCustomerId}
-                 onChange={e => setSelectedCustomerId(e.target.value)}
-                 className="mv-input"
-                 style={{ width: '100%', height: 38, fontSize: 13 }}
-               >
-                 <option value="">-- Pick Customer --</option>
-                 {customers.map(c => (
-                   <option key={c.id} value={c.id}>
-                     {c.company_name || c.trading_name || c.business_name || c.name} ({c.account_number || 'No Account #'})
-                   </option>
-                 ))}
-               </select>
-             </div>
-
-             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-               <button
-                 onClick={() => setShowInjectModal(false)}
-                 className="mv-btn-ghost"
-                 disabled={injecting}
-               >
-                 Cancel
-               </button>
-               <button
-                 onClick={handleInjectSample}
-                 className="mv-btn"
-                 disabled={injecting || !selectedCustomerId}
-               >
-                 {injecting ? 'Injecting...' : 'Inject Sample Shipments'}
-               </button>
-             </div>
-           </div>
-         </div>
-       )}
 
        {/* ── Multi-Tab Payload & Pricing Audit Modal ────────────────────── */}
        {selectedShipment && (
