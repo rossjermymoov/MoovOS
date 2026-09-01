@@ -1622,24 +1622,12 @@ router.post('/bulk-sync-dc-ids', async (req, res, next) => {
           name: targetCust.business_name,
           dc_customer_id: dcId,
         });
-      } else if (name) {
-        // Create new customer
-        const aliases = [name, dcId].filter(Boolean);
-        const randAcct = 'MOS-' + String(Math.floor(Math.random() * 90000 + 10000));
-        const ins = await query(
-          `INSERT INTO customers 
-            (business_name, account_number, dc_customer_id, registered_address, postcode, phone_number, primary_email, account_status, tier, billing_aliases)
-           VALUES ($1, $2, $3, 'Registered Address', 'UK', '—', $4, 'active', 'bronze', $5)
-           RETURNING id, business_name, dc_customer_id`,
-          [name, randAcct, dcId || null, `billing@${name.toLowerCase().replace(/[^a-z0-9]/g, '')}.co.uk`, aliases]
-        );
-
-        results.created++;
+      } else {
+        // Customer does not exist in database — skip
         results.details.push({
-          action: 'created',
-          id: ins.rows[0].id,
-          name: ins.rows[0].business_name,
-          dc_customer_id: ins.rows[0].dc_customer_id,
+          action: 'skipped_not_found',
+          name,
+          dc_customer_id: dcId,
         });
       }
     }
