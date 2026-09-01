@@ -1537,20 +1537,6 @@ export default function TrackingPage() {
             </button>
           ))}
 
-          {/* Quick Exceptions Filter Toggle */}
-          <button
-            className={`mv-chip ${statusFilter === 'exceptions_group' ? 'is-on' : ''}`}
-            style={{
-              borderColor: statusFilter === 'exceptions_group' ? 'var(--mv-magenta)' : undefined,
-              background: statusFilter === 'exceptions_group' ? 'var(--mv-magenta-deep)' : undefined,
-              color: statusFilter === 'exceptions_group' ? '#fff' : undefined,
-            }}
-            onClick={toggleExceptionFilter}
-          >
-            <AlertTriangle size={12} style={{ marginRight: 4 }} />
-            Exceptions ({exceptionCount})
-          </button>
-
           <span style={{ flex: 1 }} />
 
           <div className="mv-search" style={{ width: 280, height: 34 }}>
