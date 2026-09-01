@@ -1520,4 +1520,137 @@ router.put('/:id/ddp-mode', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// POST /api/customers/bulk-sync-dc-ids
+// Bulk synchronise Despatch Cloud customer IDs to Moov OS customer records.
+// Accepts: JSON array, { mappings: [...] }, or CSV lines ("0176,wasiwosi")
+router.post('/bulk-sync-dc-ids', async (req, res, next) => {
+  try {
+    let items = req.body;
+    if (typeof items === 'string') {
+      items = items.split('\n')
+        .map(l => l.trim())
+        .filter(Boolean)
+        .map(line => {
+          const parts = line.split(/[,\t|]/).map(p => p.trim());
+          return { dc_id: parts[0], name: parts[1] || parts[0] };
+        });
+    } else if (items && items.mappings && Array.isArray(items.mappings)) {
+      items = items.mappings;
+    } else if (!Array.isArray(items)) {
+      items = [items];
+    }
+
+    const results = {
+      total: items.length,
+      updated: 0,
+      created: 0,
+      cleared_conflicts: 0,
+      details: [],
+    };
+
+    for (const item of items) {
+      const dcId = String(item.dc_id || item.dc_customer_id || item.dcCustomerId || item.id || item.code || '').trim();
+      const name = String(item.name || item.business_name || item.customer_name || item.company_name || '').trim();
+      const accountNum = String(item.account_number || item.accountNumber || dcId).trim();
+
+      if (!dcId && !name) continue;
+
+      // 1. Clear this dcId from any existing customer that DOES NOT match this name (e.g. 0176 was wrongly on Europa)
+      if (dcId) {
+        const conflictRes = await query(
+          `UPDATE customers 
+           SET dc_customer_id = NULL 
+           WHERE dc_customer_id = $1 
+             AND LOWER(business_name) != LOWER($2) 
+             AND (trading_name IS NULL OR LOWER(trading_name) != LOWER($2))
+           RETURNING id, business_name`,
+          [dcId, name]
+        );
+        if (conflictRes.rows.length > 0) {
+          results.cleared_conflicts += conflictRes.rows.length;
+        }
+      }
+
+      // 2. Find customer by exact name or trading name or billing alias
+      let targetCust = null;
+      if (name) {
+        const r1 = await query(
+          `SELECT id, business_name, dc_customer_id, billing_aliases 
+           FROM customers 
+           WHERE LOWER(business_name) = LOWER($1) 
+              OR (trading_name IS NOT NULL AND LOWER(trading_name) = LOWER($1))
+           LIMIT 1`,
+          [name]
+        );
+        if (r1.rows.length) {
+          targetCust = r1.rows[0];
+        } else {
+          // Try ILIKE partial or alias match
+          const r2 = await query(
+            `SELECT id, business_name, dc_customer_id, billing_aliases 
+             FROM customers 
+             WHERE LOWER(business_name) ILIKE $1 
+                OR EXISTS (SELECT 1 FROM unnest(billing_aliases) a WHERE LOWER(a) = LOWER($2))
+             ORDER BY LENGTH(business_name) ASC LIMIT 1`,
+            [`%${name}%`, name]
+          );
+          if (r2.rows.length) targetCust = r2.rows[0];
+        }
+      }
+
+      if (targetCust) {
+        // Update existing customer
+        const aliases = Array.isArray(targetCust.billing_aliases) ? [...targetCust.billing_aliases] : [];
+        if (name && !aliases.some(a => a.toLowerCase() === name.toLowerCase())) {
+          aliases.push(name);
+        }
+        if (dcId && !aliases.includes(dcId)) {
+          aliases.push(dcId);
+        }
+
+        await query(
+          `UPDATE customers 
+           SET dc_customer_id = COALESCE($1, dc_customer_id),
+               billing_aliases = $2,
+               updated_at = NOW()
+           WHERE id = $3`,
+          [dcId || null, aliases, targetCust.id]
+        );
+
+        results.updated++;
+        results.details.push({
+          action: 'updated',
+          id: targetCust.id,
+          name: targetCust.business_name,
+          dc_customer_id: dcId,
+        });
+      } else if (name) {
+        // Create new customer
+        const aliases = [name, dcId].filter(Boolean);
+        const ins = await query(
+          `INSERT INTO customers 
+            (business_name, dc_customer_id, account_number, account_status, tier, billing_aliases)
+           VALUES ($1, $2, $3, 'active', 'standard', $4)
+           RETURNING id, business_name, dc_customer_id`,
+          [name, dcId || null, accountNum || dcId || null, aliases]
+        );
+
+        results.created++;
+        results.details.push({
+          action: 'created',
+          id: ins.rows[0].id,
+          name: ins.rows[0].business_name,
+          dc_customer_id: ins.rows[0].dc_customer_id,
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `Processed ${results.total} mappings: ${results.updated} updated, ${results.created} created, ${results.cleared_conflicts} cleared conflicts.`,
+      ...results,
+    });
+  } catch (err) { next(err); }
+});
+
 export default router;
