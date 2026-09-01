@@ -37,7 +37,7 @@ BEGIN
     VALUES (
       'Developer Testing', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), '1',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Developer Testing', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Developer Testing', '1', '1']
+      'active', 'bronze', ARRAY['Developer Testing', '1', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -73,7 +73,7 @@ BEGIN
     VALUES (
       'Cloud 9 Fulfilment', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Cloud9',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Cloud 9 Fulfilment', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Cloud 9 Fulfilment', 'Cloud9', '9']
+      'active', 'bronze', ARRAY['Cloud 9 Fulfilment', 'Cloud9', '9']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -109,7 +109,7 @@ BEGIN
     VALUES (
       'WXM - Greenplant UK Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'WXM-0004',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('WXM - Greenplant UK Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['WXM - Greenplant UK Ltd', 'WXM-0004', '0004', '4']
+      'active', 'bronze', ARRAY['WXM - Greenplant UK Ltd', 'WXM-0004', '0004', '4']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -145,7 +145,7 @@ BEGIN
     VALUES (
       'WXM - Projekt Indigo Studio Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'WXM-0005',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('WXM - Projekt Indigo Studio Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['WXM - Projekt Indigo Studio Ltd', 'WXM-0005', '0005', '5']
+      'active', 'bronze', ARRAY['WXM - Projekt Indigo Studio Ltd', 'WXM-0005', '0005', '5']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -181,7 +181,7 @@ BEGIN
     VALUES (
       'Floship-Returns', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'FLOSHIP',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Floship-Returns', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Floship-Returns', 'FLOSHIP']
+      'active', 'bronze', ARRAY['Floship-Returns', 'FLOSHIP']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -217,7 +217,7 @@ BEGIN
     VALUES (
       'Keells', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0201',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Keells', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Keells', 'DP1-0201', '1']
+      'active', 'bronze', ARRAY['Keells', 'DP1-0201', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -253,7 +253,7 @@ BEGIN
     VALUES (
       'MoreHustl', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'HOF-0031',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('MoreHustl', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['MoreHustl', 'HOF-0031', '0031', '31']
+      'active', 'bronze', ARRAY['MoreHustl', 'HOF-0031', '0031', '31']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -289,7 +289,7 @@ BEGIN
     VALUES (
       'Suresh Deepal Herath 12', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Dep2-0006',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Suresh Deepal Herath 12', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Suresh Deepal Herath 12', 'Dep2-0006', '2']
+      'active', 'bronze', ARRAY['Suresh Deepal Herath 12', 'Dep2-0006', '2']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -325,7 +325,7 @@ BEGIN
     VALUES (
       'The Chosen Baller LLC', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), '001-0002',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('The Chosen Baller LLC', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['The Chosen Baller LLC', '001-0002', '001', '1']
+      'active', 'bronze', ARRAY['The Chosen Baller LLC', '001-0002', '001', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -361,7 +361,7 @@ BEGIN
     VALUES (
       'SND Electrical', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'HOF-0054',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('SND Electrical', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['SND Electrical', 'HOF-0054', '0054', '54']
+      'active', 'bronze', ARRAY['SND Electrical', 'HOF-0054', '0054', '54']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -397,7 +397,7 @@ BEGIN
     VALUES (
       'E & L Trading Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'HOF-0055',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('E & L Trading Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['E & L Trading Ltd', 'HOF-0055', '0055', '55']
+      'active', 'bronze', ARRAY['E & L Trading Ltd', 'HOF-0055', '0055', '55']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -433,7 +433,7 @@ BEGIN
     VALUES (
       'Britalitez Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'HOF-0056',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Britalitez Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Britalitez Limited', 'HOF-0056', '0056', '56']
+      'active', 'bronze', ARRAY['Britalitez Limited', 'HOF-0056', '0056', '56']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -469,7 +469,7 @@ BEGIN
     VALUES (
       'Moov Prod Admin two', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DD2-0003',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Moov Prod Admin two', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Moov Prod Admin two', 'DD2-0003', '2']
+      'active', 'bronze', ARRAY['Moov Prod Admin two', 'DD2-0003', '2']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -505,7 +505,7 @@ BEGIN
     VALUES (
       'Danny Snelson', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'HOF-0008',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Danny Snelson', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Danny Snelson', 'HOF-0008', '0008', '8']
+      'active', 'bronze', ARRAY['Danny Snelson', 'HOF-0008', '0008', '8']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -541,7 +541,7 @@ BEGIN
     VALUES (
       'Spare and Square', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'HOF-GONE',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Spare and Square', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Spare and Square', 'HOF-GONE']
+      'active', 'bronze', ARRAY['Spare and Square', 'HOF-GONE']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -577,7 +577,7 @@ BEGIN
     VALUES (
       'Crystal Nails', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'HOF-0009',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Crystal Nails', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Crystal Nails', 'HOF-0009', '0009', '9']
+      'active', 'bronze', ARRAY['Crystal Nails', 'HOF-0009', '0009', '9']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -613,7 +613,7 @@ BEGIN
     VALUES (
       'Fight Outlet', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'HOF-0010',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Fight Outlet', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Fight Outlet', 'HOF-0010', '0010', '10']
+      'active', 'bronze', ARRAY['Fight Outlet', 'HOF-0010', '0010', '10']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -649,7 +649,7 @@ BEGIN
     VALUES (
       'Prophecy Cricket Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'HOF-0011',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Prophecy Cricket Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Prophecy Cricket Ltd', 'HOF-0011', '0011', '11']
+      'active', 'bronze', ARRAY['Prophecy Cricket Ltd', 'HOF-0011', '0011', '11']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -685,7 +685,7 @@ BEGIN
     VALUES (
       'Seedball Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'HOF-0012',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Seedball Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Seedball Limited', 'HOF-0012', '0012', '12']
+      'active', 'bronze', ARRAY['Seedball Limited', 'HOF-0012', '0012', '12']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -721,7 +721,7 @@ BEGIN
     VALUES (
       'Saloos Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0002',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Saloos Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Saloos Ltd', 'MOOV-0002', '0002', '2']
+      'active', 'bronze', ARRAY['Saloos Ltd', 'MOOV-0002', '0002', '2']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -757,7 +757,7 @@ BEGIN
     VALUES (
       'MP Homewares Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0003',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('MP Homewares Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['MP Homewares Ltd', 'MOOV-0003', '0003', '3']
+      'active', 'bronze', ARRAY['MP Homewares Ltd', 'MOOV-0003', '0003', '3']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -793,7 +793,7 @@ BEGIN
     VALUES (
       'I Luv Designer', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0004',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('I Luv Designer', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['I Luv Designer', 'MOOV-0004', '0004', '4']
+      'active', 'bronze', ARRAY['I Luv Designer', 'MOOV-0004', '0004', '4']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -829,7 +829,7 @@ BEGIN
     VALUES (
       '3 Devices Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0005',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('3 Devices Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['3 Devices Ltd', 'MOOV-0005', '0005', '5']
+      'active', 'bronze', ARRAY['3 Devices Ltd', 'MOOV-0005', '0005', '5']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -865,7 +865,7 @@ BEGIN
     VALUES (
       'EF TEST CUSTOMER QA EIGHT', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DF1-0004',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('EF TEST CUSTOMER QA EIGHT', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['EF TEST CUSTOMER QA EIGHT', 'DF1-0004', '1']
+      'active', 'bronze', ARRAY['EF TEST CUSTOMER QA EIGHT', 'DF1-0004', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -901,7 +901,7 @@ BEGIN
     VALUES (
       'Yayo Familia Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0006',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Yayo Familia Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Yayo Familia Ltd', 'MOOV-0006', '0006', '6']
+      'active', 'bronze', ARRAY['Yayo Familia Ltd', 'MOOV-0006', '0006', '6']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -937,7 +937,7 @@ BEGIN
     VALUES (
       'Capatex Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0007',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Capatex Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Capatex Limited', 'MOOV-0007', '0007', '7']
+      'active', 'bronze', ARRAY['Capatex Limited', 'MOOV-0007', '0007', '7']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -973,7 +973,7 @@ BEGIN
     VALUES (
       'Trident Pumps', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0008',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Trident Pumps', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Trident Pumps', 'MOOV-0008', '0008', '8']
+      'active', 'bronze', ARRAY['Trident Pumps', 'MOOV-0008', '0008', '8']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -1009,7 +1009,7 @@ BEGIN
     VALUES (
       'Tribal Society', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0009',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Tribal Society', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Tribal Society', 'MOOV-0009', '0009', '9']
+      'active', 'bronze', ARRAY['Tribal Society', 'MOOV-0009', '0009', '9']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -1045,7 +1045,7 @@ BEGIN
     VALUES (
       'Millvill Industrial Supplies Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0010',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Millvill Industrial Supplies Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Millvill Industrial Supplies Ltd', 'MOOV-0010', '0010', '10']
+      'active', 'bronze', ARRAY['Millvill Industrial Supplies Ltd', 'MOOV-0010', '0010', '10']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -1081,7 +1081,7 @@ BEGIN
     VALUES (
       'B2B Workwear & Janitorial Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0011',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('B2B Workwear & Janitorial Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['B2B Workwear & Janitorial Ltd', 'MOOV-0011', '0011', '11']
+      'active', 'bronze', ARRAY['B2B Workwear & Janitorial Ltd', 'MOOV-0011', '0011', '11']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -1117,7 +1117,7 @@ BEGIN
     VALUES (
       'Britalitez Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0012',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Britalitez Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Britalitez Ltd', 'MOOV-0012', '0012', '12']
+      'active', 'bronze', ARRAY['Britalitez Ltd', 'MOOV-0012', '0012', '12']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -1153,7 +1153,7 @@ BEGIN
     VALUES (
       'Code Nine UK Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0013',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Code Nine UK Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Code Nine UK Ltd', 'MOOV-0013', '0013', '13']
+      'active', 'bronze', ARRAY['Code Nine UK Ltd', 'MOOV-0013', '0013', '13']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -1189,7 +1189,7 @@ BEGIN
     VALUES (
       'Edmunson Electrical Leeds', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0014',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Edmunson Electrical Leeds', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Edmunson Electrical Leeds', 'MOOV-0014', '0014', '14']
+      'active', 'bronze', ARRAY['Edmunson Electrical Leeds', 'MOOV-0014', '0014', '14']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -1225,7 +1225,7 @@ BEGIN
     VALUES (
       'Green Footprint Services Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0015',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Green Footprint Services Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Green Footprint Services Ltd', 'MOOV-0015', '0015', '15']
+      'active', 'bronze', ARRAY['Green Footprint Services Ltd', 'MOOV-0015', '0015', '15']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -1261,7 +1261,7 @@ BEGIN
     VALUES (
       'EF QA CUSTOMER HS', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0011',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('EF QA CUSTOMER HS', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['EF QA CUSTOMER HS', 'DP1-0011', '1']
+      'active', 'bronze', ARRAY['EF QA CUSTOMER HS', 'DP1-0011', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -1297,7 +1297,7 @@ BEGIN
     VALUES (
       'hjko', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), '1233-0001',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('hjko', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['hjko', '1233-0001', '1233']
+      'active', 'bronze', ARRAY['hjko', '1233-0001', '1233']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -1333,7 +1333,7 @@ BEGIN
     VALUES (
       'qwerty', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DF1-0007',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('qwerty', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['qwerty', 'DF1-0007', '1']
+      'active', 'bronze', ARRAY['qwerty', 'DF1-0007', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -1369,7 +1369,7 @@ BEGIN
     VALUES (
       'Norfolk Saw Services', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0016',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Norfolk Saw Services', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Norfolk Saw Services', 'MOOV-0016', '0016', '16']
+      'active', 'bronze', ARRAY['Norfolk Saw Services', 'MOOV-0016', '0016', '16']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -1405,7 +1405,7 @@ BEGIN
     VALUES (
       'Rilco Electrical Supplies', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0017',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Rilco Electrical Supplies', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Rilco Electrical Supplies', 'MOOV-0017', '0017', '17']
+      'active', 'bronze', ARRAY['Rilco Electrical Supplies', 'MOOV-0017', '0017', '17']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -1441,7 +1441,7 @@ BEGIN
     VALUES (
       'asdfg', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DF1-0008',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('asdfg', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['asdfg', 'DF1-0008', '1']
+      'active', 'bronze', ARRAY['asdfg', 'DF1-0008', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -1477,7 +1477,7 @@ BEGIN
     VALUES (
       'Passion Accessories Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0018',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Passion Accessories Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Passion Accessories Ltd', 'MOOV-0018', '0018', '18']
+      'active', 'bronze', ARRAY['Passion Accessories Ltd', 'MOOV-0018', '0018', '18']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -1513,7 +1513,7 @@ BEGIN
     VALUES (
       'Spare and Square Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0019',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Spare and Square Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Spare and Square Ltd', 'MOOV-0019', '0019', '19']
+      'active', 'bronze', ARRAY['Spare and Square Ltd', 'MOOV-0019', '0019', '19']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -1549,7 +1549,7 @@ BEGIN
     VALUES (
       'nnmm', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DF1-0009',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('nnmm', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['nnmm', 'DF1-0009', '1']
+      'active', 'bronze', ARRAY['nnmm', 'DF1-0009', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -1585,7 +1585,7 @@ BEGIN
     VALUES (
       'check', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), '1233-0002',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('check', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['check', '1233-0002', '1233']
+      'active', 'bronze', ARRAY['check', '1233-0002', '1233']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -1621,7 +1621,7 @@ BEGIN
     VALUES (
       'SND ELECTRICAL WHOLESALERS (UK) LTD', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0020',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('SND ELECTRICAL WHOLESALERS (UK) LTD', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['SND ELECTRICAL WHOLESALERS (UK) LTD', 'MOOV-0020', '0020', '20']
+      'active', 'bronze', ARRAY['SND ELECTRICAL WHOLESALERS (UK) LTD', 'MOOV-0020', '0020', '20']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -1657,7 +1657,7 @@ BEGIN
     VALUES (
       'Efutures', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0014',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Efutures', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Efutures', 'DP1-0014', '1']
+      'active', 'bronze', ARRAY['Efutures', 'DP1-0014', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -1693,7 +1693,7 @@ BEGIN
     VALUES (
       'Lifemax Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0021',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Lifemax Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Lifemax Limited', 'MOOV-0021', '0021', '21']
+      'active', 'bronze', ARRAY['Lifemax Limited', 'MOOV-0021', '0021', '21']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -1729,7 +1729,7 @@ BEGIN
     VALUES (
       'IFS', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DD2-0005',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('IFS', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['IFS', 'DD2-0005', '2']
+      'active', 'bronze', ARRAY['IFS', 'DD2-0005', '2']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -1765,7 +1765,7 @@ BEGIN
     VALUES (
       'M and J Brothers Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0022',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('M and J Brothers Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['M and J Brothers Ltd', 'MOOV-0022', '0022', '22']
+      'active', 'bronze', ARRAY['M and J Brothers Ltd', 'MOOV-0022', '0022', '22']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -1801,7 +1801,7 @@ BEGIN
     VALUES (
       'Beacons and Lightbars', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0023',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Beacons and Lightbars', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Beacons and Lightbars', 'MOOV-0023', '0023', '23']
+      'active', 'bronze', ARRAY['Beacons and Lightbars', 'MOOV-0023', '0023', '23']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -1837,7 +1837,7 @@ BEGIN
     VALUES (
       'DDUP International Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0024',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('DDUP International Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['DDUP International Ltd', 'MOOV-0024', '0024', '24']
+      'active', 'bronze', ARRAY['DDUP International Ltd', 'MOOV-0024', '0024', '24']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -1873,7 +1873,7 @@ BEGIN
     VALUES (
       'Granola Kitchen Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0025',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Granola Kitchen Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Granola Kitchen Ltd', 'MOOV-0025', '0025', '25']
+      'active', 'bronze', ARRAY['Granola Kitchen Ltd', 'MOOV-0025', '0025', '25']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -1909,7 +1909,7 @@ BEGIN
     VALUES (
       'Pet & Grooming Supplies Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0026',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Pet & Grooming Supplies Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Pet & Grooming Supplies Ltd', 'MOOV-0026', '0026', '26']
+      'active', 'bronze', ARRAY['Pet & Grooming Supplies Ltd', 'MOOV-0026', '0026', '26']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -1945,7 +1945,7 @@ BEGIN
     VALUES (
       'SRR3', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DF1-0010',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('SRR3', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['SRR3', 'DF1-0010', '1']
+      'active', 'bronze', ARRAY['SRR3', 'DF1-0010', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -1981,7 +1981,7 @@ BEGIN
     VALUES (
       'Uni4mers', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Uni4mers',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Uni4mers', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Uni4mers', 'Uni4mers', '4']
+      'active', 'bronze', ARRAY['Uni4mers', 'Uni4mers', '4']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -2017,7 +2017,7 @@ BEGIN
     VALUES (
       'Efutures4', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0016',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Efutures4', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Efutures4', 'DP1-0016', '1']
+      'active', 'bronze', ARRAY['Efutures4', 'DP1-0016', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -2053,7 +2053,7 @@ BEGIN
     VALUES (
       'EFtures5', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0017',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('EFtures5', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['EFtures5', 'DP1-0017', '1']
+      'active', 'bronze', ARRAY['EFtures5', 'DP1-0017', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -2089,7 +2089,7 @@ BEGIN
     VALUES (
       'Sharkeye Wheel Aligners UK Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0027',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Sharkeye Wheel Aligners UK Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Sharkeye Wheel Aligners UK Ltd', 'MOOV-0027', '0027', '27']
+      'active', 'bronze', ARRAY['Sharkeye Wheel Aligners UK Ltd', 'MOOV-0027', '0027', '27']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -2125,7 +2125,7 @@ BEGIN
     VALUES (
       'Efutures5', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DDJ1-0001',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Efutures5', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Efutures5', 'DDJ1-0001', '1']
+      'active', 'bronze', ARRAY['Efutures5', 'DDJ1-0001', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -2161,7 +2161,7 @@ BEGIN
     VALUES (
       'The Hanger Store', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0028',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('The Hanger Store', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['The Hanger Store', 'MOOV-0028', '0028', '28']
+      'active', 'bronze', ARRAY['The Hanger Store', 'MOOV-0028', '0028', '28']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -2197,7 +2197,7 @@ BEGIN
     VALUES (
       'How High Brands', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0029',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('How High Brands', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['How High Brands', 'MOOV-0029', '0029', '29']
+      'active', 'bronze', ARRAY['How High Brands', 'MOOV-0029', '0029', '29']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -2233,7 +2233,7 @@ BEGIN
     VALUES (
       'SQA', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0019',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('SQA', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['SQA', 'DP1-0019', '1']
+      'active', 'bronze', ARRAY['SQA', 'DP1-0019', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -2269,7 +2269,7 @@ BEGIN
     VALUES (
       'SINGER', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0021',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('SINGER', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['SINGER', 'DP1-0021', '1']
+      'active', 'bronze', ARRAY['SINGER', 'DP1-0021', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -2305,7 +2305,7 @@ BEGIN
     VALUES (
       'Greenplant UK Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0030',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Greenplant UK Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Greenplant UK Ltd', 'MOOV-0030', '0030', '30']
+      'active', 'bronze', ARRAY['Greenplant UK Ltd', 'MOOV-0030', '0030', '30']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -2341,7 +2341,7 @@ BEGIN
     VALUES (
       'Assetee', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0024',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Assetee', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Assetee', 'DP1-0024', '1']
+      'active', 'bronze', ARRAY['Assetee', 'DP1-0024', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -2377,7 +2377,7 @@ BEGIN
     VALUES (
       'Mobberley Cakes Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0031',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Mobberley Cakes Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Mobberley Cakes Ltd', 'MOOV-0031', '0031', '31']
+      'active', 'bronze', ARRAY['Mobberley Cakes Ltd', 'MOOV-0031', '0031', '31']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -2413,7 +2413,7 @@ BEGIN
     VALUES (
       'Ecom Group UK Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0032',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Ecom Group UK Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Ecom Group UK Limited', 'MOOV-0032', '0032', '32']
+      'active', 'bronze', ARRAY['Ecom Group UK Limited', 'MOOV-0032', '0032', '32']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -2449,7 +2449,7 @@ BEGIN
     VALUES (
       'Heaven Scent Incense Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0033',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Heaven Scent Incense Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Heaven Scent Incense Ltd', 'MOOV-0033', '0033', '33']
+      'active', 'bronze', ARRAY['Heaven Scent Incense Ltd', 'MOOV-0033', '0033', '33']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -2485,7 +2485,7 @@ BEGIN
     VALUES (
       'EFUTURES6', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0025',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('EFUTURES6', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['EFUTURES6', 'DP1-0025', '1']
+      'active', 'bronze', ARRAY['EFUTURES6', 'DP1-0025', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -2521,7 +2521,7 @@ BEGIN
     VALUES (
       'AJP1', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'AJP1',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('AJP1', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['AJP1', 'AJP1', '1']
+      'active', 'bronze', ARRAY['AJP1', 'AJP1', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -2557,7 +2557,7 @@ BEGIN
     VALUES (
       'AJP2', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'AJP2',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('AJP2', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['AJP2', 'AJP2', '2']
+      'active', 'bronze', ARRAY['AJP2', 'AJP2', '2']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -2593,7 +2593,7 @@ BEGIN
     VALUES (
       'AJP3', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'AJP3',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('AJP3', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['AJP3', 'AJP3', '3']
+      'active', 'bronze', ARRAY['AJP3', 'AJP3', '3']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -2629,7 +2629,7 @@ BEGIN
     VALUES (
       'AJP4', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'AJP4',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('AJP4', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['AJP4', 'AJP4', '4']
+      'active', 'bronze', ARRAY['AJP4', 'AJP4', '4']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -2665,7 +2665,7 @@ BEGIN
     VALUES (
       'AJP5', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'AJP5',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('AJP5', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['AJP5', 'AJP5', '5']
+      'active', 'bronze', ARRAY['AJP5', 'AJP5', '5']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -2701,7 +2701,7 @@ BEGIN
     VALUES (
       'Info Technology Supply', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0034',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Info Technology Supply', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Info Technology Supply', 'MOOV-0034', '0034', '34']
+      'active', 'bronze', ARRAY['Info Technology Supply', 'MOOV-0034', '0034', '34']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -2737,7 +2737,7 @@ BEGIN
     VALUES (
       '99X', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0027',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('99X', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['99X', 'DP1-0027', '1']
+      'active', 'bronze', ARRAY['99X', 'DP1-0027', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -2773,7 +2773,7 @@ BEGIN
     VALUES (
       'Aegean Sea Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0035',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Aegean Sea Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Aegean Sea Ltd', 'MOOV-0035', '0035', '35']
+      'active', 'bronze', ARRAY['Aegean Sea Ltd', 'MOOV-0035', '0035', '35']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -2809,7 +2809,7 @@ BEGIN
     VALUES (
       'LB Finance', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0028',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('LB Finance', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['LB Finance', 'DP1-0028', '1']
+      'active', 'bronze', ARRAY['LB Finance', 'DP1-0028', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -2845,7 +2845,7 @@ BEGIN
     VALUES (
       'DM AGENCY AND DISTRIBUTION', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0036',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('DM AGENCY AND DISTRIBUTION', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['DM AGENCY AND DISTRIBUTION', 'MOOV-0036', '0036', '36']
+      'active', 'bronze', ARRAY['DM AGENCY AND DISTRIBUTION', 'MOOV-0036', '0036', '36']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -2881,7 +2881,7 @@ BEGIN
     VALUES (
       'DDPL', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DDPL',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('DDPL', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['DDPL', 'DDPL']
+      'active', 'bronze', ARRAY['DDPL', 'DDPL']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -2917,7 +2917,7 @@ BEGIN
     VALUES (
       'Aglory MERCHANT ENTERPRISES LIMITED', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Aglory MERCHANT ENTERPRISES LIMITED',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Aglory MERCHANT ENTERPRISES LIMITED', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Aglory MERCHANT ENTERPRISES LIMITED', 'Aglory MERCHANT ENTERPRISES LIMITED']
+      'active', 'bronze', ARRAY['Aglory MERCHANT ENTERPRISES LIMITED', 'Aglory MERCHANT ENTERPRISES LIMITED']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -2953,7 +2953,7 @@ BEGIN
     VALUES (
       'HCL', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0029',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('HCL', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['HCL', 'DP1-0029', '1']
+      'active', 'bronze', ARRAY['HCL', 'DP1-0029', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -2989,7 +2989,7 @@ BEGIN
     VALUES (
       'NEXT', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0030',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('NEXT', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['NEXT', 'DP1-0030', '1']
+      'active', 'bronze', ARRAY['NEXT', 'DP1-0030', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -3025,7 +3025,7 @@ BEGIN
     VALUES (
       'E Square', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'E Square',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('E Square', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['E Square', 'E Square']
+      'active', 'bronze', ARRAY['E Square', 'E Square']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -3061,7 +3061,7 @@ BEGIN
     VALUES (
       'Natural Spa Supplies Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0037',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Natural Spa Supplies Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Natural Spa Supplies Ltd', 'MOOV-0037', '0037', '37']
+      'active', 'bronze', ARRAY['Natural Spa Supplies Ltd', 'MOOV-0037', '0037', '37']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -3097,7 +3097,7 @@ BEGIN
     VALUES (
       'JOY ASIAN FOOD & GROCERY LIMITED', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0038',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('JOY ASIAN FOOD & GROCERY LIMITED', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['JOY ASIAN FOOD & GROCERY LIMITED', 'MOOV-0038', '0038', '38']
+      'active', 'bronze', ARRAY['JOY ASIAN FOOD & GROCERY LIMITED', 'MOOV-0038', '0038', '38']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -3133,7 +3133,7 @@ BEGIN
     VALUES (
       'Bakers Street Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0039',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Bakers Street Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Bakers Street Limited', 'MOOV-0039', '0039', '39']
+      'active', 'bronze', ARRAY['Bakers Street Limited', 'MOOV-0039', '0039', '39']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -3169,7 +3169,7 @@ BEGIN
     VALUES (
       '8ack', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), '8ack',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('8ack', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['8ack', '8ack', '8']
+      'active', 'bronze', ARRAY['8ack', '8ack', '8']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -3205,7 +3205,7 @@ BEGIN
     VALUES (
       'Jane Scott Ceramics', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0040',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Jane Scott Ceramics', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Jane Scott Ceramics', 'MOOV-0040', '0040', '40']
+      'active', 'bronze', ARRAY['Jane Scott Ceramics', 'MOOV-0040', '0040', '40']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -3241,7 +3241,7 @@ BEGIN
     VALUES (
       'SCR DISTRIBUTION', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0041',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('SCR DISTRIBUTION', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['SCR DISTRIBUTION', 'MOOV-0041', '0041', '41']
+      'active', 'bronze', ARRAY['SCR DISTRIBUTION', 'MOOV-0041', '0041', '41']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -3277,7 +3277,7 @@ BEGIN
     VALUES (
       'Megway', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Megway Parcels',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Megway', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Megway', 'Megway Parcels']
+      'active', 'bronze', ARRAY['Megway', 'Megway Parcels']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -3313,7 +3313,7 @@ BEGIN
     VALUES (
       'Lather Up', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0042',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Lather Up', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Lather Up', 'MOOV-0042', '0042', '42']
+      'active', 'bronze', ARRAY['Lather Up', 'MOOV-0042', '0042', '42']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -3349,7 +3349,7 @@ BEGIN
     VALUES (
       'Impoxer LTD T/A Makrom', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0043',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Impoxer LTD T/A Makrom', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Impoxer LTD T/A Makrom', 'MOOV-0043', '0043', '43']
+      'active', 'bronze', ARRAY['Impoxer LTD T/A Makrom', 'MOOV-0043', '0043', '43']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -3385,7 +3385,7 @@ BEGIN
     VALUES (
       'Vertura Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0045',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Vertura Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Vertura Ltd', 'MOOV-0045', '0045', '45']
+      'active', 'bronze', ARRAY['Vertura Ltd', 'MOOV-0045', '0045', '45']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -3421,7 +3421,7 @@ BEGIN
     VALUES (
       'Roar Gill Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0046',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Roar Gill Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Roar Gill Ltd', 'MOOV-0046', '0046', '46']
+      'active', 'bronze', ARRAY['Roar Gill Ltd', 'MOOV-0046', '0046', '46']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -3457,7 +3457,7 @@ BEGIN
     VALUES (
       'Oriental Mart', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Oriental Mart',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Oriental Mart', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Oriental Mart', 'Oriental Mart']
+      'active', 'bronze', ARRAY['Oriental Mart', 'Oriental Mart']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -3493,7 +3493,7 @@ BEGIN
     VALUES (
       'Reevo', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0047',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Reevo', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Reevo', 'MOOV-0047', '0047', '47']
+      'active', 'bronze', ARRAY['Reevo', 'MOOV-0047', '0047', '47']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -3529,7 +3529,7 @@ BEGIN
     VALUES (
       'Lace and Favour Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0048',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Lace and Favour Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Lace and Favour Ltd', 'MOOV-0048', '0048', '48']
+      'active', 'bronze', ARRAY['Lace and Favour Ltd', 'MOOV-0048', '0048', '48']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -3565,7 +3565,7 @@ BEGIN
     VALUES (
       'Andersen EV', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Andersen EV',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Andersen EV', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Andersen EV', 'Andersen EV']
+      'active', 'bronze', ARRAY['Andersen EV', 'Andersen EV']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -3601,7 +3601,7 @@ BEGIN
     VALUES (
       'Henry And Tosh Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0050',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Henry And Tosh Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Henry And Tosh Limited', 'MOOV-0050', '0050', '50']
+      'active', 'bronze', ARRAY['Henry And Tosh Limited', 'MOOV-0050', '0050', '50']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -3637,7 +3637,7 @@ BEGIN
     VALUES (
       'March Laboratories Ltd / Ace Canine Healthcare', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0051',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('March Laboratories Ltd / Ace Canine Healthcare', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['March Laboratories Ltd / Ace Canine Healthcare', 'MOOV-0051', '0051', '51']
+      'active', 'bronze', ARRAY['March Laboratories Ltd / Ace Canine Healthcare', 'MOOV-0051', '0051', '51']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -3673,7 +3673,7 @@ BEGIN
     VALUES (
       'May2024', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DF1-0012',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('May2024', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['May2024', 'DF1-0012', '1']
+      'active', 'bronze', ARRAY['May2024', 'DF1-0012', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -3709,7 +3709,7 @@ BEGIN
     VALUES (
       'test 2024', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DF1-0013',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('test 2024', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['test 2024', 'DF1-0013', '1']
+      'active', 'bronze', ARRAY['test 2024', 'DF1-0013', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -3745,7 +3745,7 @@ BEGIN
     VALUES (
       'testii', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DF1-0014',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('testii', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['testii', 'DF1-0014', '1']
+      'active', 'bronze', ARRAY['testii', 'DF1-0014', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -3781,7 +3781,7 @@ BEGIN
     VALUES (
       'Abans Company', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DQA1-0001',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Abans Company', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Abans Company', 'DQA1-0001', '1']
+      'active', 'bronze', ARRAY['Abans Company', 'DQA1-0001', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -3817,7 +3817,7 @@ BEGIN
     VALUES (
       'Neil Test', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0053',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Neil Test', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Neil Test', 'MOOV-0053', '0053', '53']
+      'active', 'bronze', ARRAY['Neil Test', 'MOOV-0053', '0053', '53']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -3853,7 +3853,7 @@ BEGIN
     VALUES (
       'Moov Parcel', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0054',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Moov Parcel', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Moov Parcel', 'MOOV-0054', '0054', '54']
+      'active', 'bronze', ARRAY['Moov Parcel', 'MOOV-0054', '0054', '54']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -3889,7 +3889,7 @@ BEGIN
     VALUES (
       'Ultra Soft Water Softeners Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0056',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Ultra Soft Water Softeners Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Ultra Soft Water Softeners Ltd', 'MOOV-0056', '0056', '56']
+      'active', 'bronze', ARRAY['Ultra Soft Water Softeners Ltd', 'MOOV-0056', '0056', '56']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -3925,7 +3925,7 @@ BEGIN
     VALUES (
       'UK Optics Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0057',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('UK Optics Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['UK Optics Ltd', 'MOOV-0057', '0057', '57']
+      'active', 'bronze', ARRAY['UK Optics Ltd', 'MOOV-0057', '0057', '57']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -3961,7 +3961,7 @@ BEGIN
     VALUES (
       'CLIPHER LTD', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0058',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('CLIPHER LTD', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['CLIPHER LTD', 'MOOV-0058', '0058', '58']
+      'active', 'bronze', ARRAY['CLIPHER LTD', 'MOOV-0058', '0058', '58']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -3997,7 +3997,7 @@ BEGIN
     VALUES (
       'Damro', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DF1-0015',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Damro', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Damro', 'DF1-0015', '1']
+      'active', 'bronze', ARRAY['Damro', 'DF1-0015', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -4033,7 +4033,7 @@ BEGIN
     VALUES (
       'Teleseen', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0034',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Teleseen', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Teleseen', 'DP1-0034', '1']
+      'active', 'bronze', ARRAY['Teleseen', 'DP1-0034', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -4069,7 +4069,7 @@ BEGIN
     VALUES (
       'Live Quote Testing', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'LQT',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Live Quote Testing', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Live Quote Testing', 'LQT']
+      'active', 'bronze', ARRAY['Live Quote Testing', 'LQT']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -4105,7 +4105,7 @@ BEGIN
     VALUES (
       'P&S Products & Refreshening Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0059',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('P&S Products & Refreshening Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['P&S Products & Refreshening Ltd', 'MOOV-0059', '0059', '59']
+      'active', 'bronze', ARRAY['P&S Products & Refreshening Ltd', 'MOOV-0059', '0059', '59']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -4141,7 +4141,7 @@ BEGIN
     VALUES (
       'HOME AND HAVEN LIMITED', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0060',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('HOME AND HAVEN LIMITED', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['HOME AND HAVEN LIMITED', 'MOOV-0060', '0060', '60']
+      'active', 'bronze', ARRAY['HOME AND HAVEN LIMITED', 'MOOV-0060', '0060', '60']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -4177,7 +4177,7 @@ BEGIN
     VALUES (
       '2024', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0037',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('2024', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['2024', 'DP1-0037', '1']
+      'active', 'bronze', ARRAY['2024', 'DP1-0037', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -4213,7 +4213,7 @@ BEGIN
     VALUES (
       'Jetstar Airways', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0038',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Jetstar Airways', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Jetstar Airways', 'DP1-0038', '1']
+      'active', 'bronze', ARRAY['Jetstar Airways', 'DP1-0038', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -4249,7 +4249,7 @@ BEGIN
     VALUES (
       'Rifai UK Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0061',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Rifai UK Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Rifai UK Ltd', 'MOOV-0061', '0061', '61']
+      'active', 'bronze', ARRAY['Rifai UK Ltd', 'MOOV-0061', '0061', '61']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -4285,7 +4285,7 @@ BEGIN
     VALUES (
       'Giga Distributors', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0062',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Giga Distributors', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Giga Distributors', 'MOOV-0062', '0062', '62']
+      'active', 'bronze', ARRAY['Giga Distributors', 'MOOV-0062', '0062', '62']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -4321,7 +4321,7 @@ BEGIN
     VALUES (
       'TKS NATURALS LTD', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0063',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('TKS NATURALS LTD', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['TKS NATURALS LTD', 'MOOV-0063', '0063', '63']
+      'active', 'bronze', ARRAY['TKS NATURALS LTD', 'MOOV-0063', '0063', '63']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -4357,7 +4357,7 @@ BEGIN
     VALUES (
       'Mini La Mode', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0064',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Mini La Mode', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Mini La Mode', 'MOOV-0064', '0064', '64']
+      'active', 'bronze', ARRAY['Mini La Mode', 'MOOV-0064', '0064', '64']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -4393,7 +4393,7 @@ BEGIN
     VALUES (
       'TCS Worldwide', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'TCS',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('TCS Worldwide', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['TCS Worldwide', 'TCS']
+      'active', 'bronze', ARRAY['TCS Worldwide', 'TCS']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -4429,7 +4429,7 @@ BEGIN
     VALUES (
       'ERTECH LTD', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0066',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('ERTECH LTD', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['ERTECH LTD', 'MOOV-0066', '0066', '66']
+      'active', 'bronze', ARRAY['ERTECH LTD', 'MOOV-0066', '0066', '66']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -4465,7 +4465,7 @@ BEGIN
     VALUES (
       'D S Engineering', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0067',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('D S Engineering', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['D S Engineering', 'MOOV-0067', '0067', '67']
+      'active', 'bronze', ARRAY['D S Engineering', 'MOOV-0067', '0067', '67']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -4501,7 +4501,7 @@ BEGIN
     VALUES (
       'kol', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), '1233-0003',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('kol', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['kol', '1233-0003', '1233']
+      'active', 'bronze', ARRAY['kol', '1233-0003', '1233']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -4537,7 +4537,7 @@ BEGIN
     VALUES (
       'Hairways (Hair & Beauty) Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0068',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Hairways (Hair & Beauty) Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Hairways (Hair & Beauty) Ltd', 'MOOV-0068', '0068', '68']
+      'active', 'bronze', ARRAY['Hairways (Hair & Beauty) Ltd', 'MOOV-0068', '0068', '68']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -4573,7 +4573,7 @@ BEGIN
     VALUES (
       'Soghaat Gifts & Fragrances Ltd.', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0069',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Soghaat Gifts & Fragrances Ltd.', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Soghaat Gifts & Fragrances Ltd.', 'MOOV-0069', '0069', '69']
+      'active', 'bronze', ARRAY['Soghaat Gifts & Fragrances Ltd.', 'MOOV-0069', '0069', '69']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -4609,7 +4609,7 @@ BEGIN
     VALUES (
       'Lampfix', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0070',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Lampfix', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Lampfix', 'MOOV-0070', '0070', '70']
+      'active', 'bronze', ARRAY['Lampfix', 'MOOV-0070', '0070', '70']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -4645,7 +4645,7 @@ BEGIN
     VALUES (
       'Bentley Photographic', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0071',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Bentley Photographic', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Bentley Photographic', 'MOOV-0071', '0071', '71']
+      'active', 'bronze', ARRAY['Bentley Photographic', 'MOOV-0071', '0071', '71']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -4681,7 +4681,7 @@ BEGIN
     VALUES (
       'Creative Solution', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DQA1-0005',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Creative Solution', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Creative Solution', 'DQA1-0005', '1']
+      'active', 'bronze', ARRAY['Creative Solution', 'DQA1-0005', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -4717,7 +4717,7 @@ BEGIN
     VALUES (
       'Gapstar', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0043',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Gapstar', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Gapstar', 'DP1-0043', '1']
+      'active', 'bronze', ARRAY['Gapstar', 'DP1-0043', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -4753,7 +4753,7 @@ BEGIN
     VALUES (
       'TestCompany11', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DDK1-0002',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('TestCompany11', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['TestCompany11', 'DDK1-0002', '1']
+      'active', 'bronze', ARRAY['TestCompany11', 'DDK1-0002', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -4789,7 +4789,7 @@ BEGIN
     VALUES (
       'Virtusa', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DQA1-0007',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Virtusa', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Virtusa', 'DQA1-0007', '1']
+      'active', 'bronze', ARRAY['Virtusa', 'DQA1-0007', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -4825,7 +4825,7 @@ BEGIN
     VALUES (
       'Toyota', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DQA1-0009',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Toyota', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Toyota', 'DQA1-0009', '1']
+      'active', 'bronze', ARRAY['Toyota', 'DQA1-0009', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -4861,7 +4861,7 @@ BEGIN
     VALUES (
       'Brandix', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DQA1-0011',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Brandix', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Brandix', 'DQA1-0011', '1']
+      'active', 'bronze', ARRAY['Brandix', 'DQA1-0011', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -4897,7 +4897,7 @@ BEGIN
     VALUES (
       'Softlogic', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DQA1-0012',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Softlogic', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Softlogic', 'DQA1-0012', '1']
+      'active', 'bronze', ARRAY['Softlogic', 'DQA1-0012', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -4933,7 +4933,7 @@ BEGIN
     VALUES (
       'Daraz', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DQA1-0013',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Daraz', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Daraz', 'DQA1-0013', '1']
+      'active', 'bronze', ARRAY['Daraz', 'DQA1-0013', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -4969,7 +4969,7 @@ BEGIN
     VALUES (
       'Impact Particles', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0072',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Impact Particles', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Impact Particles', 'MOOV-0072', '0072', '72']
+      'active', 'bronze', ARRAY['Impact Particles', 'MOOV-0072', '0072', '72']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -5005,7 +5005,7 @@ BEGIN
     VALUES (
       'Garden Greatness LTD', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0073',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Garden Greatness LTD', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Garden Greatness LTD', 'MOOV-0073', '0073', '73']
+      'active', 'bronze', ARRAY['Garden Greatness LTD', 'MOOV-0073', '0073', '73']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -5041,7 +5041,7 @@ BEGIN
     VALUES (
       'Major Brushes Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0074',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Major Brushes Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Major Brushes Ltd', 'MOOV-0074', '0074', '74']
+      'active', 'bronze', ARRAY['Major Brushes Ltd', 'MOOV-0074', '0074', '74']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -5077,7 +5077,7 @@ BEGIN
     VALUES (
       'Ottone Hardware', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0065',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Ottone Hardware', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Ottone Hardware', 'MOOV-0065', '0065', '65']
+      'active', 'bronze', ARRAY['Ottone Hardware', 'MOOV-0065', '0065', '65']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -5113,7 +5113,7 @@ BEGIN
     VALUES (
       'Europa', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Europa',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Europa', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Europa', 'Europa']
+      'active', 'bronze', ARRAY['Europa', 'Europa']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -5149,7 +5149,7 @@ BEGIN
     VALUES (
       'TELESONIC', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DQA1-0014',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('TELESONIC', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['TELESONIC', 'DQA1-0014', '1']
+      'active', 'bronze', ARRAY['TELESONIC', 'DQA1-0014', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -5185,7 +5185,7 @@ BEGIN
     VALUES (
       'ALDO', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DQA1-0015',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('ALDO', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['ALDO', 'DQA1-0015', '1']
+      'active', 'bronze', ARRAY['ALDO', 'DQA1-0015', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -5221,7 +5221,7 @@ BEGIN
     VALUES (
       'Barry AI', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Barry AI',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Barry AI', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Barry AI', 'Barry AI']
+      'active', 'bronze', ARRAY['Barry AI', 'Barry AI']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -5257,7 +5257,7 @@ BEGIN
     VALUES (
       'NECTR', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0075',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('NECTR', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['NECTR', 'MOOV-0075', '0075', '75']
+      'active', 'bronze', ARRAY['NECTR', 'MOOV-0075', '0075', '75']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -5293,7 +5293,7 @@ BEGIN
     VALUES (
       'Ray Wai-Shing', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'HOF-0007',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Ray Wai-Shing', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Ray Wai-Shing', 'HOF-0007', '0007', '7']
+      'active', 'bronze', ARRAY['Ray Wai-Shing', 'HOF-0007', '0007', '7']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -5329,7 +5329,7 @@ BEGIN
     VALUES (
       'Michael Chadburn', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'HOF-0003',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Michael Chadburn', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Michael Chadburn', 'HOF-0003', '0003', '3']
+      'active', 'bronze', ARRAY['Michael Chadburn', 'HOF-0003', '0003', '3']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -5365,7 +5365,7 @@ BEGIN
     VALUES (
       'UK Demo', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DD2-0002',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('UK Demo', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['UK Demo', 'DD2-0002', '2']
+      'active', 'bronze', ARRAY['UK Demo', 'DD2-0002', '2']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -5401,7 +5401,7 @@ BEGIN
     VALUES (
       'Ninja UK Production', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'HOF-0002',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Ninja UK Production', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Ninja UK Production', 'HOF-0002', '0002', '2']
+      'active', 'bronze', ARRAY['Ninja UK Production', 'HOF-0002', '0002', '2']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -5437,7 +5437,7 @@ BEGIN
     VALUES (
       'Prod Chinthaka', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'HOF-0001',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Prod Chinthaka', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Prod Chinthaka', 'HOF-0001', '0001', '1']
+      'active', 'bronze', ARRAY['Prod Chinthaka', 'HOF-0001', '0001', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -5473,7 +5473,7 @@ BEGIN
     VALUES (
       'EFUTURES1', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0001',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('EFUTURES1', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['EFUTURES1', 'DP1-0001', '1']
+      'active', 'bronze', ARRAY['EFUTURES1', 'DP1-0001', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -5509,7 +5509,7 @@ BEGIN
     VALUES (
       'Moreyeah Foods Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0076',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Moreyeah Foods Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Moreyeah Foods Ltd', 'MOOV-0076', '0076', '76']
+      'active', 'bronze', ARRAY['Moreyeah Foods Ltd', 'MOOV-0076', '0076', '76']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -5545,7 +5545,7 @@ BEGIN
     VALUES (
       'S Smith & Sons Carpets Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0077',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('S Smith & Sons Carpets Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['S Smith & Sons Carpets Ltd', 'MOOV-0077', '0077', '77']
+      'active', 'bronze', ARRAY['S Smith & Sons Carpets Ltd', 'MOOV-0077', '0077', '77']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -5581,7 +5581,7 @@ BEGIN
     VALUES (
       'The Railway Shop Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0078',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('The Railway Shop Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['The Railway Shop Ltd', 'MOOV-0078', '0078', '78']
+      'active', 'bronze', ARRAY['The Railway Shop Ltd', 'MOOV-0078', '0078', '78']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -5617,7 +5617,7 @@ BEGIN
     VALUES (
       'Pex Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0079',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Pex Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Pex Ltd', 'MOOV-0079', '0079', '79']
+      'active', 'bronze', ARRAY['Pex Ltd', 'MOOV-0079', '0079', '79']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -5653,7 +5653,7 @@ BEGIN
     VALUES (
       'Finger on Pulse Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0080',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Finger on Pulse Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Finger on Pulse Ltd', 'MOOV-0080', '0080', '80']
+      'active', 'bronze', ARRAY['Finger on Pulse Ltd', 'MOOV-0080', '0080', '80']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -5689,7 +5689,7 @@ BEGIN
     VALUES (
       'Iglu Meal Prep', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Iglu Meal Prep',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Iglu Meal Prep', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Iglu Meal Prep', 'Iglu Meal Prep']
+      'active', 'bronze', ARRAY['Iglu Meal Prep', 'Iglu Meal Prep']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -5725,7 +5725,7 @@ BEGIN
     VALUES (
       'Yourbookstore', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Yourbookstore',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Yourbookstore', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Yourbookstore', 'Yourbookstore']
+      'active', 'bronze', ARRAY['Yourbookstore', 'Yourbookstore']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -5761,7 +5761,7 @@ BEGIN
     VALUES (
       'Carnivore Cartel Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0081',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Carnivore Cartel Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Carnivore Cartel Ltd', 'MOOV-0081', '0081', '81']
+      'active', 'bronze', ARRAY['Carnivore Cartel Ltd', 'MOOV-0081', '0081', '81']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -5797,7 +5797,7 @@ BEGIN
     VALUES (
       'Igluu Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0082',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Igluu Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Igluu Ltd', 'MOOV-0082', '0082', '82']
+      'active', 'bronze', ARRAY['Igluu Ltd', 'MOOV-0082', '0082', '82']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -5833,7 +5833,7 @@ BEGIN
     VALUES (
       'E-Health Pharmacy Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0083',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('E-Health Pharmacy Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['E-Health Pharmacy Ltd', 'MOOV-0083', '0083', '83']
+      'active', 'bronze', ARRAY['E-Health Pharmacy Ltd', 'MOOV-0083', '0083', '83']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -5869,7 +5869,7 @@ BEGIN
     VALUES (
       'Techworknetwork LTD', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0084',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Techworknetwork LTD', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Techworknetwork LTD', 'MOOV-0084', '0084', '84']
+      'active', 'bronze', ARRAY['Techworknetwork LTD', 'MOOV-0084', '0084', '84']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -5905,7 +5905,7 @@ BEGIN
     VALUES (
       'Matrix Seating Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0085',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Matrix Seating Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Matrix Seating Limited', 'MOOV-0085', '0085', '85']
+      'active', 'bronze', ARRAY['Matrix Seating Limited', 'MOOV-0085', '0085', '85']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -5941,7 +5941,7 @@ BEGIN
     VALUES (
       'test', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0044',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('test', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['test', 'DP1-0044', '1']
+      'active', 'bronze', ARRAY['test', 'DP1-0044', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -5977,7 +5977,7 @@ BEGIN
     VALUES (
       'Test company name', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0045',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Test company name', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Test company name', 'DP1-0045', '1']
+      'active', 'bronze', ARRAY['Test company name', 'DP1-0045', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -6013,7 +6013,7 @@ BEGIN
     VALUES (
       'Zesta', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP2-0001',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Zesta', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Zesta', 'DP2-0001', '2']
+      'active', 'bronze', ARRAY['Zesta', 'DP2-0001', '2']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -6049,7 +6049,7 @@ BEGIN
     VALUES (
       'HSBC', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DDJ1-0002',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('HSBC', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['HSBC', 'DDJ1-0002', '1']
+      'active', 'bronze', ARRAY['HSBC', 'DDJ1-0002', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -6085,7 +6085,7 @@ BEGIN
     VALUES (
       'Danijels Parcels', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0087',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Danijels Parcels', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Danijels Parcels', 'MOOV-0087', '0087', '87']
+      'active', 'bronze', ARRAY['Danijels Parcels', 'MOOV-0087', '0087', '87']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -6121,7 +6121,7 @@ BEGIN
     VALUES (
       'TCS Express Worldwide UK Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0088',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('TCS Express Worldwide UK Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['TCS Express Worldwide UK Limited', 'MOOV-0088', '0088', '88']
+      'active', 'bronze', ARRAY['TCS Express Worldwide UK Limited', 'MOOV-0088', '0088', '88']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -6157,7 +6157,7 @@ BEGIN
     VALUES (
       'Clearance Stock Supplies Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0089',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Clearance Stock Supplies Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Clearance Stock Supplies Limited', 'MOOV-0089', '0089', '89']
+      'active', 'bronze', ARRAY['Clearance Stock Supplies Limited', 'MOOV-0089', '0089', '89']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -6193,7 +6193,7 @@ BEGIN
     VALUES (
       'Octopus', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0046',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Octopus', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Octopus', 'DP1-0046', '1']
+      'active', 'bronze', ARRAY['Octopus', 'DP1-0046', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -6229,7 +6229,7 @@ BEGIN
     VALUES (
       'Matt Test', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0090',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Matt Test', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Matt Test', 'MOOV-0090', '0090', '90']
+      'active', 'bronze', ARRAY['Matt Test', 'MOOV-0090', '0090', '90']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -6265,7 +6265,7 @@ BEGIN
     VALUES (
       'Test company', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DQA1-0016',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Test company', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Test company', 'DQA1-0016', '1']
+      'active', 'bronze', ARRAY['Test company', 'DQA1-0016', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -6301,7 +6301,7 @@ BEGIN
     VALUES (
       'Pet Food Online LTD', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0091',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Pet Food Online LTD', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Pet Food Online LTD', 'MOOV-0091', '0091', '91']
+      'active', 'bronze', ARRAY['Pet Food Online LTD', 'MOOV-0091', '0091', '91']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -6337,7 +6337,7 @@ BEGIN
     VALUES (
       'Aromina', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DDJ1-0003',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Aromina', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Aromina', 'DDJ1-0003', '1']
+      'active', 'bronze', ARRAY['Aromina', 'DDJ1-0003', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -6373,7 +6373,7 @@ BEGIN
     VALUES (
       'Paragon Design Joinery Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0092',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Paragon Design Joinery Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Paragon Design Joinery Ltd', 'MOOV-0092', '0092', '92']
+      'active', 'bronze', ARRAY['Paragon Design Joinery Ltd', 'MOOV-0092', '0092', '92']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -6409,7 +6409,7 @@ BEGIN
     VALUES (
       'Macchiato Bar Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0093',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Macchiato Bar Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Macchiato Bar Ltd', 'MOOV-0093', '0093', '93']
+      'active', 'bronze', ARRAY['Macchiato Bar Ltd', 'MOOV-0093', '0093', '93']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -6445,7 +6445,7 @@ BEGIN
     VALUES (
       'Soothe Limited t/a Luxury Skincare Brands', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0094',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Soothe Limited t/a Luxury Skincare Brands', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Soothe Limited t/a Luxury Skincare Brands', 'MOOV-0094', '0094', '94']
+      'active', 'bronze', ARRAY['Soothe Limited t/a Luxury Skincare Brands', 'MOOV-0094', '0094', '94']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -6481,7 +6481,7 @@ BEGIN
     VALUES (
       'MAD baits supplies Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0095',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('MAD baits supplies Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['MAD baits supplies Ltd', 'MOOV-0095', '0095', '95']
+      'active', 'bronze', ARRAY['MAD baits supplies Ltd', 'MOOV-0095', '0095', '95']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -6517,7 +6517,7 @@ BEGIN
     VALUES (
       'Sam Scotts Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0097',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Sam Scotts Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Sam Scotts Limited', 'MOOV-0097', '0097', '97']
+      'active', 'bronze', ARRAY['Sam Scotts Limited', 'MOOV-0097', '0097', '97']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -6553,7 +6553,7 @@ BEGIN
     VALUES (
       'Crytec Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0098',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Crytec Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Crytec Limited', 'MOOV-0098', '0098', '98']
+      'active', 'bronze', ARRAY['Crytec Limited', 'MOOV-0098', '0098', '98']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -6589,7 +6589,7 @@ BEGIN
     VALUES (
       'Hairways (Hair & Beauty) Ltd Site B', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0099',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Hairways (Hair & Beauty) Ltd Site B', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Hairways (Hair & Beauty) Ltd Site B', 'MOOV-0099', '0099', '99']
+      'active', 'bronze', ARRAY['Hairways (Hair & Beauty) Ltd Site B', 'MOOV-0099', '0099', '99']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -6625,7 +6625,7 @@ BEGIN
     VALUES (
       'WoodUbend Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0101',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('WoodUbend Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['WoodUbend Ltd', 'MOOV-0101', '0101', '101']
+      'active', 'bronze', ARRAY['WoodUbend Ltd', 'MOOV-0101', '0101', '101']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -6661,7 +6661,7 @@ BEGIN
     VALUES (
       'TMK Trading Ltd t/a Nexus Modelling Supplies', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0102',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('TMK Trading Ltd t/a Nexus Modelling Supplies', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['TMK Trading Ltd t/a Nexus Modelling Supplies', 'MOOV-0102', '0102', '102']
+      'active', 'bronze', ARRAY['TMK Trading Ltd t/a Nexus Modelling Supplies', 'MOOV-0102', '0102', '102']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -6697,7 +6697,7 @@ BEGIN
     VALUES (
       'Brexons Workwear', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0103',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Brexons Workwear', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Brexons Workwear', 'MOOV-0103', '0103', '103']
+      'active', 'bronze', ARRAY['Brexons Workwear', 'MOOV-0103', '0103', '103']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -6733,7 +6733,7 @@ BEGIN
     VALUES (
       'Sing Ko', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0105',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Sing Ko', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Sing Ko', 'MOOV-0105', '0105', '105']
+      'active', 'bronze', ARRAY['Sing Ko', 'MOOV-0105', '0105', '105']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -6769,7 +6769,7 @@ BEGIN
     VALUES (
       'Boori (Europe) LTD', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0106',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Boori (Europe) LTD', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Boori (Europe) LTD', 'MOOV-0106', '0106', '106']
+      'active', 'bronze', ARRAY['Boori (Europe) LTD', 'MOOV-0106', '0106', '106']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -6805,7 +6805,7 @@ BEGIN
     VALUES (
       'mike', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), '123-0001',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('mike', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['mike', '123-0001', '123']
+      'active', 'bronze', ARRAY['mike', '123-0001', '123']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -6841,7 +6841,7 @@ BEGIN
     VALUES (
       'sdfdsf', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), '11-2002',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('sdfdsf', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['sdfdsf', '11-2002', '11']
+      'active', 'bronze', ARRAY['sdfdsf', '11-2002', '11']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -6877,7 +6877,7 @@ BEGIN
     VALUES (
       'MV', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), '123-0002',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('MV', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['MV', '123-0002', '123']
+      'active', 'bronze', ARRAY['MV', '123-0002', '123']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -6913,7 +6913,7 @@ BEGIN
     VALUES (
       'SYNTAXGENIE', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), '123-0003',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('SYNTAXGENIE', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['SYNTAXGENIE', '123-0003', '123']
+      'active', 'bronze', ARRAY['SYNTAXGENIE', '123-0003', '123']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -6949,7 +6949,7 @@ BEGIN
     VALUES (
       'sdgsd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), '123-0004',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('sdgsd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['sdgsd', '123-0004', '123']
+      'active', 'bronze', ARRAY['sdgsd', '123-0004', '123']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -6985,7 +6985,7 @@ BEGIN
     VALUES (
       'cf', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), '11-2001',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('cf', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['cf', '11-2001', '11']
+      'active', 'bronze', ARRAY['cf', '11-2001', '11']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -7021,7 +7021,7 @@ BEGIN
     VALUES (
       'Property Documents Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0107',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Property Documents Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Property Documents Ltd', 'MOOV-0107', '0107', '107']
+      'active', 'bronze', ARRAY['Property Documents Ltd', 'MOOV-0107', '0107', '107']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -7057,7 +7057,7 @@ BEGIN
     VALUES (
       'Accentura', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0047',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Accentura', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Accentura', 'DP1-0047', '1']
+      'active', 'bronze', ARRAY['Accentura', 'DP1-0047', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -7093,7 +7093,7 @@ BEGIN
     VALUES (
       'Direct Auto Electrics Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0108',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Direct Auto Electrics Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Direct Auto Electrics Ltd', 'MOOV-0108', '0108', '108']
+      'active', 'bronze', ARRAY['Direct Auto Electrics Ltd', 'MOOV-0108', '0108', '108']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -7129,7 +7129,7 @@ BEGIN
     VALUES (
       'Sampath Bank', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DDJ1-0004',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Sampath Bank', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Sampath Bank', 'DDJ1-0004', '1']
+      'active', 'bronze', ARRAY['Sampath Bank', 'DDJ1-0004', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -7165,7 +7165,7 @@ BEGIN
     VALUES (
       'W J Jones Ltd T/A Zoar''s Ark', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0109',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('W J Jones Ltd T/A Zoar''s Ark', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['W J Jones Ltd T/A Zoar''s Ark', 'MOOV-0109', '0109', '109']
+      'active', 'bronze', ARRAY['W J Jones Ltd T/A Zoar''s Ark', 'MOOV-0109', '0109', '109']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -7201,7 +7201,7 @@ BEGIN
     VALUES (
       'Raycom Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0110',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Raycom Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Raycom Ltd', 'MOOV-0110', '0110', '110']
+      'active', 'bronze', ARRAY['Raycom Ltd', 'MOOV-0110', '0110', '110']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -7237,7 +7237,7 @@ BEGIN
     VALUES (
       'Michael kors', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DQA1-0017',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Michael kors', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Michael kors', 'DQA1-0017', '1']
+      'active', 'bronze', ARRAY['Michael kors', 'DQA1-0017', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -7273,7 +7273,7 @@ BEGIN
     VALUES (
       'Vintsreet', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Vintsreet',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Vintsreet', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Vintsreet', 'Vintsreet']
+      'active', 'bronze', ARRAY['Vintsreet', 'Vintsreet']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -7309,7 +7309,7 @@ BEGIN
     VALUES (
       'Efutures Prod Test Account', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DD2-0006',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Efutures Prod Test Account', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Efutures Prod Test Account', 'DD2-0006', '2']
+      'active', 'bronze', ARRAY['Efutures Prod Test Account', 'DD2-0006', '2']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -7345,7 +7345,7 @@ BEGIN
     VALUES (
       'Redo Commerce', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Redo Commerce',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Redo Commerce', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Redo Commerce', 'Redo Commerce']
+      'active', 'bronze', ARRAY['Redo Commerce', 'Redo Commerce']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -7381,7 +7381,7 @@ BEGIN
     VALUES (
       'Empire Printing & Embroidery Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0111',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Empire Printing & Embroidery Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Empire Printing & Embroidery Ltd', 'MOOV-0111', '0111', '111']
+      'active', 'bronze', ARRAY['Empire Printing & Embroidery Ltd', 'MOOV-0111', '0111', '111']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -7417,7 +7417,7 @@ BEGIN
     VALUES (
       'BARRY CARTER MOTOR PRODUCTS', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0113',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('BARRY CARTER MOTOR PRODUCTS', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['BARRY CARTER MOTOR PRODUCTS', 'MOOV-0113', '0113', '113']
+      'active', 'bronze', ARRAY['BARRY CARTER MOTOR PRODUCTS', 'MOOV-0113', '0113', '113']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -7453,7 +7453,7 @@ BEGIN
     VALUES (
       'Cranswick', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Cranswick',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Cranswick', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Cranswick', 'Cranswick']
+      'active', 'bronze', ARRAY['Cranswick', 'Cranswick']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -7489,7 +7489,7 @@ BEGIN
     VALUES (
       'Vint Street Ltd.', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0114',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Vint Street Ltd.', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Vint Street Ltd.', 'MOOV-0114', '0114', '114']
+      'active', 'bronze', ARRAY['Vint Street Ltd.', 'MOOV-0114', '0114', '114']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -7525,7 +7525,7 @@ BEGIN
     VALUES (
       'Imagin Products Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0115',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Imagin Products Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Imagin Products Ltd', 'MOOV-0115', '0115', '115']
+      'active', 'bronze', ARRAY['Imagin Products Ltd', 'MOOV-0115', '0115', '115']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -7561,7 +7561,7 @@ BEGIN
     VALUES (
       'Efutures Prod Account Two', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DD2-0007',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Efutures Prod Account Two', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Efutures Prod Account Two', 'DD2-0007', '2']
+      'active', 'bronze', ARRAY['Efutures Prod Account Two', 'DD2-0007', '2']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -7597,7 +7597,7 @@ BEGIN
     VALUES (
       'EZZTECH', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0116',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('EZZTECH', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['EZZTECH', 'MOOV-0116', '0116', '116']
+      'active', 'bronze', ARRAY['EZZTECH', 'MOOV-0116', '0116', '116']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -7633,7 +7633,7 @@ BEGIN
     VALUES (
       'Tool Hub Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0117',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Tool Hub Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Tool Hub Ltd', 'MOOV-0117', '0117', '117']
+      'active', 'bronze', ARRAY['Tool Hub Ltd', 'MOOV-0117', '0117', '117']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -7669,7 +7669,7 @@ BEGIN
     VALUES (
       'Getplumb Reading Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0118',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Getplumb Reading Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Getplumb Reading Ltd', 'MOOV-0118', '0118', '118']
+      'active', 'bronze', ARRAY['Getplumb Reading Ltd', 'MOOV-0118', '0118', '118']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -7705,7 +7705,7 @@ BEGIN
     VALUES (
       'Vision Warehouse', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0112',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Vision Warehouse', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Vision Warehouse', 'MOOV-0112', '0112', '112']
+      'active', 'bronze', ARRAY['Vision Warehouse', 'MOOV-0112', '0112', '112']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -7741,7 +7741,7 @@ BEGIN
     VALUES (
       '608 Group Ltd (304 Clothing)', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0119',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('608 Group Ltd (304 Clothing)', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['608 Group Ltd (304 Clothing)', 'MOOV-0119', '0119', '119']
+      'active', 'bronze', ARRAY['608 Group Ltd (304 Clothing)', 'MOOV-0119', '0119', '119']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -7777,7 +7777,7 @@ BEGIN
     VALUES (
       'Sky Chemicals (UK) Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0120',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Sky Chemicals (UK) Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Sky Chemicals (UK) Ltd', 'MOOV-0120', '0120', '120']
+      'active', 'bronze', ARRAY['Sky Chemicals (UK) Ltd', 'MOOV-0120', '0120', '120']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -7813,7 +7813,7 @@ BEGIN
     VALUES (
       'Wedcova Uk Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0121',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Wedcova Uk Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Wedcova Uk Ltd', 'MOOV-0121', '0121', '121']
+      'active', 'bronze', ARRAY['Wedcova Uk Ltd', 'MOOV-0121', '0121', '121']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -7849,7 +7849,7 @@ BEGIN
     VALUES (
       'Fosseway Parcels Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0122',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Fosseway Parcels Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Fosseway Parcels Ltd', 'MOOV-0122', '0122', '122']
+      'active', 'bronze', ARRAY['Fosseway Parcels Ltd', 'MOOV-0122', '0122', '122']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -7885,7 +7885,7 @@ BEGIN
     VALUES (
       'ARIMAC', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DDJ1-0005',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('ARIMAC', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['ARIMAC', 'DDJ1-0005', '1']
+      'active', 'bronze', ARRAY['ARIMAC', 'DDJ1-0005', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -7921,7 +7921,7 @@ BEGIN
     VALUES (
       'GPG - Getpersonalisedgifts Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0123',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('GPG - Getpersonalisedgifts Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['GPG - Getpersonalisedgifts Limited', 'MOOV-0123', '0123', '123']
+      'active', 'bronze', ARRAY['GPG - Getpersonalisedgifts Limited', 'MOOV-0123', '0123', '123']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -7957,7 +7957,7 @@ BEGIN
     VALUES (
       'Thirsty Soft Drinks', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0124',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Thirsty Soft Drinks', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Thirsty Soft Drinks', 'MOOV-0124', '0124', '124']
+      'active', 'bronze', ARRAY['Thirsty Soft Drinks', 'MOOV-0124', '0124', '124']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -7993,7 +7993,7 @@ BEGIN
     VALUES (
       'Gifts2Impress', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0125',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Gifts2Impress', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Gifts2Impress', 'MOOV-0125', '0125', '125']
+      'active', 'bronze', ARRAY['Gifts2Impress', 'MOOV-0125', '0125', '125']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -8029,7 +8029,7 @@ BEGIN
     VALUES (
       'Xylo LTD', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0126',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Xylo LTD', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Xylo LTD', 'MOOV-0126', '0126', '126']
+      'active', 'bronze', ARRAY['Xylo LTD', 'MOOV-0126', '0126', '126']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -8065,7 +8065,7 @@ BEGIN
     VALUES (
       'The Saddlery Shop Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0127',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('The Saddlery Shop Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['The Saddlery Shop Ltd', 'MOOV-0127', '0127', '127']
+      'active', 'bronze', ARRAY['The Saddlery Shop Ltd', 'MOOV-0127', '0127', '127']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -8101,7 +8101,7 @@ BEGIN
     VALUES (
       'EF TEST QA ACCOUNT', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DD2-0008',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('EF TEST QA ACCOUNT', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['EF TEST QA ACCOUNT', 'DD2-0008', '2']
+      'active', 'bronze', ARRAY['EF TEST QA ACCOUNT', 'DD2-0008', '2']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -8137,7 +8137,7 @@ BEGIN
     VALUES (
       'Organax Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0128',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Organax Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Organax Ltd', 'MOOV-0128', '0128', '128']
+      'active', 'bronze', ARRAY['Organax Ltd', 'MOOV-0128', '0128', '128']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -8173,7 +8173,7 @@ BEGIN
     VALUES (
       'Gra Telford LTD', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0129',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Gra Telford LTD', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Gra Telford LTD', 'MOOV-0129', '0129', '129']
+      'active', 'bronze', ARRAY['Gra Telford LTD', 'MOOV-0129', '0129', '129']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -8209,7 +8209,7 @@ BEGIN
     VALUES (
       'Attapattu & Sons', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), '123-0005',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Attapattu & Sons', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Attapattu & Sons', '123-0005', '123']
+      'active', 'bronze', ARRAY['Attapattu & Sons', '123-0005', '123']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -8245,7 +8245,7 @@ BEGIN
     VALUES (
       'Jayasuriya & Sons', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), '123-0006',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Jayasuriya & Sons', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Jayasuriya & Sons', '123-0006', '123']
+      'active', 'bronze', ARRAY['Jayasuriya & Sons', '123-0006', '123']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -8281,7 +8281,7 @@ BEGIN
     VALUES (
       'The Wall Lighting Company Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0130',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('The Wall Lighting Company Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['The Wall Lighting Company Ltd', 'MOOV-0130', '0130', '130']
+      'active', 'bronze', ARRAY['The Wall Lighting Company Ltd', 'MOOV-0130', '0130', '130']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -8317,7 +8317,7 @@ BEGIN
     VALUES (
       'Chilli Seating Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0131',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Chilli Seating Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Chilli Seating Ltd', 'MOOV-0131', '0131', '131']
+      'active', 'bronze', ARRAY['Chilli Seating Ltd', 'MOOV-0131', '0131', '131']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -8353,7 +8353,7 @@ BEGIN
     VALUES (
       'ZARA Company', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DDJ1-0006',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('ZARA Company', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['ZARA Company', 'DDJ1-0006', '1']
+      'active', 'bronze', ARRAY['ZARA Company', 'DDJ1-0006', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -8389,7 +8389,7 @@ BEGIN
     VALUES (
       'N70', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), '123-0007',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('N70', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['N70', '123-0007', '123']
+      'active', 'bronze', ARRAY['N70', '123-0007', '123']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -8425,7 +8425,7 @@ BEGIN
     VALUES (
       'Mahela Co', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), '123-0008',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Mahela Co', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Mahela Co', '123-0008', '123']
+      'active', 'bronze', ARRAY['Mahela Co', '123-0008', '123']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -8461,7 +8461,7 @@ BEGIN
     VALUES (
       'David Jones', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0048',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('David Jones', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['David Jones', 'DP1-0048', '1']
+      'active', 'bronze', ARRAY['David Jones', 'DP1-0048', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -8497,7 +8497,7 @@ BEGIN
     VALUES (
       'Deshi Delights Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0132',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Deshi Delights Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Deshi Delights Ltd', 'MOOV-0132', '0132', '132']
+      'active', 'bronze', ARRAY['Deshi Delights Ltd', 'MOOV-0132', '0132', '132']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -8533,7 +8533,7 @@ BEGIN
     VALUES (
       'EFUTURES TEST COMPANY', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DD2-0009',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('EFUTURES TEST COMPANY', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['EFUTURES TEST COMPANY', 'DD2-0009', '2']
+      'active', 'bronze', ARRAY['EFUTURES TEST COMPANY', 'DD2-0009', '2']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -8569,7 +8569,7 @@ BEGIN
     VALUES (
       'Bill''s Tool Store Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0133',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Bill''s Tool Store Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Bill''s Tool Store Ltd', 'MOOV-0133', '0133', '133']
+      'active', 'bronze', ARRAY['Bill''s Tool Store Ltd', 'MOOV-0133', '0133', '133']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -8605,7 +8605,7 @@ BEGIN
     VALUES (
       'Jaycee Engineering T/A Jaycee Trophies', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0134',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Jaycee Engineering T/A Jaycee Trophies', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Jaycee Engineering T/A Jaycee Trophies', 'MOOV-0134', '0134', '134']
+      'active', 'bronze', ARRAY['Jaycee Engineering T/A Jaycee Trophies', 'MOOV-0134', '0134', '134']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -8641,7 +8641,7 @@ BEGIN
     VALUES (
       'Arden Medical Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0135',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Arden Medical Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Arden Medical Limited', 'MOOV-0135', '0135', '135']
+      'active', 'bronze', ARRAY['Arden Medical Limited', 'MOOV-0135', '0135', '135']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -8677,7 +8677,7 @@ BEGIN
     VALUES (
       'ORIGINAL SOURCE LIMITED', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0136',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('ORIGINAL SOURCE LIMITED', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['ORIGINAL SOURCE LIMITED', 'MOOV-0136', '0136', '136']
+      'active', 'bronze', ARRAY['ORIGINAL SOURCE LIMITED', 'MOOV-0136', '0136', '136']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -8713,7 +8713,7 @@ BEGIN
     VALUES (
       'Ransom Publishing Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0137',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Ransom Publishing Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Ransom Publishing Ltd', 'MOOV-0137', '0137', '137']
+      'active', 'bronze', ARRAY['Ransom Publishing Ltd', 'MOOV-0137', '0137', '137']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -8749,7 +8749,7 @@ BEGIN
     VALUES (
       'Webhook Test', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), '123-0010',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Webhook Test', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Webhook Test', '123-0010', '123']
+      'active', 'bronze', ARRAY['Webhook Test', '123-0010', '123']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -8785,7 +8785,7 @@ BEGIN
     VALUES (
       'Fortec Trading Ltd t/a Glowtopia', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Fortec Trading Ltd t/a Glowtopia',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Fortec Trading Ltd t/a Glowtopia', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Fortec Trading Ltd t/a Glowtopia', 'Fortec Trading Ltd t/a Glowtopia']
+      'active', 'bronze', ARRAY['Fortec Trading Ltd t/a Glowtopia', 'Fortec Trading Ltd t/a Glowtopia']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -8821,7 +8821,7 @@ BEGIN
     VALUES (
       'Alpha Cus', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), '123-0011',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Alpha Cus', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Alpha Cus', '123-0011', '123']
+      'active', 'bronze', ARRAY['Alpha Cus', '123-0011', '123']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -8857,7 +8857,7 @@ BEGIN
     VALUES (
       'Beta Cus', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), '123-0012',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Beta Cus', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Beta Cus', '123-0012', '123']
+      'active', 'bronze', ARRAY['Beta Cus', '123-0012', '123']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -8893,7 +8893,7 @@ BEGIN
     VALUES (
       'Vintstreet', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Vintstreet',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Vintstreet', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Vintstreet', 'Vintstreet']
+      'active', 'bronze', ARRAY['Vintstreet', 'Vintstreet']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -8929,7 +8929,7 @@ BEGIN
     VALUES (
       'Westcare Ltd T/A westcare Supply Zone', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0138',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Westcare Ltd T/A westcare Supply Zone', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Westcare Ltd T/A westcare Supply Zone', 'MOOV-0138', '0138', '138']
+      'active', 'bronze', ARRAY['Westcare Ltd T/A westcare Supply Zone', 'MOOV-0138', '0138', '138']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -8965,7 +8965,7 @@ BEGIN
     VALUES (
       'Talpa office products ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0139',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Talpa office products ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Talpa office products ltd', 'MOOV-0139', '0139', '139']
+      'active', 'bronze', ARRAY['Talpa office products ltd', 'MOOV-0139', '0139', '139']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -9001,7 +9001,7 @@ BEGIN
     VALUES (
       'LED Smart Solutions Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0140',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('LED Smart Solutions Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['LED Smart Solutions Limited', 'MOOV-0140', '0140', '140']
+      'active', 'bronze', ARRAY['LED Smart Solutions Limited', 'MOOV-0140', '0140', '140']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -9037,7 +9037,7 @@ BEGIN
     VALUES (
       'My Company', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'HOF-0013',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('My Company', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['My Company', 'HOF-0013', '0013', '13']
+      'active', 'bronze', ARRAY['My Company', 'HOF-0013', '0013', '13']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -9073,7 +9073,7 @@ BEGIN
     VALUES (
       'JST Supplies LTD', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0141',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('JST Supplies LTD', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['JST Supplies LTD', 'MOOV-0141', '0141', '141']
+      'active', 'bronze', ARRAY['JST Supplies LTD', 'MOOV-0141', '0141', '141']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -9109,7 +9109,7 @@ BEGIN
     VALUES (
       'Moov Diana Demo', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0142',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Moov Diana Demo', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Moov Diana Demo', 'MOOV-0142', '0142', '142']
+      'active', 'bronze', ARRAY['Moov Diana Demo', 'MOOV-0142', '0142', '142']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -9145,7 +9145,7 @@ BEGIN
     VALUES (
       'OliArt Wood LTD', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0143',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('OliArt Wood LTD', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['OliArt Wood LTD', 'MOOV-0143', '0143', '143']
+      'active', 'bronze', ARRAY['OliArt Wood LTD', 'MOOV-0143', '0143', '143']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -9181,7 +9181,7 @@ BEGIN
     VALUES (
       'Bessette LTD', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0144',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Bessette LTD', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Bessette LTD', 'MOOV-0144', '0144', '144']
+      'active', 'bronze', ARRAY['Bessette LTD', 'MOOV-0144', '0144', '144']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -9217,7 +9217,7 @@ BEGIN
     VALUES (
       'NDB', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DDJ1-0007',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('NDB', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['NDB', 'DDJ1-0007', '1']
+      'active', 'bronze', ARRAY['NDB', 'DDJ1-0007', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -9253,7 +9253,7 @@ BEGIN
     VALUES (
       'CONTEXT PNEUMATIC SUPPLIES LIMITED', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0145',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('CONTEXT PNEUMATIC SUPPLIES LIMITED', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['CONTEXT PNEUMATIC SUPPLIES LIMITED', 'MOOV-0145', '0145', '145']
+      'active', 'bronze', ARRAY['CONTEXT PNEUMATIC SUPPLIES LIMITED', 'MOOV-0145', '0145', '145']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -9289,7 +9289,7 @@ BEGIN
     VALUES (
       'Bentley and Bo Interiors Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0146',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Bentley and Bo Interiors Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Bentley and Bo Interiors Ltd', 'MOOV-0146', '0146', '146']
+      'active', 'bronze', ARRAY['Bentley and Bo Interiors Ltd', 'MOOV-0146', '0146', '146']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -9325,7 +9325,7 @@ BEGIN
     VALUES (
       'SME IT Solutions Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0147',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('SME IT Solutions Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['SME IT Solutions Limited', 'MOOV-0147', '0147', '147']
+      'active', 'bronze', ARRAY['SME IT Solutions Limited', 'MOOV-0147', '0147', '147']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -9361,7 +9361,7 @@ BEGIN
     VALUES (
       'EFUTURES SMOKE TEST CUSTOMER', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0148',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('EFUTURES SMOKE TEST CUSTOMER', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['EFUTURES SMOKE TEST CUSTOMER', 'MOOV-0148', '0148', '148']
+      'active', 'bronze', ARRAY['EFUTURES SMOKE TEST CUSTOMER', 'MOOV-0148', '0148', '148']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -9397,7 +9397,7 @@ BEGIN
     VALUES (
       'Buffalo Systems Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0149',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Buffalo Systems Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Buffalo Systems Ltd', 'MOOV-0149', '0149', '149']
+      'active', 'bronze', ARRAY['Buffalo Systems Ltd', 'MOOV-0149', '0149', '149']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -9433,7 +9433,7 @@ BEGIN
     VALUES (
       'East London Packaging Supplies Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0150',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('East London Packaging Supplies Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['East London Packaging Supplies Ltd', 'MOOV-0150', '0150', '150']
+      'active', 'bronze', ARRAY['East London Packaging Supplies Ltd', 'MOOV-0150', '0150', '150']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -9469,7 +9469,7 @@ BEGIN
     VALUES (
       'Metal Polishing Supplies Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0151',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Metal Polishing Supplies Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Metal Polishing Supplies Ltd', 'MOOV-0151', '0151', '151']
+      'active', 'bronze', ARRAY['Metal Polishing Supplies Ltd', 'MOOV-0151', '0151', '151']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -9505,7 +9505,7 @@ BEGIN
     VALUES (
       'Spokz Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0152',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Spokz Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Spokz Ltd', 'MOOV-0152', '0152', '152']
+      'active', 'bronze', ARRAY['Spokz Ltd', 'MOOV-0152', '0152', '152']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -9541,7 +9541,7 @@ BEGIN
     VALUES (
       'Youtheory', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), '123-0013',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Youtheory', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Youtheory', '123-0013', '123']
+      'active', 'bronze', ARRAY['Youtheory', '123-0013', '123']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -9577,7 +9577,7 @@ BEGIN
     VALUES (
       'M. Criscuolo & Co Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0153',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('M. Criscuolo & Co Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['M. Criscuolo & Co Ltd', 'MOOV-0153', '0153', '153']
+      'active', 'bronze', ARRAY['M. Criscuolo & Co Ltd', 'MOOV-0153', '0153', '153']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -9613,7 +9613,7 @@ BEGIN
     VALUES (
       'Kettles Pottery Supplies Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0154',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Kettles Pottery Supplies Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Kettles Pottery Supplies Ltd', 'MOOV-0154', '0154', '154']
+      'active', 'bronze', ARRAY['Kettles Pottery Supplies Ltd', 'MOOV-0154', '0154', '154']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -9649,7 +9649,7 @@ BEGIN
     VALUES (
       'East Coast Creations Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0155',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('East Coast Creations Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['East Coast Creations Ltd', 'MOOV-0155', '0155', '155']
+      'active', 'bronze', ARRAY['East Coast Creations Ltd', 'MOOV-0155', '0155', '155']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -9685,7 +9685,7 @@ BEGIN
     VALUES (
       'ETA Solutions Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0156',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('ETA Solutions Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['ETA Solutions Limited', 'MOOV-0156', '0156', '156']
+      'active', 'bronze', ARRAY['ETA Solutions Limited', 'MOOV-0156', '0156', '156']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -9721,7 +9721,7 @@ BEGIN
     VALUES (
       'Security Trade Products Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0157',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Security Trade Products Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Security Trade Products Ltd', 'MOOV-0157', '0157', '157']
+      'active', 'bronze', ARRAY['Security Trade Products Ltd', 'MOOV-0157', '0157', '157']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -9757,7 +9757,7 @@ BEGIN
     VALUES (
       'Sarratt Online Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0158',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Sarratt Online Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Sarratt Online Ltd', 'MOOV-0158', '0158', '158']
+      'active', 'bronze', ARRAY['Sarratt Online Ltd', 'MOOV-0158', '0158', '158']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -9793,7 +9793,7 @@ BEGIN
     VALUES (
       'Agar Hygiene Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0159',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Agar Hygiene Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Agar Hygiene Ltd', 'MOOV-0159', '0159', '159']
+      'active', 'bronze', ARRAY['Agar Hygiene Ltd', 'MOOV-0159', '0159', '159']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -9829,7 +9829,7 @@ BEGIN
     VALUES (
       'Lesser Spotted Images Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0160',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Lesser Spotted Images Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Lesser Spotted Images Ltd', 'MOOV-0160', '0160', '160']
+      'active', 'bronze', ARRAY['Lesser Spotted Images Ltd', 'MOOV-0160', '0160', '160']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -9865,7 +9865,7 @@ BEGIN
     VALUES (
       'Just Cable Ties', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0161',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Just Cable Ties', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Just Cable Ties', 'MOOV-0161', '0161', '161']
+      'active', 'bronze', ARRAY['Just Cable Ties', 'MOOV-0161', '0161', '161']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -9901,7 +9901,7 @@ BEGIN
     VALUES (
       'Work and Wear Direct Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Work and Wear Direct Ltd',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Work and Wear Direct Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Work and Wear Direct Ltd', 'Work and Wear Direct Ltd']
+      'active', 'bronze', ARRAY['Work and Wear Direct Ltd', 'Work and Wear Direct Ltd']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -9937,7 +9937,7 @@ BEGIN
     VALUES (
       'Exhale Boutique', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Exhale Boutique',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Exhale Boutique', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Exhale Boutique', 'Exhale Boutique']
+      'active', 'bronze', ARRAY['Exhale Boutique', 'Exhale Boutique']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -9973,7 +9973,7 @@ BEGIN
     VALUES (
       'Southdown Abrasives & Ind Chemicals Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0162',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Southdown Abrasives & Ind Chemicals Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Southdown Abrasives & Ind Chemicals Ltd', 'MOOV-0162', '0162', '162']
+      'active', 'bronze', ARRAY['Southdown Abrasives & Ind Chemicals Ltd', 'MOOV-0162', '0162', '162']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -10009,7 +10009,7 @@ BEGIN
     VALUES (
       'Tackl', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Tackl',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Tackl', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Tackl', 'Tackl']
+      'active', 'bronze', ARRAY['Tackl', 'Tackl']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -10045,7 +10045,7 @@ BEGIN
     VALUES (
       'Auto Test', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Auto',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Auto Test', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Auto Test', 'Auto']
+      'active', 'bronze', ARRAY['Auto Test', 'Auto']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -10081,7 +10081,7 @@ BEGIN
     VALUES (
       'HPSA Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0163',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('HPSA Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['HPSA Ltd', 'MOOV-0163', '0163', '163']
+      'active', 'bronze', ARRAY['HPSA Ltd', 'MOOV-0163', '0163', '163']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -10117,7 +10117,7 @@ BEGIN
     VALUES (
       'ceravi', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0051',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('ceravi', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['ceravi', 'DP1-0051', '1']
+      'active', 'bronze', ARRAY['ceravi', 'DP1-0051', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -10153,7 +10153,7 @@ BEGIN
     VALUES (
       'PWS Leeds Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0164',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('PWS Leeds Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['PWS Leeds Ltd', 'MOOV-0164', '0164', '164']
+      'active', 'bronze', ARRAY['PWS Leeds Ltd', 'MOOV-0164', '0164', '164']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -10189,7 +10189,7 @@ BEGIN
     VALUES (
       'Total Insignia Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0165',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Total Insignia Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Total Insignia Ltd', 'MOOV-0165', '0165', '165']
+      'active', 'bronze', ARRAY['Total Insignia Ltd', 'MOOV-0165', '0165', '165']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -10225,7 +10225,7 @@ BEGIN
     VALUES (
       'USER', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'EFD1-0004',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('USER', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['USER', 'EFD1-0004', '1']
+      'active', 'bronze', ARRAY['USER', 'EFD1-0004', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -10261,7 +10261,7 @@ BEGIN
     VALUES (
       'The Wild Meat Company ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0166',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('The Wild Meat Company ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['The Wild Meat Company ltd', 'MOOV-0166', '0166', '166']
+      'active', 'bronze', ARRAY['The Wild Meat Company ltd', 'MOOV-0166', '0166', '166']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -10297,7 +10297,7 @@ BEGIN
     VALUES (
       'Grace Test Account', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0167',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Grace Test Account', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Grace Test Account', 'MOOV-0167', '0167', '167']
+      'active', 'bronze', ARRAY['Grace Test Account', 'MOOV-0167', '0167', '167']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -10333,7 +10333,7 @@ BEGIN
     VALUES (
       'Bob AI', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0168',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Bob AI', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Bob AI', 'MOOV-0168', '0168', '168']
+      'active', 'bronze', ARRAY['Bob AI', 'MOOV-0168', '0168', '168']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -10369,7 +10369,7 @@ BEGIN
     VALUES (
       'Xplore Brands', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0169',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Xplore Brands', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Xplore Brands', 'MOOV-0169', '0169', '169']
+      'active', 'bronze', ARRAY['Xplore Brands', 'MOOV-0169', '0169', '169']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -10405,7 +10405,7 @@ BEGIN
     VALUES (
       'Medicube', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DQA1-0018',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Medicube', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Medicube', 'DQA1-0018', '1']
+      'active', 'bronze', ARRAY['Medicube', 'DQA1-0018', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -10441,7 +10441,7 @@ BEGIN
     VALUES (
       'Sherwood Wholesale Foods Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0170',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Sherwood Wholesale Foods Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Sherwood Wholesale Foods Ltd', 'MOOV-0170', '0170', '170']
+      'active', 'bronze', ARRAY['Sherwood Wholesale Foods Ltd', 'MOOV-0170', '0170', '170']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -10477,7 +10477,7 @@ BEGIN
     VALUES (
       '2023', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'QDP1-0001',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('2023', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['2023', 'QDP1-0001', '1']
+      'active', 'bronze', ARRAY['2023', 'QDP1-0001', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -10513,7 +10513,7 @@ BEGIN
     VALUES (
       'PROD EF COMPANY', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'TDP1-0001',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('PROD EF COMPANY', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['PROD EF COMPANY', 'TDP1-0001', '1']
+      'active', 'bronze', ARRAY['PROD EF COMPANY', 'TDP1-0001', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -10549,7 +10549,7 @@ BEGIN
     VALUES (
       'EF', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DE22-0009',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('EF', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['EF', 'DE22-0009', '22']
+      'active', 'bronze', ARRAY['EF', 'DE22-0009', '22']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -10585,7 +10585,7 @@ BEGIN
     VALUES (
       'NNU', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DE22-0011',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('NNU', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['NNU', 'DE22-0011', '22']
+      'active', 'bronze', ARRAY['NNU', 'DE22-0011', '22']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -10621,7 +10621,7 @@ BEGIN
     VALUES (
       'Non Ninja Company', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'QDP1-0003',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Non Ninja Company', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Non Ninja Company', 'QDP1-0003', '1']
+      'active', 'bronze', ARRAY['Non Ninja Company', 'QDP1-0003', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -10657,7 +10657,7 @@ BEGIN
     VALUES (
       'Test Ninja company', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0053',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Test Ninja company', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Test Ninja company', 'DP1-0053', '1']
+      'active', 'bronze', ARRAY['Test Ninja company', 'DP1-0053', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -10693,7 +10693,7 @@ BEGIN
     VALUES (
       'Efutures Non Ninja company', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DE22-0015',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Efutures Non Ninja company', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Efutures Non Ninja company', 'DE22-0015', '22']
+      'active', 'bronze', ARRAY['Efutures Non Ninja company', 'DE22-0015', '22']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -10729,7 +10729,7 @@ BEGIN
     VALUES (
       'EFUTURES TEST PORD NINJA COMPANY', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'TDP1-0005',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('EFUTURES TEST PORD NINJA COMPANY', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['EFUTURES TEST PORD NINJA COMPANY', 'TDP1-0005', '1']
+      'active', 'bronze', ARRAY['EFUTURES TEST PORD NINJA COMPANY', 'TDP1-0005', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -10765,7 +10765,7 @@ BEGIN
     VALUES (
       'Test Efutures Non Ninja comp', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'TDP1-0007',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Test Efutures Non Ninja comp', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Test Efutures Non Ninja comp', 'TDP1-0007', '1']
+      'active', 'bronze', ARRAY['Test Efutures Non Ninja comp', 'TDP1-0007', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -10801,7 +10801,7 @@ BEGIN
     VALUES (
       'Jamie Ferments Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0171',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Jamie Ferments Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Jamie Ferments Limited', 'MOOV-0171', '0171', '171']
+      'active', 'bronze', ARRAY['Jamie Ferments Limited', 'MOOV-0171', '0171', '171']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -10837,7 +10837,7 @@ BEGIN
     VALUES (
       'Jezaya UK Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0172',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Jezaya UK Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Jezaya UK Limited', 'MOOV-0172', '0172', '172']
+      'active', 'bronze', ARRAY['Jezaya UK Limited', 'MOOV-0172', '0172', '172']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -10873,7 +10873,7 @@ BEGIN
     VALUES (
       'Wine Buffs Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0173',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Wine Buffs Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Wine Buffs Ltd', 'MOOV-0173', '0173', '173']
+      'active', 'bronze', ARRAY['Wine Buffs Ltd', 'MOOV-0173', '0173', '173']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -10909,7 +10909,7 @@ BEGIN
     VALUES (
       'Doran Packaging Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0174',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Doran Packaging Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Doran Packaging Ltd', 'MOOV-0174', '0174', '174']
+      'active', 'bronze', ARRAY['Doran Packaging Ltd', 'MOOV-0174', '0174', '174']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -10945,7 +10945,7 @@ BEGIN
     VALUES (
       'Purozo Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0175',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Purozo Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Purozo Limited', 'MOOV-0175', '0175', '175']
+      'active', 'bronze', ARRAY['Purozo Limited', 'MOOV-0175', '0175', '175']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -10981,7 +10981,7 @@ BEGIN
     VALUES (
       'Wosi Wosi Foods Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0176',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Wosi Wosi Foods Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Wosi Wosi Foods Limited', 'MOOV-0176', '0176', '176', 'wasi wasi', 'wasiwasi', 'wosi wosi', 'wosiwosi', '0176']
+      'active', 'bronze', ARRAY['Wosi Wosi Foods Limited', 'MOOV-0176', '0176', '176', 'wasi wasi', 'wasiwasi', 'wosi wosi', 'wosiwosi', '0176']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -11017,7 +11017,7 @@ BEGIN
     VALUES (
       'My Shadow Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0177',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('My Shadow Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['My Shadow Ltd', 'MOOV-0177', '0177', '177']
+      'active', 'bronze', ARRAY['My Shadow Ltd', 'MOOV-0177', '0177', '177']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -11053,7 +11053,7 @@ BEGIN
     VALUES (
       'U-Telecom Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0178',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('U-Telecom Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['U-Telecom Ltd', 'MOOV-0178', '0178', '178']
+      'active', 'bronze', ARRAY['U-Telecom Ltd', 'MOOV-0178', '0178', '178']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -11089,7 +11089,7 @@ BEGIN
     VALUES (
       'Mala Leather', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0179',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Mala Leather', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Mala Leather', 'MOOV-0179', '0179', '179']
+      'active', 'bronze', ARRAY['Mala Leather', 'MOOV-0179', '0179', '179']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -11125,7 +11125,7 @@ BEGIN
     VALUES (
       'CT Inc', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0003',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('CT Inc', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['CT Inc', 'DP1-0003', '1']
+      'active', 'bronze', ARRAY['CT Inc', 'DP1-0003', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -11161,7 +11161,7 @@ BEGIN
     VALUES (
       'Golf and Baby Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0180',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Golf and Baby Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Golf and Baby Limited', 'MOOV-0180', '0180', '180']
+      'active', 'bronze', ARRAY['Golf and Baby Limited', 'MOOV-0180', '0180', '180']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -11197,7 +11197,7 @@ BEGIN
     VALUES (
       'IMEX China Trade Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0181',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('IMEX China Trade Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['IMEX China Trade Ltd', 'MOOV-0181', '0181', '181']
+      'active', 'bronze', ARRAY['IMEX China Trade Ltd', 'MOOV-0181', '0181', '181']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -11233,7 +11233,7 @@ BEGIN
     VALUES (
       'Tanalia Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0182',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Tanalia Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Tanalia Ltd', 'MOOV-0182', '0182', '182']
+      'active', 'bronze', ARRAY['Tanalia Ltd', 'MOOV-0182', '0182', '182']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -11269,7 +11269,7 @@ BEGIN
     VALUES (
       'Saturn Display Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0183',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Saturn Display Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Saturn Display Ltd', 'MOOV-0183', '0183', '183']
+      'active', 'bronze', ARRAY['Saturn Display Ltd', 'MOOV-0183', '0183', '183']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -11305,7 +11305,7 @@ BEGIN
     VALUES (
       'Fun Stickers Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0184',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Fun Stickers Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Fun Stickers Ltd', 'MOOV-0184', '0184', '184']
+      'active', 'bronze', ARRAY['Fun Stickers Ltd', 'MOOV-0184', '0184', '184']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -11341,7 +11341,7 @@ BEGIN
     VALUES (
       'Perex Group Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0185',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Perex Group Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Perex Group Ltd', 'MOOV-0185', '0185', '185']
+      'active', 'bronze', ARRAY['Perex Group Ltd', 'MOOV-0185', '0185', '185']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -11377,7 +11377,7 @@ BEGIN
     VALUES (
       'TT Proturf Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0186',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('TT Proturf Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['TT Proturf Ltd', 'MOOV-0186', '0186', '186']
+      'active', 'bronze', ARRAY['TT Proturf Ltd', 'MOOV-0186', '0186', '186']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -11413,7 +11413,7 @@ BEGIN
     VALUES (
       'Decorative Gardens Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0187',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Decorative Gardens Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Decorative Gardens Ltd', 'MOOV-0187', '0187', '187']
+      'active', 'bronze', ARRAY['Decorative Gardens Ltd', 'MOOV-0187', '0187', '187']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -11449,7 +11449,7 @@ BEGIN
     VALUES (
       'Isoclean Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0188',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Isoclean Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Isoclean Ltd', 'MOOV-0188', '0188', '188']
+      'active', 'bronze', ARRAY['Isoclean Ltd', 'MOOV-0188', '0188', '188']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -11485,7 +11485,7 @@ BEGIN
     VALUES (
       'C Com', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'DP1-0054',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('C Com', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['C Com', 'DP1-0054', '1']
+      'active', 'bronze', ARRAY['C Com', 'DP1-0054', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -11521,7 +11521,7 @@ BEGIN
     VALUES (
       'Bodri Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0189',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Bodri Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Bodri Ltd', 'MOOV-0189', '0189', '189']
+      'active', 'bronze', ARRAY['Bodri Ltd', 'MOOV-0189', '0189', '189']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -11557,7 +11557,7 @@ BEGIN
     VALUES (
       '1st Class Uniforms & Workwear Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0190',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('1st Class Uniforms & Workwear Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['1st Class Uniforms & Workwear Ltd', 'MOOV-0190', '0190', '190']
+      'active', 'bronze', ARRAY['1st Class Uniforms & Workwear Ltd', 'MOOV-0190', '0190', '190']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -11593,7 +11593,7 @@ BEGIN
     VALUES (
       'Carp Junky', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0191',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Carp Junky', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Carp Junky', 'MOOV-0191', '0191', '191']
+      'active', 'bronze', ARRAY['Carp Junky', 'MOOV-0191', '0191', '191']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -11629,7 +11629,7 @@ BEGIN
     VALUES (
       'Mackemshop Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0192',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Mackemshop Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Mackemshop Ltd', 'MOOV-0192', '0192', '192']
+      'active', 'bronze', ARRAY['Mackemshop Ltd', 'MOOV-0192', '0192', '192']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -11665,7 +11665,7 @@ BEGIN
     VALUES (
       'Test company CHN', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'TDP1-0009',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Test company CHN', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Test company CHN', 'TDP1-0009', '1']
+      'active', 'bronze', ARRAY['Test company CHN', 'TDP1-0009', '1']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -11701,7 +11701,7 @@ BEGIN
     VALUES (
       'UK Wedding Favours Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0193',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('UK Wedding Favours Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['UK Wedding Favours Ltd', 'MOOV-0193', '0193', '193']
+      'active', 'bronze', ARRAY['UK Wedding Favours Ltd', 'MOOV-0193', '0193', '193']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -11737,7 +11737,7 @@ BEGIN
     VALUES (
       'Pure Crimson Design Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0194',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Pure Crimson Design Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Pure Crimson Design Limited', 'MOOV-0194', '0194', '194']
+      'active', 'bronze', ARRAY['Pure Crimson Design Limited', 'MOOV-0194', '0194', '194']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -11773,7 +11773,7 @@ BEGIN
     VALUES (
       'ID Dance school sport & leisure wear limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0195',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('ID Dance school sport & leisure wear limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['ID Dance school sport & leisure wear limited', 'MOOV-0195', '0195', '195']
+      'active', 'bronze', ARRAY['ID Dance school sport & leisure wear limited', 'MOOV-0195', '0195', '195']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -11809,7 +11809,7 @@ BEGIN
     VALUES (
       'Smilax Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0196',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Smilax Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Smilax Ltd', 'MOOV-0196', '0196', '196']
+      'active', 'bronze', ARRAY['Smilax Ltd', 'MOOV-0196', '0196', '196']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -11845,7 +11845,7 @@ BEGIN
     VALUES (
       'Slumba London', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0197',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Slumba London', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Slumba London', 'MOOV-0197', '0197', '197']
+      'active', 'bronze', ARRAY['Slumba London', 'MOOV-0197', '0197', '197']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -11881,7 +11881,7 @@ BEGIN
     VALUES (
       'Amba Hydraulics Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0198',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Amba Hydraulics Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Amba Hydraulics Ltd', 'MOOV-0198', '0198', '198']
+      'active', 'bronze', ARRAY['Amba Hydraulics Ltd', 'MOOV-0198', '0198', '198']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -11917,7 +11917,7 @@ BEGIN
     VALUES (
       'Ayurvedic Nature Care Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0199',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Ayurvedic Nature Care Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Ayurvedic Nature Care Ltd', 'MOOV-0199', '0199', '199']
+      'active', 'bronze', ARRAY['Ayurvedic Nature Care Ltd', 'MOOV-0199', '0199', '199']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -11953,7 +11953,7 @@ BEGIN
     VALUES (
       'Chopra Brothers Intl Group Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0200',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Chopra Brothers Intl Group Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Chopra Brothers Intl Group Ltd', 'MOOV-0200', '0200', '200']
+      'active', 'bronze', ARRAY['Chopra Brothers Intl Group Ltd', 'MOOV-0200', '0200', '200']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -11989,7 +11989,7 @@ BEGIN
     VALUES (
       'Sofa Scene Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0201',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Sofa Scene Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Sofa Scene Ltd', 'MOOV-0201', '0201', '201']
+      'active', 'bronze', ARRAY['Sofa Scene Ltd', 'MOOV-0201', '0201', '201']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -12025,7 +12025,7 @@ BEGIN
     VALUES (
       'Metal Work Supplies Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0202',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Metal Work Supplies Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Metal Work Supplies Ltd', 'MOOV-0202', '0202', '202']
+      'active', 'bronze', ARRAY['Metal Work Supplies Ltd', 'MOOV-0202', '0202', '202']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -12061,7 +12061,7 @@ BEGIN
     VALUES (
       'Meilleure Decor Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0203',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Meilleure Decor Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Meilleure Decor Ltd', 'MOOV-0203', '0203', '203']
+      'active', 'bronze', ARRAY['Meilleure Decor Ltd', 'MOOV-0203', '0203', '203']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -12097,7 +12097,7 @@ BEGIN
     VALUES (
       'Taunton Trailers', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0204',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Taunton Trailers', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Taunton Trailers', 'MOOV-0204', '0204', '204']
+      'active', 'bronze', ARRAY['Taunton Trailers', 'MOOV-0204', '0204', '204']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -12133,7 +12133,7 @@ BEGIN
     VALUES (
       'Kitloop', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Kitloop',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Kitloop', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Kitloop', 'Kitloop']
+      'active', 'bronze', ARRAY['Kitloop', 'Kitloop']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -12169,7 +12169,7 @@ BEGIN
     VALUES (
       'Frith Holdings Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0205',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Frith Holdings Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Frith Holdings Ltd', 'MOOV-0205', '0205', '205']
+      'active', 'bronze', ARRAY['Frith Holdings Ltd', 'MOOV-0205', '0205', '205']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -12205,7 +12205,7 @@ BEGIN
     VALUES (
       '24Up Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0206',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('24Up Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['24Up Ltd', 'MOOV-0206', '0206', '206']
+      'active', 'bronze', ARRAY['24Up Ltd', 'MOOV-0206', '0206', '206']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -12241,7 +12241,7 @@ BEGIN
     VALUES (
       'Scarlet Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0207',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Scarlet Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Scarlet Ltd', 'MOOV-0207', '0207', '207']
+      'active', 'bronze', ARRAY['Scarlet Ltd', 'MOOV-0207', '0207', '207']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -12277,7 +12277,7 @@ BEGIN
     VALUES (
       'J Adams Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0208',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('J Adams Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['J Adams Ltd', 'MOOV-0208', '0208', '208']
+      'active', 'bronze', ARRAY['J Adams Ltd', 'MOOV-0208', '0208', '208']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -12313,7 +12313,7 @@ BEGIN
     VALUES (
       'Scarlet Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'Scarlet Ltd',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Scarlet Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Scarlet Ltd', 'Scarlet Ltd']
+      'active', 'bronze', ARRAY['Scarlet Ltd', 'Scarlet Ltd']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -12349,7 +12349,7 @@ BEGIN
     VALUES (
       'Wolf Cycles Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0209',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Wolf Cycles Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Wolf Cycles Limited', 'MOOV-0209', '0209', '209']
+      'active', 'bronze', ARRAY['Wolf Cycles Limited', 'MOOV-0209', '0209', '209']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -12385,7 +12385,7 @@ BEGIN
     VALUES (
       'Hilltop Boarding Kennels and Cat Hotel Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0210',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Hilltop Boarding Kennels and Cat Hotel Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Hilltop Boarding Kennels and Cat Hotel Ltd', 'MOOV-0210', '0210', '210']
+      'active', 'bronze', ARRAY['Hilltop Boarding Kennels and Cat Hotel Ltd', 'MOOV-0210', '0210', '210']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -12421,7 +12421,7 @@ BEGIN
     VALUES (
       'Tam Demo Account', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0211',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Tam Demo Account', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Tam Demo Account', 'MOOV-0211', '0211', '211']
+      'active', 'bronze', ARRAY['Tam Demo Account', 'MOOV-0211', '0211', '211']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -12457,7 +12457,7 @@ BEGIN
     VALUES (
       'Truck Cranes Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0212',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Truck Cranes Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Truck Cranes Ltd', 'MOOV-0212', '0212', '212']
+      'active', 'bronze', ARRAY['Truck Cranes Ltd', 'MOOV-0212', '0212', '212']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -12493,7 +12493,7 @@ BEGIN
     VALUES (
       'Simple Camper Vans Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0213',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Simple Camper Vans Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Simple Camper Vans Limited', 'MOOV-0213', '0213', '213']
+      'active', 'bronze', ARRAY['Simple Camper Vans Limited', 'MOOV-0213', '0213', '213']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -12529,7 +12529,7 @@ BEGIN
     VALUES (
       'Direct Imaging Supplies Limited', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0214',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Direct Imaging Supplies Limited', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Direct Imaging Supplies Limited', 'MOOV-0214', '0214', '214']
+      'active', 'bronze', ARRAY['Direct Imaging Supplies Limited', 'MOOV-0214', '0214', '214']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -12565,7 +12565,7 @@ BEGIN
     VALUES (
       'Bodies-in-Motion Dancewear', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0215',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Bodies-in-Motion Dancewear', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Bodies-in-Motion Dancewear', 'MOOV-0215', '0215', '215']
+      'active', 'bronze', ARRAY['Bodies-in-Motion Dancewear', 'MOOV-0215', '0215', '215']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -12601,7 +12601,7 @@ BEGIN
     VALUES (
       'Marvellous Mushrooms', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0216',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Marvellous Mushrooms', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Marvellous Mushrooms', 'MOOV-0216', '0216', '216']
+      'active', 'bronze', ARRAY['Marvellous Mushrooms', 'MOOV-0216', '0216', '216']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -12637,7 +12637,7 @@ BEGIN
     VALUES (
       'Blaze''s Bistro', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0217',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Blaze''s Bistro', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Blaze''s Bistro', 'MOOV-0217', '0217', '217']
+      'active', 'bronze', ARRAY['Blaze''s Bistro', 'MOOV-0217', '0217', '217']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -12673,7 +12673,7 @@ BEGIN
     VALUES (
       'Triumph Dorset Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0218',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Triumph Dorset Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Triumph Dorset Ltd', 'MOOV-0218', '0218', '218']
+      'active', 'bronze', ARRAY['Triumph Dorset Ltd', 'MOOV-0218', '0218', '218']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -12709,7 +12709,7 @@ BEGIN
     VALUES (
       'Cold Case Investigation Unit', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0219',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Cold Case Investigation Unit', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Cold Case Investigation Unit', 'MOOV-0219', '0219', '219']
+      'active', 'bronze', ARRAY['Cold Case Investigation Unit', 'MOOV-0219', '0219', '219']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -12745,7 +12745,7 @@ BEGIN
     VALUES (
       'WPC Supplies Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0220',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('WPC Supplies Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['WPC Supplies Ltd', 'MOOV-0220', '0220', '220']
+      'active', 'bronze', ARRAY['WPC Supplies Ltd', 'MOOV-0220', '0220', '220']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -12781,7 +12781,7 @@ BEGIN
     VALUES (
       'IOI Trading Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0221',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('IOI Trading Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['IOI Trading Ltd', 'MOOV-0221', '0221', '221']
+      'active', 'bronze', ARRAY['IOI Trading Ltd', 'MOOV-0221', '0221', '221']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -12817,7 +12817,7 @@ BEGIN
     VALUES (
       'Trembling Madness Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0222',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Trembling Madness Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Trembling Madness Ltd', 'MOOV-0222', '0222', '222']
+      'active', 'bronze', ARRAY['Trembling Madness Ltd', 'MOOV-0222', '0222', '222']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;
@@ -12853,7 +12853,7 @@ BEGIN
     VALUES (
       'Ashley House Printing Co Ltd', 'MOS-' || LPAD(FLOOR(RANDOM() * 90000 + 10000)::TEXT, 5, '0'), 'MOOV-0224',
       'Registered Address', 'UK', '—', 'billing@' || LOWER(REGEXP_REPLACE('Ashley House Printing Co Ltd', '[^a-zA-Z0-9]', '', 'g')) || '.co.uk',
-      'active', 'standard', ARRAY['Ashley House Printing Co Ltd', 'MOOV-0224', '0224', '224']
+      'active', 'bronze', ARRAY['Ashley House Printing Co Ltd', 'MOOV-0224', '0224', '224']
     )
     ON CONFLICT (account_number) DO NOTHING;
   END IF;

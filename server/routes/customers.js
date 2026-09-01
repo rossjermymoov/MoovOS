@@ -1629,7 +1629,7 @@ router.post('/bulk-sync-dc-ids', async (req, res, next) => {
         const ins = await query(
           `INSERT INTO customers 
             (business_name, account_number, dc_customer_id, registered_address, postcode, phone_number, primary_email, account_status, tier, billing_aliases)
-           VALUES ($1, $2, $3, 'Registered Address', 'UK', '—', $4, 'active', 'standard', $5)
+           VALUES ($1, $2, $3, 'Registered Address', 'UK', '—', $4, 'active', 'bronze', $5)
            RETURNING id, business_name, dc_customer_id`,
           [name, randAcct, dcId || null, `billing@${name.toLowerCase().replace(/[^a-z0-9]/g, '')}.co.uk`, aliases]
         );
