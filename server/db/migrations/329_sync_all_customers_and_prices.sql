@@ -17,7 +17,7 @@ CREATE TRIGGER trg_customer_dc_id_sync
 BEFORE INSERT OR UPDATE OF account_number ON customers
 FOR EACH ROW EXECUTE FUNCTION sync_customer_dc_id();
 
--- Ensure customer_rates table exists
+-- Ensure customer_rates table and exact constraint exists
 CREATE TABLE IF NOT EXISTS customer_rates (
   id                SERIAL PRIMARY KEY,
   customer_id       UUID NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
@@ -27,13 +27,18 @@ CREATE TABLE IF NOT EXISTS customer_rates (
   service_id        INT NOT NULL,
   service_code      VARCHAR(100),
   service_name      VARCHAR(200),
-  zone_id           INT NOT NULL,
+  zone_id           INT NOT NULL DEFAULT 0,
   zone_name         VARCHAR(200),
-  weight_class_id   INT NOT NULL,
+  weight_class_id   INT NOT NULL DEFAULT 0,
   weight_class_name VARCHAR(200),
-  price             NUMERIC(10,4) NOT NULL,
-  UNIQUE (customer_id, service_id, zone_id, weight_class_id)
+  price             NUMERIC(10,4) NOT NULL
 );
+
+ALTER TABLE customer_rates DROP CONSTRAINT IF EXISTS customer_rates_unique_zone;
+ALTER TABLE customer_rates DROP CONSTRAINT IF EXISTS customer_rates_unique_name;
+ALTER TABLE customer_rates DROP CONSTRAINT IF EXISTS customer_rates_customer_id_service_id_zone_id_weight_class_id_key;
+
+ALTER TABLE customer_rates ADD CONSTRAINT customer_rates_unique_zone UNIQUE (customer_id, service_id, zone_name, weight_class_name);
 
 CREATE INDEX IF NOT EXISTS idx_customer_rates_customer ON customer_rates(customer_id);
 CREATE INDEX IF NOT EXISTS idx_customer_rates_service  ON customer_rates(customer_id, service_id);
@@ -19536,15 +19541,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1735, 'DPD-20', 'DPD Direct Lite', 15302, 'United States', 25973, '0.5 kg - 1 kg', 12.47),
       (v_c_id, 150, 'DPD', 'DPD', 1735, 'DPD-20', 'DPD Direct Lite', 15302, 'United States', 25974, '1 kg - 1.5 kg', 16.5),
       (v_c_id, 150, 'DPD', 'DPD', 1735, 'DPD-20', 'DPD Direct Lite', 15302, 'United States', 25975, '1.5 kg - 2 kg', 20.53)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -19594,15 +19600,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 773, 'DPD-13', 'DPD Next Day 12.00', 9549, 'Mainland', 17523, 'Parcel', 6.27),
       (v_c_id, 150, 'DPD', 'DPD', 774, 'DPD-18', 'DPD Saturday 10.30', 9550, 'Mainland', 17524, 'Parcel', 15.68),
       (v_c_id, 150, 'DPD', 'DPD', 775, 'DPD-17', 'DPD Saturday 12.00', 9551, 'Mainland', 17525, 'Parcel', 12.55)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -19628,15 +19635,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 774, 'DPD-18', 'DPD Saturday 10.30', 9550, 'Mainland', 17524, 'Parcel', 16.13),
       (v_c_id, 150, 'DPD', 'DPD', 775, 'DPD-17', 'DPD Saturday 12.00', 9551, 'Mainland', 17525, 'Parcel', 13),
       (v_c_id, 212, 'PC', 'Pro Carrier', 1276, 'DG-PCBI', 'Yodel Xpect 48 Mini', 12510, 'Mainland', 22720, 'Up to 3kg', 2.08)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -19658,15 +19666,16 @@ BEGIN
       (v_c_id, 212, 'PC', 'Pro Carrier', 1281, '2VN', 'Yodel Xpect Large 48', 12516, 'Out of Area', 22727, 'Parcel', 7.35),
       (v_c_id, 212, 'PC', 'Pro Carrier', 1282, '1CEN', 'Yodel Channel Islands', 12518, 'Channel Islands', 22723, 'Parcel', 8.45),
       (v_c_id, 212, 'PC', 'Pro Carrier', 1283, '1CEP', 'Yodel Channel Islands POD', 12519, 'Channel Islands', 22724, 'Parcel', 8.6)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -19705,15 +19714,16 @@ BEGIN
       (v_c_id, 212, 'PC', 'Pro Carrier', 1283, '1CEP', 'Yodel Channel Islands POD', 12519, 'Channel Islands', 22724, 'Parcel', 8.65),
       (v_c_id, 212, 'PC', 'Pro Carrier', 1284, 'DG-PCSU', 'Yodel Xpect 48 XL', 12520, 'Mainland', 22722, 'Parcel', 7.95),
       (v_c_id, 212, 'PC', 'Pro Carrier', 1284, 'DG-PCSU', 'Yodel Xpect 48 XL', 12521, 'Out of Area', 22722, 'Parcel', 9.95)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -19932,15 +19942,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 875, 'DPD-81', 'DPD Freight Two Day', 9830, 'Mainland', 18218, '97.01 kg - 98.01 kg', 91.43),
       (v_c_id, 150, 'DPD', 'DPD', 875, 'DPD-81', 'DPD Freight Two Day', 9830, 'Mainland', 18219, '98.01 kg - 99 kg', 92.07),
       (v_c_id, 150, 'DPD', 'DPD', 1360, 'DPD-42', 'DPD Swap IT Next Day', 12796, 'Mainland', 23134, 'Parcel', 14.5)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -19984,15 +19995,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14124, 'Northern Ireland', 25332, 'Parcel', 18.25),
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14125, 'Scottish Highlands', 25332, 'Parcel', 20.29),
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14126, 'Scottish Islands', 25332, 'Parcel', 20.29)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -20019,15 +20031,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 774, 'DPD-18', 'DPD Saturday 10.30', 9550, 'Mainland', 17524, 'Parcel', 18.45),
       (v_c_id, 150, 'DPD', 'DPD', 775, 'DPD-17', 'DPD Saturday 12.00', 9551, 'Mainland', 17525, 'Parcel', 15.6),
       (v_c_id, 150, 'DPD', 'DPD', 872, 'DPD-12OFF', 'DPD Next Day N Ireland', 9827, 'DPD Offshore', 18023, 'Parcel', 30.2)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -20053,15 +20066,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 774, 'DPD-18', 'DPD Saturday 10.30', 9550, 'Mainland', 17524, 'Parcel', 18.45),
       (v_c_id, 150, 'DPD', 'DPD', 775, 'DPD-17', 'DPD Saturday 12.00', 9551, 'Mainland', 17525, 'Parcel', 15.6),
       (v_c_id, 150, 'DPD', 'DPD', 872, 'DPD-12OFF', 'DPD Next Day N Ireland', 9827, 'DPD Offshore', 18023, 'Parcel', 31.4)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -20089,15 +20103,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 773, 'DPD-13', 'DPD Next Day 12.00', 9549, 'Mainland', 17523, 'Parcel', 8.8),
       (v_c_id, 150, 'DPD', 'DPD', 774, 'DPD-18', 'DPD Saturday 10.30', 9550, 'Mainland', 17524, 'Parcel', 18.45),
       (v_c_id, 150, 'DPD', 'DPD', 775, 'DPD-17', 'DPD Saturday 12.00', 9551, 'Mainland', 17525, 'Parcel', 15.6)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -20151,15 +20166,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 872, 'DPD-12OFF', 'DPD Next Day N Ireland', 9827, 'DPD Offshore', 18023, 'Parcel', 31.95),
       (v_c_id, 150, 'DPD', 'DPD', 1026, 'DPD-12OOG', 'DPD Next Day Out of Gauge', 12159, 'Mainland', 21247, 'Parcel', 11.75),
       (v_c_id, 150, 'DPD', 'DPD', 1027, 'DPD-11OOG', 'DPD Two Day Out of Gauge', 12160, 'Mainland', 21248, 'Parcel', 11.75)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -20202,15 +20218,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14124, 'Northern Ireland', 25332, 'Parcel', 18.6),
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14125, 'Scottish Highlands', 25332, 'Parcel', 20.66),
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14126, 'Scottish Islands', 25332, 'Parcel', 20.66)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -20239,15 +20256,16 @@ BEGIN
       (v_c_id, 212, 'PC', 'Pro Carrier', 1324, '1VP', 'Yodel Xpect Large 24 POD', 12681, 'Mainland', 23022, 'Parcel', 6.36),
       (v_c_id, 212, 'PC', 'Pro Carrier', 1325, '2VP', 'Yodel Xpect Large 48 POD', 12678, 'Mainland', 23019, 'Parcel', 6.08),
       (v_c_id, 212, 'PC', 'Pro Carrier', 1325, '2VP', 'Yodel Xpect Large 48 POD', 12679, 'Cross Border', 23019, 'Parcel', 9.58)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -20293,15 +20311,16 @@ BEGIN
       (v_c_id, 212, 'PC', 'Pro Carrier', 1323, 'DG-PCST', 'Yodel Xpect Medium 24 POD', 12680, 'Mainland', 23021, 'Parcel', 3.4),
       (v_c_id, 212, 'PC', 'Pro Carrier', 1324, '1VP', 'Yodel Xpect Large 24 POD', 12681, 'Mainland', 23022, 'Parcel', 4.6),
       (v_c_id, 212, 'PC', 'Pro Carrier', 1325, '2VP', 'Yodel Xpect Large 48 POD', 12678, 'Mainland', 23019, 'Parcel', 4.35)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -20327,15 +20346,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 773, 'DPD-13', 'DPD Next Day 12.00', 9549, 'Mainland', 17523, 'Parcel', 9.8),
       (v_c_id, 150, 'DPD', 'DPD', 774, 'DPD-18', 'DPD Saturday 10.30', 9550, 'Mainland', 17524, 'Parcel', 19.45),
       (v_c_id, 150, 'DPD', 'DPD', 775, 'DPD-17', 'DPD Saturday 12.00', 9551, 'Mainland', 17525, 'Parcel', 16.6)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -20847,15 +20867,16 @@ BEGIN
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13312, '9', 23973, '2 kg - 2.5 kg', 36),
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13312, '9', 23974, '2.5 kg - 3 kg', 38.48),
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13312, '9', 23975, '3 kg - 3.5 kg', 40.69)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -21302,15 +21323,16 @@ BEGIN
       (v_c_id, 276, 'DHLC2C', 'DHL Ecom C2C', 1651, 'DHL-2KGC2C', 'DHL Bagit 2Kg C2C', 14032, 'Mainland', 25290, 'Medium Bagit', 5.59),
       (v_c_id, 276, 'DHLC2C', 'DHL Ecom C2C', 1652, 'DHL-5KGC2C', 'DHL Bagit 5Kg C2C', 14033, 'Mainland', 25291, 'Large Bagit', 5.69),
       (v_c_id, 276, 'DHLC2C', 'DHL Ecom C2C', 1653, 'DHL-PRCLC2C', 'DHL Parcel C2C', 14034, 'Mainland', 25292, 'Parcel', 6.1)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -21341,15 +21363,16 @@ BEGIN
       (v_c_id, 212, 'PC', 'Pro Carrier', 1324, '1VP', 'Yodel Xpect Large 24 POD', 12681, 'Mainland', 23022, 'Parcel', 5.55),
       (v_c_id, 212, 'PC', 'Pro Carrier', 1325, '2VP', 'Yodel Xpect Large 48 POD', 12678, 'Mainland', 23019, 'Parcel', 5.12),
       (v_c_id, 212, 'PC', 'Pro Carrier', 1325, '2VP', 'Yodel Xpect Large 48 POD', 12679, 'Cross Border', 23019, 'Parcel', 8.12)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -21380,15 +21403,16 @@ BEGIN
       (v_c_id, 212, 'PC', 'Pro Carrier', 1325, '2VP', 'Yodel Xpect Large 48 POD', 12678, 'Mainland', 23019, 'Parcel', 4.8),
       (v_c_id, 212, 'PC', 'Pro Carrier', 1325, '2VP', 'Yodel Xpect Large 48 POD', 12679, 'Cross Border', 23019, 'Parcel', 6.8),
       (v_c_id, 225, 'PPI', 'PPI', 1353, 'PPI-Default', 'PPI Label', 12771, 'UK', 23094, 'Parcel', 0.03)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -21404,15 +21428,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 765, 'DPD-11', 'DPD Two Day', 9708, 'Mainland', 17517, 'Parcel', 6.45),
       (v_c_id, 150, 'DPD', 'DPD', 765, 'DPD-11', 'DPD Two Day', 9529, 'Scottish Highlands', 17517, 'Parcel', 12.48),
       (v_c_id, 150, 'DPD', 'DPD', 765, 'DPD-11', 'DPD Two Day', 9532, 'Scottish Islands', 17517, 'Parcel', 12.48)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -21441,15 +21466,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 775, 'DPD-17', 'DPD Saturday 12.00', 9551, 'Mainland', 17525, 'Parcel', 16.6),
       (v_c_id, 150, 'DPD', 'DPD', 1026, 'DPD-12OOG', 'DPD Next Day Out of Gauge', 12159, 'Mainland', 21247, 'Parcel', 11.75),
       (v_c_id, 150, 'DPD', 'DPD', 1027, 'DPD-11OOG', 'DPD Two Day Out of Gauge', 12160, 'Mainland', 21248, 'Parcel', 11.75)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -21480,15 +21506,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1026, 'DPD-12OOG', 'DPD Next Day Out of Gauge', 12159, 'Mainland', 21247, 'Parcel', 11.75),
       (v_c_id, 150, 'DPD', 'DPD', 1027, 'DPD-11OOG', 'DPD Two Day Out of Gauge', 12160, 'Mainland', 21248, 'Parcel', 11.75),
       (v_c_id, 150, 'DPD', 'DPD', 1360, 'DPD-42', 'DPD Swap IT Next Day', 12796, 'Mainland', 23134, 'Parcel', 20.25)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -21518,15 +21545,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 937, 'DPD-5000', 'DPD Next Day 5k Insurance', 11465, 'Mainland', 19694, 'Parcel', 12.65),
       (v_c_id, 150, 'DPD', 'DPD', 1026, 'DPD-12OOG', 'DPD Next Day Out of Gauge', 12159, 'Mainland', 21247, 'Parcel', 11.65),
       (v_c_id, 150, 'DPD', 'DPD', 1027, 'DPD-11OOG', 'DPD Two Day Out of Gauge', 12160, 'Mainland', 21248, 'Parcel', 11.65)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -21571,15 +21599,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14124, 'Northern Ireland', 25332, 'Parcel', 18.25),
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14125, 'Scottish Highlands', 25332, 'Parcel', 20.29),
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14126, 'Scottish Islands', 25332, 'Parcel', 20.29)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -21608,15 +21637,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 775, 'DPD-17', 'DPD Saturday 12.00', 9551, 'Mainland', 17525, 'Parcel', 16.6),
       (v_c_id, 150, 'DPD', 'DPD', 937, 'DPD-5000', 'DPD Next Day 5k Insurance', 11465, 'Mainland', 19694, 'Parcel', 12.95),
       (v_c_id, 150, 'DPD', 'DPD', 1026, 'DPD-12OOG', 'DPD Next Day Out of Gauge', 12159, 'Mainland', 21247, 'Parcel', 12.45)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -21646,15 +21676,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 872, 'DPD-12OFF', 'DPD Next Day N Ireland', 9827, 'DPD Offshore', 18023, 'Parcel', 34.15),
       (v_c_id, 150, 'DPD', 'DPD', 937, 'DPD-5000', 'DPD Next Day 5k Insurance', 11465, 'Mainland', 19694, 'Parcel', 12.5),
       (v_c_id, 150, 'DPD', 'DPD', 1026, 'DPD-12OOG', 'DPD Next Day Out of Gauge', 12159, 'Mainland', 21247, 'Parcel', 11.97)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -21684,15 +21715,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 775, 'DPD-17', 'DPD Saturday 12.00', 9551, 'Mainland', 17525, 'Parcel', 16.9),
       (v_c_id, 150, 'DPD', 'DPD', 937, 'DPD-5000', 'DPD Next Day 5k Insurance', 11465, 'Mainland', 19694, 'Parcel', 13.25),
       (v_c_id, 150, 'DPD', 'DPD', 1026, 'DPD-12OOG', 'DPD Next Day Out of Gauge', 12159, 'Mainland', 21247, 'Parcel', 13.75)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -21720,15 +21752,16 @@ BEGIN
       (v_c_id, 212, 'PC', 'Pro Carrier', 1323, 'DG-PCST', 'Yodel Xpect Medium 24 POD', 12680, 'Mainland', 23021, 'Parcel', 3.6),
       (v_c_id, 212, 'PC', 'Pro Carrier', 1324, '1VP', 'Yodel Xpect Large 24 POD', 12681, 'Mainland', 23022, 'Parcel', 4.8),
       (v_c_id, 212, 'PC', 'Pro Carrier', 1325, '2VP', 'Yodel Xpect Large 48 POD', 12678, 'Mainland', 23019, 'Parcel', 4.55)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -21757,15 +21790,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 775, 'DPD-17', 'DPD Saturday 12.00', 9551, 'Mainland', 17525, 'Parcel', 16.6),
       (v_c_id, 150, 'DPD', 'DPD', 937, 'DPD-5000', 'DPD Next Day 5k Insurance', 11465, 'Mainland', 19694, 'Parcel', 12.5),
       (v_c_id, 150, 'DPD', 'DPD', 1026, 'DPD-12OOG', 'DPD Next Day Out of Gauge', 12159, 'Mainland', 21247, 'Parcel', 12)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -21794,15 +21828,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 775, 'DPD-17', 'DPD Saturday 12.00', 9551, 'Mainland', 17525, 'Parcel', 16.9),
       (v_c_id, 150, 'DPD', 'DPD', 937, 'DPD-5000', 'DPD Next Day 5k Insurance', 11465, 'Mainland', 19694, 'Parcel', 12.35),
       (v_c_id, 150, 'DPD', 'DPD', 1026, 'DPD-12OOG', 'DPD Next Day Out of Gauge', 12159, 'Mainland', 21247, 'Parcel', 12.85)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -21833,15 +21868,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 872, 'DPD-12OFF', 'DPD Next Day N Ireland', 9827, 'DPD Offshore', 18023, 'Parcel', 31.95),
       (v_c_id, 150, 'DPD', 'DPD', 937, 'DPD-5000', 'DPD Next Day 5k Insurance', 11465, 'Mainland', 19694, 'Parcel', 12.8),
       (v_c_id, 150, 'DPD', 'DPD', 1026, 'DPD-12OOG', 'DPD Next Day Out of Gauge', 12159, 'Mainland', 21247, 'Parcel', 13.3)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -21885,15 +21921,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14124, 'Northern Ireland', 25332, 'Parcel', 21.14),
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14125, 'Scottish Highlands', 25332, 'Parcel', 20.35),
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14126, 'Scottish Islands', 25332, 'Parcel', 20.35)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -21925,15 +21962,16 @@ BEGIN
       (v_c_id, 212, 'PC', 'Pro Carrier', 1324, '1VP', 'Yodel Xpect Large 24 POD', 12681, 'Mainland', 23022, 'Parcel', 4.9),
       (v_c_id, 212, 'PC', 'Pro Carrier', 1325, '2VP', 'Yodel Xpect Large 48 POD', 12678, 'Mainland', 23019, 'Parcel', 4.65),
       (v_c_id, 212, 'PC', 'Pro Carrier', 1325, '2VP', 'Yodel Xpect Large 48 POD', 12679, 'Cross Border', 23019, 'Parcel', 6.65)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -21994,15 +22032,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14124, 'Northern Ireland', 25332, 'Parcel', 18.81),
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14125, 'Scottish Highlands', 25332, 'Parcel', 20.97),
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14126, 'Scottish Islands', 25332, 'Parcel', 20.97)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -22036,15 +22075,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1027, 'DPD-11OOG', 'DPD Two Day Out of Gauge', 12924, 'Isle of Man', 21248, 'Parcel', 20.45),
       (v_c_id, 150, 'DPD', 'DPD', 1027, 'DPD-11OOG', 'DPD Two Day Out of Gauge', 12921, 'Scottish Highlands', 21248, 'Parcel', 18.89),
       (v_c_id, 150, 'DPD', 'DPD', 1027, 'DPD-11OOG', 'DPD Two Day Out of Gauge', 12922, 'Scottish Islands', 21248, 'Parcel', 18.89)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -22087,15 +22127,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14124, 'Northern Ireland', 25332, 'Parcel', 18.5),
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14125, 'Scottish Highlands', 25332, 'Parcel', 20.07),
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14126, 'Scottish Islands', 25332, 'Parcel', 20.07)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -22134,15 +22175,16 @@ BEGIN
       (v_c_id, 176, 'EvRi', 'EvRi', 1536, 'EVRI-48PPAK', 'Evri 48 POD Packet', 13237, 'Mainland', 23709, 'Parcel', 3.15),
       (v_c_id, 176, 'EvRi', 'EvRi', 1536, 'EVRI-48PPAK', 'Evri 48 POD Packet', 13238, 'Offshore', 23708, 'Packet', 5.75),
       (v_c_id, 176, 'EvRi', 'EvRi', 1536, 'EVRI-48PPAK', 'Evri 48 POD Packet', 13238, 'Offshore', 23709, 'Parcel', 6.2)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -22172,15 +22214,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 937, 'DPD-5000', 'DPD Next Day 5k Insurance', 11465, 'Mainland', 19694, 'Parcel', 12.25),
       (v_c_id, 150, 'DPD', 'DPD', 1026, 'DPD-12OOG', 'DPD Next Day Out of Gauge', 12159, 'Mainland', 21247, 'Parcel', 13.45),
       (v_c_id, 150, 'DPD', 'DPD', 1357, 'DPD-ND2KG', 'DPD Next Day Parcel 2Kg', 12784, 'Mainland', 23120, 'Parcel', 4.25)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -22227,15 +22270,16 @@ BEGIN
       (v_c_id, 212, 'PC', 'Pro Carrier', 1322, '2VMP', 'Yodel Xpect Medium 48 POD', 12677, 'Out of Area', 23018, 'Parcel', 7.2),
       (v_c_id, 212, 'PC', 'Pro Carrier', 1323, 'DG-PCST', 'Yodel Xpect Medium 24 POD', 12680, 'Mainland', 23021, 'Parcel', 4.55),
       (v_c_id, 150, 'DPD', 'DPD', 1344, 'DPD-16OOG', 'DPD Saturday Out of Gauge', 12724, 'Mainland', 23073, 'Parcel', 18.42)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -22277,15 +22321,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14124, 'Northern Ireland', 25332, 'Parcel', 17.44),
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14125, 'Scottish Highlands', 25332, 'Parcel', 19.49),
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14126, 'Scottish Islands', 25332, 'Parcel', 19.49)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -22335,15 +22380,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 12.42),
       (v_c_id, 150, 'DPD', 'DPD', 2272, 'DPD-NIAR5K', 'DPD NI At Risk 5K Insurance', 17501, 'N Ireland', 29447, 'Parcel', 19.11),
       (v_c_id, 150, 'DPD', 'DPD', 2565, 'DPD-SAT5K', 'DPD Saturday 5k Insurance', 19256, 'Mainland', 31944, 'Parcel', 18.77)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -22382,15 +22428,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1027, 'DPD-11OOG', 'DPD Two Day Out of Gauge', 12921, 'Scottish Highlands', 21248, 'Parcel', 22.82),
       (v_c_id, 150, 'DPD', 'DPD', 1027, 'DPD-11OOG', 'DPD Two Day Out of Gauge', 12922, 'Scottish Islands', 21248, 'Parcel', 22.82),
       (v_c_id, 150, 'DPD', 'DPD', 1344, 'DPD-16OOG', 'DPD Saturday Out of Gauge', 12724, 'Mainland', 23073, 'Parcel', 29.57)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -22440,15 +22487,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14126, 'Scottish Islands', 25332, 'Parcel', 20.96),
       (v_c_id, 150, 'DPD', 'DPD', 1922, 'DPD-NIAR', 'DPD N Ireland At Risk', 15614, 'N Ireland', 26489, 'Parcel', 10.9),
       (v_c_id, 150, 'DPD', 'DPD', 2565, 'DPD-SAT5K', 'DPD Saturday 5k Insurance', 19256, 'Mainland', 31944, 'Parcel', 18.87)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -22491,15 +22539,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14124, 'Northern Ireland', 25332, 'Parcel', 17.44),
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14125, 'Scottish Highlands', 25332, 'Parcel', 19.49),
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14126, 'Scottish Islands', 25332, 'Parcel', 19.49)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -22573,15 +22622,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 9.95),
       (v_c_id, 150, 'DPD', 'DPD', 2272, 'DPD-NIAR5K', 'DPD NI At Risk 5K Insurance', 17501, 'N Ireland', 29447, 'Parcel', 17.25),
       (v_c_id, 150, 'DPD', 'DPD', 2565, 'DPD-SAT5K', 'DPD Saturday 5k Insurance', 19256, 'Mainland', 31944, 'Parcel', 18.22)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -22629,15 +22679,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 12.42),
       (v_c_id, 150, 'DPD', 'DPD', 2272, 'DPD-NIAR5K', 'DPD NI At Risk 5K Insurance', 17501, 'N Ireland', 29447, 'Parcel', 17.74),
       (v_c_id, 150, 'DPD', 'DPD', 2565, 'DPD-SAT5K', 'DPD Saturday 5k Insurance', 19256, 'Mainland', 31944, 'Parcel', 15.63)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -22685,15 +22736,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 12.22),
       (v_c_id, 150, 'DPD', 'DPD', 2272, 'DPD-NIAR5K', 'DPD NI At Risk 5K Insurance', 17501, 'N Ireland', 29447, 'Parcel', 19),
       (v_c_id, 150, 'DPD', 'DPD', 2565, 'DPD-SAT5K', 'DPD Saturday 5k Insurance', 19256, 'Mainland', 31944, 'Parcel', 18.86)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -22744,15 +22796,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 12.65),
       (v_c_id, 150, 'DPD', 'DPD', 2272, 'DPD-NIAR5K', 'DPD NI At Risk 5K Insurance', 17501, 'N Ireland', 29447, 'Parcel', 19),
       (v_c_id, 150, 'DPD', 'DPD', 2565, 'DPD-SAT5K', 'DPD Saturday 5k Insurance', 19256, 'Mainland', 31944, 'Parcel', 19.11)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -22801,15 +22854,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 11.8),
       (v_c_id, 150, 'DPD', 'DPD', 2272, 'DPD-NIAR5K', 'DPD NI At Risk 5K Insurance', 17501, 'N Ireland', 29447, 'Parcel', 18.55),
       (v_c_id, 150, 'DPD', 'DPD', 2565, 'DPD-SAT5K', 'DPD Saturday 5k Insurance', 19256, 'Mainland', 31944, 'Parcel', 15.7)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -22873,15 +22927,16 @@ BEGIN
       (v_c_id, 450, 'AGL', 'AGL', 2757, 'AGL-1CEN', 'Yodel Channel Islands', 20814, 'Channel Islands', 33691, 'Parcel', 9.32),
       (v_c_id, 450, 'AGL', 'AGL', 2788, 'AGL-2VSNNI', 'Yodel Xpect Mini N.I.', 21213, 'Northern Ireland', 33888, 'Packet', 6.39),
       (v_c_id, 450, 'AGL', 'AGL', 2789, 'AGL-2VMNNI', 'Xpect Medium Northern Ireland', 21214, 'Northern Ireland', 33889, 'Parcel', 8.03)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -22931,15 +22986,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 12.11),
       (v_c_id, 150, 'DPD', 'DPD', 2272, 'DPD-NIAR5K', 'DPD NI At Risk 5K Insurance', 17501, 'N Ireland', 29447, 'Parcel', 18.9),
       (v_c_id, 150, 'DPD', 'DPD', 2565, 'DPD-SAT5K', 'DPD Saturday 5k Insurance', 19256, 'Mainland', 31944, 'Parcel', 18.76)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -23006,15 +23062,16 @@ BEGIN
       (v_c_id, 212, 'PC', 'Pro Carrier', 1725, '1XXP', 'Yodel XXL 24 POD', 14828, 'Mainland', 25892, 'Parcel', 18.57),
       (v_c_id, 212, 'PC', 'Pro Carrier', 1726, '2XXN', 'Yodel Xpect XXL 48 Non POD', 14829, 'Mainland', 25893, 'Parcel', 15.69),
       (v_c_id, 212, 'PC', 'Pro Carrier', 1727, '2XXP', 'Yodel Xpect XXL 48 POD', 14830, 'Mainland', 25894, 'Parcel', 15.87)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -23062,15 +23119,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 12.22),
       (v_c_id, 150, 'DPD', 'DPD', 2272, 'DPD-NIAR5K', 'DPD NI At Risk 5K Insurance', 17501, 'N Ireland', 29447, 'Parcel', 19),
       (v_c_id, 150, 'DPD', 'DPD', 2565, 'DPD-SAT5K', 'DPD Saturday 5k Insurance', 19256, 'Mainland', 31944, 'Parcel', 18.86)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -23117,15 +23175,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1922, 'DPD-NIAR', 'DPD N Ireland At Risk', 15614, 'N Ireland', 26489, 'Parcel', 10.9),
       (v_c_id, 150, 'DPD', 'DPD', 2272, 'DPD-NIAR5K', 'DPD NI At Risk 5K Insurance', 17501, 'N Ireland', 29447, 'Parcel', 18.9),
       (v_c_id, 150, 'DPD', 'DPD', 2565, 'DPD-SAT5K', 'DPD Saturday 5k Insurance', 19256, 'Mainland', 31944, 'Parcel', 18.87)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -23175,15 +23234,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 12.53),
       (v_c_id, 150, 'DPD', 'DPD', 2272, 'DPD-NIAR5K', 'DPD NI At Risk 5K Insurance', 17501, 'N Ireland', 29447, 'Parcel', 18.9),
       (v_c_id, 150, 'DPD', 'DPD', 2565, 'DPD-SAT5K', 'DPD Saturday 5k Insurance', 19256, 'Mainland', 31944, 'Parcel', 18.87)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -23231,15 +23291,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 11.4),
       (v_c_id, 150, 'DPD', 'DPD', 2272, 'DPD-NIAR5K', 'DPD NI At Risk 5K Insurance', 17501, 'N Ireland', 29447, 'Parcel', 17.75),
       (v_c_id, 150, 'DPD', 'DPD', 2565, 'DPD-SAT5K', 'DPD Saturday 5k Insurance', 19256, 'Mainland', 31944, 'Parcel', 17.75)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -23272,15 +23333,16 @@ BEGIN
       (v_c_id, 176, 'EvRi', 'EvRi', 1622, 'EVRI-48PC2C', 'Evri 48 POD C2C', 13814, 'Mainland', 24312, '1 - 2 KG', 3.8),
       (v_c_id, 176, 'EvRi', 'EvRi', 1622, 'EVRI-48PC2C', 'Evri 48 POD C2C', 13816, 'Northern Ireland', 24311, '0 - 1 KG', 6.22),
       (v_c_id, 176, 'EvRi', 'EvRi', 1622, 'EVRI-48PC2C', 'Evri 48 POD C2C', 13816, 'Northern Ireland', 24312, '1 - 2 KG', 6.8)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -23317,15 +23379,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1027, 'DPD-11OOG', 'DPD Two Day Out of Gauge', 12921, 'Scottish Highlands', 21248, 'Parcel', 19.39),
       (v_c_id, 150, 'DPD', 'DPD', 1027, 'DPD-11OOG', 'DPD Two Day Out of Gauge', 12922, 'Scottish Islands', 21248, 'Parcel', 19.39),
       (v_c_id, 150, 'DPD', 'DPD', 1360, 'DPD-42', 'DPD Swap IT Next Day', 12796, 'Mainland', 23134, 'Parcel', 13.5)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -23353,15 +23416,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 773, 'DPD-13', 'DPD Next Day 12.00', 9549, 'Mainland', 17523, 'Parcel', 8.8),
       (v_c_id, 150, 'DPD', 'DPD', 774, 'DPD-18', 'DPD Saturday 10.30', 9550, 'Mainland', 17524, 'Parcel', 18.45),
       (v_c_id, 150, 'DPD', 'DPD', 775, 'DPD-17', 'DPD Saturday 12.00', 9551, 'Mainland', 17525, 'Parcel', 15.6)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -23407,15 +23471,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14126, 'Scottish Islands', 25332, 'Parcel', 21.08),
       (v_c_id, 150, 'DPD', 'DPD', 1922, 'DPD-NIAR', 'DPD N Ireland At Risk', 15614, 'N Ireland', 26489, 'Parcel', 11),
       (v_c_id, 150, 'DPD', 'DPD', 2565, 'DPD-SAT5K', 'DPD Saturday 5k Insurance', 19256, 'Mainland', 31944, 'Parcel', 18.96)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -23446,15 +23511,16 @@ BEGIN
       (v_c_id, 212, 'PC', 'Pro Carrier', 1324, '1VP', 'Yodel Xpect Large 24 POD', 12681, 'Mainland', 23022, 'Parcel', 5.55),
       (v_c_id, 212, 'PC', 'Pro Carrier', 1325, '2VP', 'Yodel Xpect Large 48 POD', 12678, 'Mainland', 23019, 'Parcel', 5.12),
       (v_c_id, 212, 'PC', 'Pro Carrier', 1325, '2VP', 'Yodel Xpect Large 48 POD', 12679, 'Cross Border', 23019, 'Parcel', 8.12)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -23533,15 +23599,16 @@ BEGIN
       (v_c_id, 253, 'UPS', 'UPS', 1537, 'UPS-11', 'UPS Standard UK', 13239, 'Mainland', 23713, '15 - 20 KG', 5.94),
       (v_c_id, 253, 'UPS', 'UPS', 1537, 'UPS-11', 'UPS Standard UK', 13239, 'Mainland', 23714, '20 - 25 KG', 7.22),
       (v_c_id, 253, 'UPS', 'UPS', 1537, 'UPS-11', 'UPS Standard UK', 13239, 'Mainland', 23715, '25 - 30 KG', 7.22)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -23620,15 +23687,16 @@ BEGIN
       (v_c_id, 253, 'UPS', 'UPS', 1537, 'UPS-11', 'UPS Standard UK', 13239, 'Mainland', 23713, '15 - 20 KG', 5.94),
       (v_c_id, 253, 'UPS', 'UPS', 1537, 'UPS-11', 'UPS Standard UK', 13239, 'Mainland', 23714, '20 - 25 KG', 7.22),
       (v_c_id, 253, 'UPS', 'UPS', 1537, 'UPS-11', 'UPS Standard UK', 13239, 'Mainland', 23715, '25 - 30 KG', 7.22)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -23707,15 +23775,16 @@ BEGIN
       (v_c_id, 253, 'UPS', 'UPS', 1537, 'UPS-11', 'UPS Standard UK', 13239, 'Mainland', 23713, '15 - 20 KG', 5.94),
       (v_c_id, 253, 'UPS', 'UPS', 1537, 'UPS-11', 'UPS Standard UK', 13239, 'Mainland', 23714, '20 - 25 KG', 7.22),
       (v_c_id, 253, 'UPS', 'UPS', 1537, 'UPS-11', 'UPS Standard UK', 13239, 'Mainland', 23715, '25 - 30 KG', 7.22)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -23794,15 +23863,16 @@ BEGIN
       (v_c_id, 253, 'UPS', 'UPS', 1537, 'UPS-11', 'UPS Standard UK', 13239, 'Mainland', 23713, '15 - 20 KG', 5.94),
       (v_c_id, 253, 'UPS', 'UPS', 1537, 'UPS-11', 'UPS Standard UK', 13239, 'Mainland', 23714, '20 - 25 KG', 7.22),
       (v_c_id, 253, 'UPS', 'UPS', 1537, 'UPS-11', 'UPS Standard UK', 13239, 'Mainland', 23715, '25 - 30 KG', 7.22)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -23881,15 +23951,16 @@ BEGIN
       (v_c_id, 253, 'UPS', 'UPS', 1537, 'UPS-11', 'UPS Standard UK', 13239, 'Mainland', 23713, '15 - 20 KG', 5.94),
       (v_c_id, 253, 'UPS', 'UPS', 1537, 'UPS-11', 'UPS Standard UK', 13239, 'Mainland', 23714, '20 - 25 KG', 7.22),
       (v_c_id, 253, 'UPS', 'UPS', 1537, 'UPS-11', 'UPS Standard UK', 13239, 'Mainland', 23715, '25 - 30 KG', 7.22)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -23937,15 +24008,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 12.42),
       (v_c_id, 150, 'DPD', 'DPD', 2272, 'DPD-NIAR5K', 'DPD NI At Risk 5K Insurance', 17501, 'N Ireland', 29447, 'Parcel', 18.8),
       (v_c_id, 150, 'DPD', 'DPD', 2565, 'DPD-SAT5K', 'DPD Saturday 5k Insurance', 19256, 'Mainland', 31944, 'Parcel', 18.77)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -23976,15 +24048,16 @@ BEGIN
       (v_c_id, 212, 'PC', 'Pro Carrier', 1324, '1VP', 'Yodel Xpect Large 24 POD', 12681, 'Mainland', 23022, 'Parcel', 4.5),
       (v_c_id, 212, 'PC', 'Pro Carrier', 1325, '2VP', 'Yodel Xpect Large 48 POD', 12678, 'Mainland', 23019, 'Parcel', 4.05),
       (v_c_id, 212, 'PC', 'Pro Carrier', 1325, '2VP', 'Yodel Xpect Large 48 POD', 12679, 'Cross Border', 23019, 'Parcel', 7.05)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -24023,15 +24096,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1236, 'DPD-22', 'DPD Shop Return', 12451, 'Mainland', 22313, 'Parcel', 9),
       (v_c_id, 150, 'DPD', 'DPD', 1344, 'DPD-16OOG', 'DPD Saturday Out of Gauge', 12724, 'Mainland', 23073, 'Parcel', 18.42),
       (v_c_id, 150, 'DPD', 'DPD', 1360, 'DPD-42', 'DPD Swap IT Next Day', 12796, 'Mainland', 23134, 'Parcel', 13.5)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -24061,15 +24135,16 @@ BEGIN
       (v_c_id, 212, 'PC', 'Pro Carrier', 1324, '1VP', 'Yodel Xpect Large 24 POD', 12681, 'Mainland', 23022, 'Parcel', 4.5),
       (v_c_id, 212, 'PC', 'Pro Carrier', 1325, '2VP', 'Yodel Xpect Large 48 POD', 12678, 'Mainland', 23019, 'Parcel', 4.05),
       (v_c_id, 212, 'PC', 'Pro Carrier', 1325, '2VP', 'Yodel Xpect Large 48 POD', 12679, 'Cross Border', 23019, 'Parcel', 7.05)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -24581,15 +24656,16 @@ BEGIN
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13312, '9', 23992, '13 kg - 14 kg', 99.18),
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13312, '9', 23993, '14 kg - 15 kg', 103.78),
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13312, '9', 23994, '15 kg - 16 kg', 109.27)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -24972,15 +25048,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 15865, 'Highlands and Islands', 25283, '10KG', 14.17),
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 15865, 'Highlands and Islands', 25284, '15KG', 14.17),
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 15865, 'Highlands and Islands', 25285, '20KG', 14.17)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -25001,15 +25078,16 @@ BEGIN
       (v_c_id, 275, 'YODC2C', 'Yodel C2C', 1645, 'YOD-C2CPS', 'Yodel C2C Print in Store', 14018, 'Mainland', 25274, '1 - 2 KG', 2.5),
       (v_c_id, 275, 'YODC2C', 'Yodel C2C', 1645, 'YOD-C2CPS', 'Yodel C2C Print in Store', 14018, 'Mainland', 25275, '2 - 5 KG', 2.5),
       (v_c_id, 275, 'YODC2C', 'Yodel C2C', 1645, 'YOD-C2CPS', 'Yodel C2C Print in Store', 14018, 'Mainland', 25276, '5 - 10 KG', 2.5)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -25521,15 +25599,16 @@ BEGIN
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13312, '9', 23994, '15 kg - 16 kg', 136.77),
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13312, '9', 23995, '16 kg - 17 kg', 142.6),
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13312, '9', 23996, '17 kg - 18 kg', 148.38)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -25968,15 +26047,16 @@ BEGIN
       (v_c_id, 176, 'EvRi', 'EvRi', 1649, 'EVRI-48POSTC2C', 'Evri 48 Postable C2C', 14030, 'Highlands and Islands', 25282, 'Postable', 6.28),
       (v_c_id, 176, 'EvRi', 'EvRi', 1649, 'EVRI-48POSTC2C', 'Evri 48 Postable C2C', 14028, 'Mainland', 25282, 'Postable', 3.11),
       (v_c_id, 176, 'EvRi', 'EvRi', 1649, 'EVRI-48POSTC2C', 'Evri 48 Postable C2C', 14029, 'Northern Ireland', 25282, 'Postable', 6.28)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -26036,15 +26116,16 @@ BEGIN
       (v_c_id, 176, 'EvRi', 'EvRi', 1649, 'EVRI-48POSTC2C', 'Evri 48 Postable C2C', 14028, 'Mainland', 25282, 'Postable', 2.7),
       (v_c_id, 176, 'EvRi', 'EvRi', 1649, 'EVRI-48POSTC2C', 'Evri 48 Postable C2C', 14030, 'Highlands and Islands', 25282, 'Postable', 5.95),
       (v_c_id, 176, 'EvRi', 'EvRi', 1649, 'EVRI-48POSTC2C', 'Evri 48 Postable C2C', 14029, 'Northern Ireland', 25282, 'Postable', 5.95)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -26091,15 +26172,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14126, 'Scottish Islands', 25332, 'Parcel', 19.19),
       (v_c_id, 150, 'DPD', 'DPD', 1922, 'DPD-NIAR', 'DPD N Ireland At Risk', 15614, 'N Ireland', 26489, 'Parcel', 9.25),
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 9.95)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -26144,15 +26226,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14124, 'Northern Ireland', 25332, 'Parcel', 18.95),
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14125, 'Scottish Highlands', 25332, 'Parcel', 20.84),
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14126, 'Scottish Islands', 25332, 'Parcel', 20.84)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -26198,15 +26281,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14126, 'Scottish Islands', 25332, 'Parcel', 20.84),
       (v_c_id, 150, 'DPD', 'DPD', 1922, 'DPD-NIAR', 'DPD N Ireland At Risk', 15614, 'N Ireland', 26489, 'Parcel', 10.8),
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 12.42)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -26718,15 +26802,16 @@ BEGIN
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13312, '9', 23994, '15 kg - 16 kg', 109.27),
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13312, '9', 23995, '16 kg - 17 kg', 113.93),
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13312, '9', 23996, '17 kg - 18 kg', 118.55)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -27238,15 +27323,16 @@ BEGIN
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 1700, 'DHLPCUK-101', 'DHL Parcel UK Worldwide Air', 14157, 'Zone F', 25430, '1.5 kg - 2 kg', 43.9),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 1700, 'DHLPCUK-101', 'DHL Parcel UK Worldwide Air', 14157, 'Zone F', 25431, '2 kg - 2.5 kg', 46.09),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 1700, 'DHLPCUK-101', 'DHL Parcel UK Worldwide Air', 14157, 'Zone F', 25432, '2.5 kg - 3 kg', 52.79)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -27758,15 +27844,16 @@ BEGIN
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 1700, 'DHLPCUK-101', 'DHL Parcel UK Worldwide Air', 14160, 'Zone I', 25510, '41.5 kg - 42 kg', 340.99),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 1700, 'DHLPCUK-101', 'DHL Parcel UK Worldwide Air', 14160, 'Zone I', 25511, '42 kg - 42.5 kg', 344.02),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 1700, 'DHLPCUK-101', 'DHL Parcel UK Worldwide Air', 14160, 'Zone I', 25512, '42.5 kg - 43 kg', 347.03)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -28278,15 +28365,16 @@ BEGIN
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 1700, 'DHLPCUK-101', 'DHL Parcel UK Worldwide Air', 14162, 'Zone K', 25450, '11.5 kg - 12 kg', 184.56),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 1700, 'DHLPCUK-101', 'DHL Parcel UK Worldwide Air', 14162, 'Zone K', 25451, '12 kg - 12.5 kg', 188.69),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 1700, 'DHLPCUK-101', 'DHL Parcel UK Worldwide Air', 14162, 'Zone K', 25452, '12.5 kg - 13 kg', 192.79)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -28412,15 +28500,16 @@ BEGIN
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 1700, 'DHLPCUK-101', 'DHL Parcel UK Worldwide Air', 14162, 'Zone K', 25564, '68.5 kg - 69 kg', 646.86),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 1700, 'DHLPCUK-101', 'DHL Parcel UK Worldwide Air', 14162, 'Zone K', 25565, '69 kg - 69.5 kg', 650.99),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 1700, 'DHLPCUK-101', 'DHL Parcel UK Worldwide Air', 14162, 'Zone K', 25566, '69.5 kg - 70 kg', 678.79)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -28932,15 +29021,16 @@ BEGIN
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13311, '8', 23991, '12 kg - 13 kg', 51.69),
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13311, '8', 23992, '13 kg - 14 kg', 54.21),
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13311, '8', 23993, '14 kg - 15 kg', 56.76)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -29385,15 +29475,16 @@ BEGIN
       (v_c_id, 275, 'YODC2C', 'Yodel C2C', 1644, 'YODC2C', 'Yodel C2C', 14017, 'Out of Area', 25270, '1 - 2 KG', 4.5),
       (v_c_id, 275, 'YODC2C', 'Yodel C2C', 1644, 'YODC2C', 'Yodel C2C', 14017, 'Out of Area', 25271, '2 - 5 KG', 4.5),
       (v_c_id, 275, 'YODC2C', 'Yodel C2C', 1644, 'YODC2C', 'Yodel C2C', 14017, 'Out of Area', 25272, '5 - 10 KG', 4.5)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -29905,15 +29996,16 @@ BEGIN
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13311, '8', 24009, '55 kg - 60 kg', 176.16),
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13311, '8', 24010, '60 kg - 65 kg', 189.16),
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13311, '8', 24011, '65 kg - 70 kg', 202.23)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -30359,15 +30451,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14125, 'Scottish Highlands', 25332, 'Parcel', 19.79),
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14126, 'Scottish Islands', 25332, 'Parcel', 19.79),
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 10.47)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -30389,15 +30482,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 15865, 'Highlands and Islands', 25283, '10KG', 14.17),
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 15865, 'Highlands and Islands', 25284, '15KG', 14.17),
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 15865, 'Highlands and Islands', 25285, '20KG', 14.17)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -30909,15 +31003,16 @@ BEGIN
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13312, '9', 23994, '15 kg - 16 kg', 136.59),
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13312, '9', 23995, '16 kg - 17 kg', 142.41),
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13312, '9', 23996, '17 kg - 18 kg', 148.19)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -31288,15 +31383,16 @@ BEGIN
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13315, '742', 24009, '55 kg - 60 kg', 233.79),
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13315, '742', 24010, '60 kg - 65 kg', 251.06),
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13315, '742', 24011, '65 kg - 70 kg', 268.38)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -31312,15 +31408,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 13423, 'Mainland', 25283, '10KG', 5.15),
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 13423, 'Mainland', 25284, '15KG', 5.15),
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 13423, 'Mainland', 25285, '20KG', 5.15)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -31372,15 +31469,16 @@ BEGIN
       (v_c_id, 176, 'EvRi', 'EvRi', 1624, 'EVRI-24POST', 'Evri 24 Postable', 13810, 'Mainland', 24295, 'Postable', 2.95),
       (v_c_id, 176, 'EvRi', 'EvRi', 1649, 'EVRI-48POSTC2C', 'Evri 48 Postable C2C', 14030, 'Highlands and Islands', 25282, 'Postable', 5.95),
       (v_c_id, 176, 'EvRi', 'EvRi', 1649, 'EVRI-48POSTC2C', 'Evri 48 Postable C2C', 14029, 'Northern Ireland', 25282, 'Postable', 5.95)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -31423,15 +31521,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14125, 'Scottish Highlands', 25332, 'Parcel', 19.19),
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14126, 'Scottish Islands', 25332, 'Parcel', 19.19),
       (v_c_id, 150, 'DPD', 'DPD', 1922, 'DPD-NIAR', 'DPD N Ireland At Risk', 15614, 'N Ireland', 26489, 'Parcel', 9.25)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -31676,15 +31775,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1757, 'DPD-39', 'DPD Classic ExpressPak', 15224, 'Spain', 26055, 'Expresspak', 13.06),
       (v_c_id, 150, 'DPD', 'DPD', 1757, 'DPD-39', 'DPD Classic ExpressPak', 15225, 'Sweden', 26055, 'Expresspak', 13.33),
       (v_c_id, 150, 'DPD', 'DPD', 1757, 'DPD-39', 'DPD Classic ExpressPak', 15226, 'Switzerland', 26055, 'Expresspak', 14.65)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -31731,15 +31831,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 9.95),
       (v_c_id, 150, 'DPD', 'DPD', 2272, 'DPD-NIAR5K', 'DPD NI At Risk 5K Insurance', 17501, 'N Ireland', 29447, 'Parcel', 17.25),
       (v_c_id, 150, 'DPD', 'DPD', 2565, 'DPD-SAT5K', 'DPD Saturday 5k Insurance', 19256, 'Mainland', 31944, 'Parcel', 15.25)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -32251,15 +32352,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1734, 'DPD-80', 'DPD Direct', 14992, 'Philippines', 25983, '3.5 kg - 4 kg', 87.82),
       (v_c_id, 150, 'DPD', 'DPD', 1734, 'DPD-80', 'DPD Direct', 14992, 'Philippines', 25984, '4 kg - 4.5 kg', 98.12),
       (v_c_id, 150, 'DPD', 'DPD', 1734, 'DPD-80', 'DPD Direct', 14992, 'Philippines', 25985, '4.5 kg - 5 kg', 108.43)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -32619,15 +32721,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1757, 'DPD-39', 'DPD Classic ExpressPak', 15224, 'Spain', 26055, 'Expresspak', 13.06),
       (v_c_id, 150, 'DPD', 'DPD', 1757, 'DPD-39', 'DPD Classic ExpressPak', 15225, 'Sweden', 26055, 'Expresspak', 13.33),
       (v_c_id, 150, 'DPD', 'DPD', 1757, 'DPD-39', 'DPD Classic ExpressPak', 15226, 'Switzerland', 26055, 'Expresspak', 14.65)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -32875,15 +32978,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1757, 'DPD-39', 'DPD Classic ExpressPak', 15226, 'Switzerland', 26055, 'Expresspak', 14.65),
       (v_c_id, 150, 'DPD', 'DPD', 1922, 'DPD-NIAR', 'DPD N Ireland At Risk', 15614, 'N Ireland', 26489, 'Parcel', 8.95),
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 9.95)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -33395,15 +33499,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1734, 'DPD-80', 'DPD Direct', 14992, 'Philippines', 25985, '4.5 kg - 5 kg', 117.47),
       (v_c_id, 150, 'DPD', 'DPD', 1734, 'DPD-80', 'DPD Direct', 14993, 'Poland', 25976, '0 kg - 0.5 kg', 10.43),
       (v_c_id, 150, 'DPD', 'DPD', 1734, 'DPD-80', 'DPD Direct', 14993, 'Poland', 25977, '0.5 kg - 1 kg', 10.56)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -33765,15 +33870,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 9.95),
       (v_c_id, 150, 'DPD', 'DPD', 2272, 'DPD-NIAR5K', 'DPD NI At Risk 5K Insurance', 17501, 'N Ireland', 29447, 'Parcel', 16),
       (v_c_id, 150, 'DPD', 'DPD', 2565, 'DPD-SAT5K', 'DPD Saturday 5k Insurance', 19256, 'Mainland', 31944, 'Parcel', 14.75)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -34285,15 +34391,16 @@ BEGIN
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13314, '741', 23992, '13 kg - 14 kg', 35.03),
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13314, '741', 23993, '14 kg - 15 kg', 36.39),
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13314, '741', 23994, '15 kg - 16 kg', 37.73)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -34517,15 +34624,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1735, 'DPD-20', 'DPD Direct Lite', 15302, 'United States', 25973, '0.5 kg - 1 kg', 13.85),
       (v_c_id, 150, 'DPD', 'DPD', 1735, 'DPD-20', 'DPD Direct Lite', 15302, 'United States', 25974, '1 kg - 1.5 kg', 18.33),
       (v_c_id, 150, 'DPD', 'DPD', 1735, 'DPD-20', 'DPD Direct Lite', 15302, 'United States', 25975, '1.5 kg - 2 kg', 22.81)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -35037,15 +35145,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21017, 'Angola', 33839, '10 kg - 10.5 kg', 232.06),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21017, 'Angola', 33840, '10.5 kg - 11 kg', 239.88),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21017, 'Angola', 33841, '11 kg - 11.5 kg', 247.7)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -35557,15 +35666,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21025, 'Azerbaijan', 33835, '8 kg - 8.5 kg', 220.38),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21025, 'Azerbaijan', 33836, '8.5 kg - 9 kg', 231.68),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21025, 'Azerbaijan', 33837, '9 kg - 9.5 kg', 242.98)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -36077,15 +36187,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21033, 'Benin', 33831, '6 kg - 6.5 kg', 168.52),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21033, 'Benin', 33832, '6.5 kg - 7 kg', 178.24),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21033, 'Benin', 33833, '7 kg - 7.5 kg', 187.96)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -36597,15 +36708,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21041, 'Brunei', 33827, '4 kg - 4.5 kg', 118.46),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21041, 'Brunei', 33828, '4.5 kg - 5 kg', 124.72),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21041, 'Brunei', 33829, '5 kg - 5.5 kg', 130.98)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -37117,15 +37229,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21049, 'Central African Republic', 33823, '2 kg - 2.5 kg', 106.94),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21049, 'Central African Republic', 33824, '2.5 kg - 3 kg', 114.76),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21049, 'Central African Republic', 33825, '3 kg - 3.5 kg', 122.58)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -37637,15 +37750,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21057, 'Cyprus', 33819, '0 kg - 0.5 kg', 35.98),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21057, 'Cyprus', 33820, '0.5 kg - 1 kg', 41),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21057, 'Cyprus', 33821, '1 kg - 1.5 kg', 46.02)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -38157,15 +38271,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21064, 'Ecuador', 33878, '29.5 kg - 30 kg', 1124.7),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21064, 'Ecuador', 33879, '30 kg - 30.5 kg', 1142.28),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21064, 'Ecuador', 33880, '30.5 kg - 31 kg', 1159.86)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -38677,15 +38792,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21072, 'Finland', 33874, '27.5 kg - 28 kg', 282),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21072, 'Finland', 33875, '28 kg - 28.5 kg', 285.92),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21072, 'Finland', 33876, '28.5 kg - 29 kg', 289.84)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -39197,15 +39313,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21080, 'Ghana', 33870, '25.5 kg - 26 kg', 435.32),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21080, 'Ghana', 33871, '26 kg - 26.5 kg', 442.42),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21080, 'Ghana', 33872, '26.5 kg - 27 kg', 449.52)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -39717,15 +39834,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21088, 'Guinea', 33866, '23.5 kg - 24 kg', 913.74),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21088, 'Guinea', 33867, '24 kg - 24.5 kg', 931.32),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21088, 'Guinea', 33868, '24.5 kg - 25 kg', 948.9)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -40237,15 +40355,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21096, 'Indonesia', 33862, '21.5 kg - 22 kg', 514.52),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21096, 'Indonesia', 33863, '22 kg - 22.5 kg', 525.72),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21096, 'Indonesia', 33864, '22.5 kg - 23 kg', 536.92)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -40757,15 +40876,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21104, 'Kenya', 33858, '19.5 kg - 20 kg', 311.56),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21104, 'Kenya', 33859, '20 kg - 20.5 kg', 318.84),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21104, 'Kenya', 33860, '20.5 kg - 21 kg', 326.12)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -41277,15 +41397,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21112, 'Liberia', 33854, '17.5 kg - 18 kg', 669.46),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21112, 'Liberia', 33855, '18 kg - 18.5 kg', 686.2),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21112, 'Liberia', 33856, '18.5 kg - 19 kg', 702.94)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -41797,15 +41918,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21120, 'Malawi', 33850, '15.5 kg - 16 kg', 349.5),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21120, 'Malawi', 33851, '16 kg - 16.5 kg', 358.64),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21120, 'Malawi', 33852, '16.5 kg - 17 kg', 367.78)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -42317,15 +42439,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21128, 'Mexico', 33846, '13.5 kg - 14 kg', 210),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21128, 'Mexico', 33847, '14 kg - 14.5 kg', 215.72),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21128, 'Mexico', 33848, '14.5 kg - 15 kg', 221.44)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -42837,15 +42960,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21136, 'Namibia', 33842, '11.5 kg - 12 kg', 243.76),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21136, 'Namibia', 33843, '12 kg - 12.5 kg', 251.54),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21136, 'Namibia', 33844, '12.5 kg - 13 kg', 259.32)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -43357,15 +43481,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21144, 'Oman', 33838, '9.5 kg - 10 kg', 129.56),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21144, 'Oman', 33839, '10 kg - 10.5 kg', 135.26),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21144, 'Oman', 33840, '10.5 kg - 11 kg', 140.96)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -43877,15 +44002,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21152, 'Portugal', 33834, '7.5 kg - 8 kg', 130.32),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21152, 'Portugal', 33835, '8 kg - 8.5 kg', 134.56),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21152, 'Portugal', 33836, '8.5 kg - 9 kg', 138.8)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -44397,15 +44523,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21160, 'Senegal', 33830, '5.5 kg - 6 kg', 189.48),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21160, 'Senegal', 33831, '6 kg - 6.5 kg', 201.56),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21160, 'Senegal', 33832, '6.5 kg - 7 kg', 213.64)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -44917,15 +45044,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21168, 'Sri Lanka', 33826, '3.5 kg - 4 kg', 71.28),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21168, 'Sri Lanka', 33827, '4 kg - 4.5 kg', 78.2),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21168, 'Sri Lanka', 33828, '4.5 kg - 5 kg', 85.12)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -45437,15 +45565,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21176, 'Switzerland', 33822, '1.5 kg - 2 kg', 43.3),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21176, 'Switzerland', 33823, '2 kg - 2.5 kg', 47.3),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21176, 'Switzerland', 33824, '2.5 kg - 3 kg', 51.3)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -45957,15 +46086,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21183, 'Trinidad', 33881, '31 kg - 31.5 kg', 513.42),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21184, 'Tunisia', 33819, '0 kg - 0.5 kg', 72.76),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21184, 'Tunisia', 33820, '0.5 kg - 1 kg', 79.4)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -46477,15 +46607,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21191, 'USA', 33877, '29 kg - 29.5 kg', 263.26),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21191, 'USA', 33878, '29.5 kg - 30 kg', 266.76),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21191, 'USA', 33879, '30 kg - 30.5 kg', 270.26)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -46997,15 +47128,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21199, 'Zimbabwe', 33873, '27 kg - 27.5 kg', 456.62),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21199, 'Zimbabwe', 33874, '27.5 kg - 28 kg', 463.72),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21199, 'Zimbabwe', 33875, '28 kg - 28.5 kg', 470.82)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -47023,15 +47155,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21199, 'Zimbabwe', 33879, '30 kg - 30.5 kg', 499.22),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21199, 'Zimbabwe', 33880, '30.5 kg - 31 kg', 506.32),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21199, 'Zimbabwe', 33881, '31 kg - 31.5 kg', 513.42)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -47046,15 +47179,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 764, 'DPD-12', 'DPD Next Day', 14058, 'Highlands and Islands', 17516, 'Parcel', 5),
       (v_c_id, 150, 'DPD', 'DPD', 764, 'DPD-12', 'DPD Next Day', 9527, 'Mainland', 17516, 'Parcel', 5),
       (v_c_id, 150, 'DPD', 'DPD', 764, 'DPD-12', 'DPD Next Day', 11652, 'Northern Ireland', 17516, 'Parcel', 5)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -47113,15 +47247,16 @@ BEGIN
       (v_c_id, 176, 'EvRi', 'EvRi', 1649, 'EVRI-48POSTC2C', 'Evri 48 Postable C2C', 14028, 'Mainland', 25282, 'Postable', 2.7),
       (v_c_id, 176, 'EvRi', 'EvRi', 1649, 'EVRI-48POSTC2C', 'Evri 48 Postable C2C', 14030, 'Highlands and Islands', 25282, 'Postable', 5.95),
       (v_c_id, 176, 'EvRi', 'EvRi', 1649, 'EVRI-48POSTC2C', 'Evri 48 Postable C2C', 14029, 'Northern Ireland', 25282, 'Postable', 5.95)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -47175,15 +47310,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2272, 'DPD-NIAR5K', 'DPD NI At Risk 5K Insurance', 17501, 'N Ireland', 29447, 'Parcel', 17.25),
       (v_c_id, 150, 'DPD', 'DPD', 2565, 'DPD-SAT5K', 'DPD Saturday 5k Insurance', 19256, 'Mainland', 31944, 'Parcel', 15.25),
       (v_c_id, 150, 'DPD', 'DPD', 2900, 'DPD-2DAYOFF', 'DPD 2 Day Offshore', 22560, 'Offshore', 35430, 'Parcel', 14.24)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -47209,15 +47345,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 773, 'DPD-13', 'DPD Next Day 12.00', 9549, 'Mainland', 17523, 'Parcel', 10.83),
       (v_c_id, 150, 'DPD', 'DPD', 774, 'DPD-18', 'DPD Saturday 10.30', 9550, 'Mainland', 17524, 'Parcel', 21.49),
       (v_c_id, 150, 'DPD', 'DPD', 775, 'DPD-17', 'DPD Saturday 12.00', 9551, 'Mainland', 17525, 'Parcel', 18.34)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -47269,15 +47406,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2530, 'DPD-12DROPQR', 'DPD Drop Off Next Day QR Code', 19135, 'Mainland', 31775, '10KG', 5.75),
       (v_c_id, 150, 'DPD', 'DPD', 2530, 'DPD-12DROPQR', 'DPD Drop Off Next Day QR Code', 19135, 'Mainland', 31776, '15KG', 13.02),
       (v_c_id, 150, 'DPD', 'DPD', 2530, 'DPD-12DROPQR', 'DPD Drop Off Next Day QR Code', 19135, 'Mainland', 31777, '20KG', 13.02)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -47325,15 +47463,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 9.95),
       (v_c_id, 150, 'DPD', 'DPD', 2272, 'DPD-NIAR5K', 'DPD NI At Risk 5K Insurance', 17501, 'N Ireland', 29447, 'Parcel', 17.95),
       (v_c_id, 150, 'DPD', 'DPD', 2565, 'DPD-SAT5K', 'DPD Saturday 5k Insurance', 19256, 'Mainland', 31944, 'Parcel', 15.25)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -47585,15 +47724,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1757, 'DPD-39', 'DPD Classic ExpressPak', 15224, 'Spain', 26055, 'Expresspak', 13.06),
       (v_c_id, 150, 'DPD', 'DPD', 1757, 'DPD-39', 'DPD Classic ExpressPak', 15225, 'Sweden', 26055, 'Expresspak', 13.33),
       (v_c_id, 150, 'DPD', 'DPD', 1757, 'DPD-39', 'DPD Classic ExpressPak', 15226, 'Switzerland', 26055, 'Expresspak', 14.65)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -47636,15 +47776,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14126, 'Scottish Islands', 25332, 'Parcel', 20.23),
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14123, 'Mainland', 25332, 'Parcel', 14.63),
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 10.47)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -48156,15 +48297,16 @@ BEGIN
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13311, '8', 24007, '45 kg - 50 kg', 247.75),
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13311, '8', 24008, '50 kg - 55 kg', 269.25),
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13311, '8', 24009, '55 kg - 60 kg', 290.78)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -48587,15 +48729,16 @@ BEGIN
       (v_c_id, 253, 'UPS', 'UPS', 1578, 'UPS-65UK', 'UPS Express Saver', 14036, 'Mainland', 25297, '15-20 KG', 8.36),
       (v_c_id, 253, 'UPS', 'UPS', 1578, 'UPS-65UK', 'UPS Express Saver', 14036, 'Mainland', 25298, '20-25 KG', 9.67),
       (v_c_id, 253, 'UPS', 'UPS', 1578, 'UPS-65UK', 'UPS Express Saver', 14036, 'Mainland', 25299, '25-30 KG', 9.67)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -48659,15 +48802,16 @@ BEGIN
       (v_c_id, 176, 'EvRi', 'EvRi', 1649, 'EVRI-48POSTC2C', 'Evri 48 Postable C2C', 14030, 'Highlands and Islands', 25282, 'Postable', 5.95),
       (v_c_id, 176, 'EvRi', 'EvRi', 1649, 'EVRI-48POSTC2C', 'Evri 48 Postable C2C', 14029, 'Northern Ireland', 25282, 'Postable', 5.95),
       (v_c_id, 176, 'EvRi', 'EvRi', 1649, 'EVRI-48POSTC2C', 'Evri 48 Postable C2C', 14028, 'Mainland', 25282, 'Postable', 2.95)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -48713,15 +48857,16 @@ BEGIN
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 1370, 'DHLPCUK-250', 'DHL Ecommerce Bagit Medium', 12832, 'Zone B', 26406, 'Medium Bagit', 4.3),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 1371, 'DHLPCUK-260', 'DHL Ecommerce Bagit Large', 12835, 'Zone A', 26407, 'Large Bagit', 4.4),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 1371, 'DHLPCUK-260', 'DHL Ecommerce Bagit Large', 12836, 'Zone B', 26407, 'Large Bagit', 4.4)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -48786,15 +48931,16 @@ BEGIN
       (v_c_id, 176, 'EvRi', 'EvRi', 1649, 'EVRI-48POSTC2C', 'Evri 48 Postable C2C', 14028, 'Mainland', 25282, 'Postable', 3.2),
       (v_c_id, 176, 'EvRi', 'EvRi', 1649, 'EVRI-48POSTC2C', 'Evri 48 Postable C2C', 14030, 'Highlands and Islands', 25282, 'Postable', 5.95),
       (v_c_id, 176, 'EvRi', 'EvRi', 1649, 'EVRI-48POSTC2C', 'Evri 48 Postable C2C', 14029, 'Northern Ireland', 25282, 'Postable', 5.95)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -48821,15 +48967,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2529, 'DPD-DROP5KND', 'DPD Drop Off Next Day 5k Ins', 19134, 'Mainland', 31770, '10KG', 13.75),
       (v_c_id, 150, 'DPD', 'DPD', 2529, 'DPD-DROP5KND', 'DPD Drop Off Next Day 5k Ins', 19134, 'Mainland', 31771, '15KG', 13.75),
       (v_c_id, 150, 'DPD', 'DPD', 2529, 'DPD-DROP5KND', 'DPD Drop Off Next Day 5k Ins', 19134, 'Mainland', 31772, '20KG', 13.75)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -48846,15 +48993,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 13423, 'Mainland', 25283, '10KG', 5.45),
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 13423, 'Mainland', 25284, '15KG', 5.95),
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 13423, 'Mainland', 25285, '20KG', 5.95)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -48900,15 +49048,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14126, 'Scottish Islands', 25332, 'Parcel', 19.19),
       (v_c_id, 150, 'DPD', 'DPD', 1922, 'DPD-NIAR', 'DPD N Ireland At Risk', 15614, 'N Ireland', 26489, 'Parcel', 10.25),
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 9.95)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -48951,15 +49100,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14125, 'Scottish Highlands', 25332, 'Parcel', 19.19),
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14126, 'Scottish Islands', 25332, 'Parcel', 19.19),
       (v_c_id, 150, 'DPD', 'DPD', 1922, 'DPD-NIAR', 'DPD N Ireland At Risk', 15614, 'N Ireland', 26489, 'Parcel', 9.25)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -49215,15 +49365,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 9.95),
       (v_c_id, 150, 'DPD', 'DPD', 2272, 'DPD-NIAR5K', 'DPD NI At Risk 5K Insurance', 17501, 'N Ireland', 29447, 'Parcel', 17.75),
       (v_c_id, 150, 'DPD', 'DPD', 2565, 'DPD-SAT5K', 'DPD Saturday 5k Insurance', 19256, 'Mainland', 31944, 'Parcel', 14.75)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -49240,15 +49391,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 13423, 'Mainland', 25283, '10KG', 6.25),
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 13423, 'Mainland', 25284, '15KG', 6.25),
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 13423, 'Mainland', 25285, '20KG', 6.25)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -49302,15 +49454,16 @@ BEGIN
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2143, 'DHLPUKC-210', 'DHL Parcel Leave Safe', 17343, 'Zone B', 29152, 'Parcel', 4.65),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2143, 'DHLPUKC-210', 'DHL Parcel Leave Safe', 17344, 'Zone C', 29152, 'Parcel', 15),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2143, 'DHLPUKC-210', 'DHL Parcel Leave Safe', 17345, 'Zone D', 29152, 'Parcel', 15)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -49367,15 +49520,16 @@ BEGIN
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2273, 'DHLPCUK1K-220', 'DHL Parcel 1K Insurance', 17504, 'Zone C', 29448, 'Parcel', 20.24),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2273, 'DHLPCUK1K-220', 'DHL Parcel 1K Insurance', 17505, 'Zone D', 29448, 'Parcel', 20.24),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2376, 'DHLPUK-72', 'DHL 72 Hour', 18257, 'Out of Area', 30580, 'Parcel', 15.25)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -49404,15 +49558,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2529, 'DPD-DROP5KND', 'DPD Drop Off Next Day 5k Ins', 19134, 'Mainland', 31770, '10KG', 13.47),
       (v_c_id, 150, 'DPD', 'DPD', 2529, 'DPD-DROP5KND', 'DPD Drop Off Next Day 5k Ins', 19134, 'Mainland', 31771, '15KG', 13.47),
       (v_c_id, 150, 'DPD', 'DPD', 2529, 'DPD-DROP5KND', 'DPD Drop Off Next Day 5k Ins', 19134, 'Mainland', 31772, '20KG', 13.47)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -49439,15 +49594,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2529, 'DPD-DROP5KND', 'DPD Drop Off Next Day 5k Ins', 19134, 'Mainland', 31770, '10KG', 12.85),
       (v_c_id, 150, 'DPD', 'DPD', 2529, 'DPD-DROP5KND', 'DPD Drop Off Next Day 5k Ins', 19134, 'Mainland', 31771, '15KG', 12.85),
       (v_c_id, 150, 'DPD', 'DPD', 2529, 'DPD-DROP5KND', 'DPD Drop Off Next Day 5k Ins', 19134, 'Mainland', 31772, '20KG', 12.85)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -49530,15 +49686,16 @@ BEGIN
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2273, 'DHLPCUK1K-220', 'DHL Parcel 1K Insurance', 17504, 'Zone C', 29448, 'Parcel', 20.24),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2273, 'DHLPCUK1K-220', 'DHL Parcel 1K Insurance', 17505, 'Zone D', 29448, 'Parcel', 20.24),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2376, 'DHLPUK-72', 'DHL 72 Hour', 18257, 'Out of Area', 30580, 'Parcel', 15.25)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -49565,15 +49722,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2530, 'DPD-12DROPQR', 'DPD Drop Off Next Day QR Code', 19135, 'Mainland', 31775, '10KG', 5.95),
       (v_c_id, 150, 'DPD', 'DPD', 2530, 'DPD-12DROPQR', 'DPD Drop Off Next Day QR Code', 19135, 'Mainland', 31776, '15KG', 5.95),
       (v_c_id, 150, 'DPD', 'DPD', 2530, 'DPD-12DROPQR', 'DPD Drop Off Next Day QR Code', 19135, 'Mainland', 31777, '20KG', 5.95)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -49666,15 +49824,16 @@ BEGIN
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2192, 'DHLPCUK-48', 'DHL Ecommerce 48 Hour', 17500, 'Zone D', 29446, 'Parcel', 15),
       (v_c_id, 150, 'DPD', 'DPD', 2272, 'DPD-NIAR5K', 'DPD NI At Risk 5K Insurance', 17501, 'N Ireland', 29447, 'Parcel', 17.45),
       (v_c_id, 150, 'DPD', 'DPD', 2565, 'DPD-SAT5K', 'DPD Saturday 5k Insurance', 19256, 'Mainland', 31944, 'Parcel', 14.72)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -49731,15 +49890,16 @@ BEGIN
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2273, 'DHLPCUK1K-220', 'DHL Parcel 1K Insurance', 17504, 'Zone C', 29448, 'Parcel', 20.24),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2273, 'DHLPCUK1K-220', 'DHL Parcel 1K Insurance', 17505, 'Zone D', 29448, 'Parcel', 20.24),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2376, 'DHLPUK-72', 'DHL 72 Hour', 18257, 'Out of Area', 30580, 'Parcel', 15.25)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -49769,15 +49929,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 775, 'DPD-17', 'DPD Saturday 12.00', 9551, 'Mainland', 17525, 'Parcel', 14.85),
       (v_c_id, 150, 'DPD', 'DPD', 937, 'DPD-5000', 'DPD Next Day 5k Insurance', 11465, 'Mainland', 19694, 'Parcel', 12.1),
       (v_c_id, 150, 'DPD', 'DPD', 1026, 'DPD-12OOG', 'DPD Next Day Out of Gauge', 12159, 'Mainland', 21247, 'Parcel', 14.05)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -49804,15 +49965,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2530, 'DPD-12DROPQR', 'DPD Drop Off Next Day QR Code', 19135, 'Mainland', 31775, '10KG', 5.95),
       (v_c_id, 150, 'DPD', 'DPD', 2530, 'DPD-12DROPQR', 'DPD Drop Off Next Day QR Code', 19135, 'Mainland', 31776, '15KG', 5.95),
       (v_c_id, 150, 'DPD', 'DPD', 2530, 'DPD-12DROPQR', 'DPD Drop Off Next Day QR Code', 19135, 'Mainland', 31777, '20KG', 5.95)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -49862,15 +50024,16 @@ BEGIN
       (v_c_id, 408, 'RM', 'Royal Mail', 2319, 'RMCD-CRL48LL', 'Royal Mail 48 Large Letter', 17597, 'UK', 30195, 'Parcel', 0.05),
       (v_c_id, 408, 'RM', 'Royal Mail', 2321, 'RMCD-CRL48MP', 'Royal Mail 48 Medium Parcel', 17599, 'UK', 30197, 'Parcel', 0.05),
       (v_c_id, 408, 'RM', 'Royal Mail', 2375, 'RMCD-SD1', 'Royal Mail Special Delivery', 18256, 'Mainland', 30579, 'Parcel', 0.05)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -49924,15 +50087,16 @@ BEGIN
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2143, 'DHLPUKC-210', 'DHL Parcel Leave Safe', 17343, 'Zone B', 29152, 'Parcel', 5.45),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2143, 'DHLPUKC-210', 'DHL Parcel Leave Safe', 17344, 'Zone C', 29152, 'Parcel', 15.59),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2143, 'DHLPUKC-210', 'DHL Parcel Leave Safe', 17345, 'Zone D', 29152, 'Parcel', 15.59)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -49994,15 +50158,16 @@ BEGIN
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2273, 'DHLPCUK1K-220', 'DHL Parcel 1K Insurance', 17503, 'Zone B', 29448, 'Parcel', 10.9),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2273, 'DHLPCUK1K-220', 'DHL Parcel 1K Insurance', 17504, 'Zone C', 29448, 'Parcel', 20.77),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2273, 'DHLPCUK1K-220', 'DHL Parcel 1K Insurance', 17505, 'Zone D', 29448, 'Parcel', 20.77)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -50024,15 +50189,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 15865, 'Highlands and Islands', 25283, '10KG', 13.02),
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 15865, 'Highlands and Islands', 25284, '15KG', 13.02),
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 15865, 'Highlands and Islands', 25285, '20KG', 13.02)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -50068,15 +50234,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1027, 'DPD-11OOG', 'DPD Two Day Out of Gauge', 12925, 'Northern Ireland', 21248, 'Parcel', 19.2),
       (v_c_id, 150, 'DPD', 'DPD', 1027, 'DPD-11OOG', 'DPD Two Day Out of Gauge', 12921, 'Scottish Highlands', 21248, 'Parcel', 20.14),
       (v_c_id, 150, 'DPD', 'DPD', 1027, 'DPD-11OOG', 'DPD Two Day Out of Gauge', 12922, 'Scottish Islands', 21248, 'Parcel', 20.14)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -50588,15 +50755,16 @@ BEGIN
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13312, '9', 23994, '15 kg - 16 kg', 136.86),
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13312, '9', 23995, '16 kg - 17 kg', 142.69),
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13312, '9', 23996, '17 kg - 18 kg', 148.48)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -50967,15 +51135,16 @@ BEGIN
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13315, '742', 24009, '55 kg - 60 kg', 234.26),
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13315, '742', 24010, '60 kg - 65 kg', 251.56),
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13315, '742', 24011, '65 kg - 70 kg', 268.92)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -51487,15 +51656,16 @@ BEGIN
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13313, '10', 24009, '55 kg - 60 kg', 488.96),
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13313, '10', 24010, '60 kg - 65 kg', 526.24),
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13313, '10', 24011, '65 kg - 70 kg', 563.4)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -51812,15 +51982,16 @@ BEGIN
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2192, 'DHLPCUK-48', 'DHL Ecommerce 48 Hour', 17461, 'Zone B', 29446, 'Parcel', 15),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2192, 'DHLPCUK-48', 'DHL Ecommerce 48 Hour', 17499, 'Zone C', 29446, 'Parcel', 15),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2192, 'DHLPCUK-48', 'DHL Ecommerce 48 Hour', 17500, 'Zone D', 29446, 'Parcel', 15)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -51867,15 +52038,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1922, 'DPD-NIAR', 'DPD N Ireland At Risk', 15614, 'N Ireland', 26489, 'Parcel', 9.95),
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 9.5),
       (v_c_id, 150, 'DPD', 'DPD', 2272, 'DPD-NIAR5K', 'DPD NI At Risk 5K Insurance', 17501, 'N Ireland', 29447, 'Parcel', 17.45)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -51914,15 +52086,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1344, 'DPD-16OOG', 'DPD Saturday Out of Gauge', 12724, 'Mainland', 23073, 'Parcel', 17.17),
       (v_c_id, 150, 'DPD', 'DPD', 1922, 'DPD-NIAR', 'DPD N Ireland At Risk', 15614, 'N Ireland', 26489, 'Parcel', 9.95),
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 9.5)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -51944,15 +52117,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 15865, 'Highlands and Islands', 25283, '10KG', 13.02),
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 15865, 'Highlands and Islands', 25284, '15KG', 13.02),
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 15865, 'Highlands and Islands', 25285, '20KG', 13.02)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -52006,15 +52180,16 @@ BEGIN
       (v_c_id, 253, 'UPS', 'UPS', 1578, 'UPS-65UK', 'UPS Express Saver', 14036, 'Mainland', 25297, '15-20 KG', 8.83),
       (v_c_id, 253, 'UPS', 'UPS', 1578, 'UPS-65UK', 'UPS Express Saver', 14036, 'Mainland', 25298, '20-25 KG', 10.24),
       (v_c_id, 253, 'UPS', 'UPS', 1578, 'UPS-65UK', 'UPS Express Saver', 14036, 'Mainland', 25299, '25-30 KG', 10.24)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -52063,15 +52238,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14126, 'Scottish Islands', 25332, 'Parcel', 18.39),
       (v_c_id, 150, 'DPD', 'DPD', 1922, 'DPD-NIAR', 'DPD N Ireland At Risk', 15614, 'N Ireland', 26489, 'Parcel', 9.95),
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 9.5)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -52112,15 +52288,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1360, 'DPD-42', 'DPD Swap IT Next Day', 12796, 'Mainland', 23134, 'Parcel', 15.8),
       (v_c_id, 150, 'DPD', 'DPD', 1922, 'DPD-NIAR', 'DPD N Ireland At Risk', 15614, 'N Ireland', 26489, 'Parcel', 11.25),
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 10.95)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -52167,15 +52344,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 9.5),
       (v_c_id, 150, 'DPD', 'DPD', 2114, 'DPD-2DAYOFD', 'DPD Two Day Offshore', 17217, 'Offshore', 28956, 'Parcel', 13.95),
       (v_c_id, 150, 'DPD', 'DPD', 2272, 'DPD-NIAR5K', 'DPD NI At Risk 5K Insurance', 17501, 'N Ireland', 29447, 'Parcel', 17.45)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -52218,15 +52396,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 15865, 'Highlands and Islands', 25285, '20KG', 13.02),
       (v_c_id, 150, 'DPD', 'DPD', 1922, 'DPD-NIAR', 'DPD N Ireland At Risk', 15614, 'N Ireland', 26489, 'Parcel', 9.95),
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 9.5)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -52262,15 +52441,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1027, 'DPD-11OOG', 'DPD Two Day Out of Gauge', 12925, 'Northern Ireland', 21248, 'Parcel', 19.45),
       (v_c_id, 150, 'DPD', 'DPD', 1027, 'DPD-11OOG', 'DPD Two Day Out of Gauge', 12921, 'Scottish Highlands', 21248, 'Parcel', 20.39),
       (v_c_id, 150, 'DPD', 'DPD', 1027, 'DPD-11OOG', 'DPD Two Day Out of Gauge', 12922, 'Scottish Islands', 21248, 'Parcel', 20.39)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -52325,15 +52505,16 @@ BEGIN
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2273, 'DHLPCUK1K-220', 'DHL Parcel 1K Insurance', 17504, 'Zone C', 29448, 'Parcel', 19.99),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2273, 'DHLPCUK1K-220', 'DHL Parcel 1K Insurance', 17505, 'Zone D', 29448, 'Parcel', 19.99),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2376, 'DHLPUK-72', 'DHL 72 Hour', 18257, 'Out of Area', 30580, 'Parcel', 15)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -52381,15 +52562,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 10.95),
       (v_c_id, 150, 'DPD', 'DPD', 2272, 'DPD-NIAR5K', 'DPD NI At Risk 5K Insurance', 17501, 'N Ireland', 29447, 'Parcel', 18.75),
       (v_c_id, 150, 'DPD', 'DPD', 2565, 'DPD-SAT5K', 'DPD Saturday 5k Insurance', 19256, 'Mainland', 31944, 'Parcel', 14.75)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -52452,15 +52634,16 @@ BEGIN
       (v_c_id, 176, 'EvRi', 'EvRi', 1622, 'EVRI-48PC2C', 'Evri 48 POD C2C', 13816, 'Northern Ireland', 24314, '5 - 10 KG', 9.25),
       (v_c_id, 176, 'EvRi', 'EvRi', 1622, 'EVRI-48PC2C', 'Evri 48 POD C2C', 13816, 'Northern Ireland', 24315, '10 - 15 KG', 11.95),
       (v_c_id, 176, 'EvRi', 'EvRi', 1649, 'EVRI-48POSTC2C', 'Evri 48 Postable C2C', 14028, 'Mainland', 25282, 'Postable', 2.6)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -52533,15 +52716,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2530, 'DPD-12DROPQR', 'DPD Drop Off Next Day QR Code', 19135, 'Mainland', 31775, '10KG', 4.95),
       (v_c_id, 150, 'DPD', 'DPD', 2530, 'DPD-12DROPQR', 'DPD Drop Off Next Day QR Code', 19135, 'Mainland', 31776, '15KG', 4.95),
       (v_c_id, 150, 'DPD', 'DPD', 2530, 'DPD-12DROPQR', 'DPD Drop Off Next Day QR Code', 19135, 'Mainland', 31777, '20KG', 4.95)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -52595,15 +52779,16 @@ BEGIN
       (v_c_id, 253, 'UPS', 'UPS', 1578, 'UPS-65UK', 'UPS Express Saver', 14036, 'Mainland', 25297, '15-20 KG', 8.35),
       (v_c_id, 253, 'UPS', 'UPS', 1578, 'UPS-65UK', 'UPS Express Saver', 14036, 'Mainland', 25298, '20-25 KG', 9.65),
       (v_c_id, 253, 'UPS', 'UPS', 1578, 'UPS-65UK', 'UPS Express Saver', 14036, 'Mainland', 25299, '25-30 KG', 9.65)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -53115,15 +53300,16 @@ BEGIN
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13311, '8', 24007, '45 kg - 50 kg', 173.54),
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13311, '8', 24008, '50 kg - 55 kg', 188.6),
       (v_c_id, 253, 'UPS', 'UPS', 1539, 'UPS-65', 'UPS Worldwide Saver', 13311, '8', 24009, '55 kg - 60 kg', 203.67)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -53539,15 +53725,16 @@ BEGIN
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2273, 'DHLPCUK1K-220', 'DHL Parcel 1K Insurance', 17504, 'Zone C', 29448, 'Parcel', 19.99),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2273, 'DHLPCUK1K-220', 'DHL Parcel 1K Insurance', 17505, 'Zone D', 29448, 'Parcel', 19.99),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2376, 'DHLPUK-72', 'DHL 72 Hour', 18257, 'Out of Area', 30580, 'Parcel', 15)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -53595,15 +53782,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 9.95),
       (v_c_id, 150, 'DPD', 'DPD', 2272, 'DPD-NIAR5K', 'DPD NI At Risk 5K Insurance', 17501, 'N Ireland', 29447, 'Parcel', 17.75),
       (v_c_id, 150, 'DPD', 'DPD', 2565, 'DPD-SAT5K', 'DPD Saturday 5k Insurance', 19256, 'Mainland', 31944, 'Parcel', 14.75)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -53652,15 +53840,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 9.5),
       (v_c_id, 150, 'DPD', 'DPD', 2272, 'DPD-NIAR5K', 'DPD NI At Risk 5K Insurance', 17501, 'N Ireland', 29447, 'Parcel', 17.45),
       (v_c_id, 150, 'DPD', 'DPD', 2565, 'DPD-SAT5K', 'DPD Saturday 5k Insurance', 19256, 'Mainland', 31944, 'Parcel', 14.45)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -53706,15 +53895,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1634, 'DPD-32', 'DPD Expresspak', 14858, 'Highlands and Islands', 32042, 'Expresspak 5', 10.89),
       (v_c_id, 150, 'DPD', 'DPD', 1922, 'DPD-NIAR', 'DPD N Ireland At Risk', 15614, 'N Ireland', 26489, 'Parcel', 9.95),
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 9.5)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -53763,15 +53953,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 9.5),
       (v_c_id, 150, 'DPD', 'DPD', 2272, 'DPD-NIAR5K', 'DPD NI At Risk 5K Insurance', 17501, 'N Ireland', 29447, 'Parcel', 17.45),
       (v_c_id, 150, 'DPD', 'DPD', 2565, 'DPD-SAT5K', 'DPD Saturday 5k Insurance', 19256, 'Mainland', 31944, 'Parcel', 14.45)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -53803,15 +53994,16 @@ BEGIN
       (v_c_id, 450, 'AGL', 'AGL', 2788, 'AGL-2VSNNI', 'Yodel Xpect Mini N.I.', 21213, 'Northern Ireland', 33888, 'Packet', 6.88),
       (v_c_id, 450, 'AGL', 'AGL', 2789, 'AGL-2VMNNI', 'Xpect Medium Northern Ireland', 21214, 'Northern Ireland', 33889, 'Parcel', 7.69),
       (v_c_id, 450, 'AGL', 'AGL', 2845, 'AGL-1VN', 'Xpect Large 24', 21987, 'Mainland', 35167, 'Parcel', 5.06)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -53838,15 +54030,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2529, 'DPD-DROP5KND', 'DPD Drop Off Next Day 5k Ins', 19134, 'Mainland', 31770, '10KG', 12.75),
       (v_c_id, 150, 'DPD', 'DPD', 2529, 'DPD-DROP5KND', 'DPD Drop Off Next Day 5k Ins', 19134, 'Mainland', 31771, '15KG', 12.75),
       (v_c_id, 150, 'DPD', 'DPD', 2529, 'DPD-DROP5KND', 'DPD Drop Off Next Day 5k Ins', 19134, 'Mainland', 31772, '20KG', 12.75)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -54358,15 +54551,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21016, 'Andorra', 33853, '17 kg - 17.5 kg', 188.02),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21016, 'Andorra', 33854, '17.5 kg - 18 kg', 192.19),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21016, 'Andorra', 33855, '18 kg - 18.5 kg', 196.35)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -54878,15 +55072,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21024, 'Austria', 33849, '15 kg - 15.5 kg', 156.4),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21024, 'Austria', 33850, '15.5 kg - 16 kg', 159.73),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21024, 'Austria', 33851, '16 kg - 16.5 kg', 163.06)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -55398,15 +55593,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21032, 'Belize', 33845, '13 kg - 13.5 kg', 219.15),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21032, 'Belize', 33846, '13.5 kg - 14 kg', 225.18),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21032, 'Belize', 33847, '14 kg - 14.5 kg', 231.22)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -55918,15 +56114,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21040, 'British Virgin Islands', 33841, '11 kg - 11.5 kg', 195.01),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21040, 'British Virgin Islands', 33842, '11.5 kg - 12 kg', 201.04),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21040, 'British Virgin Islands', 33843, '12 kg - 12.5 kg', 207.08)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -56438,15 +56635,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21048, 'Cayman Islands', 33837, '9 kg - 9.5 kg', 170.87),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21048, 'Cayman Islands', 33838, '9.5 kg - 10 kg', 176.9),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21048, 'Cayman Islands', 33839, '10 kg - 10.5 kg', 182.94)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -56958,15 +57156,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21056, 'Croatia', 33833, '7 kg - 7.5 kg', 110.26),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21056, 'Croatia', 33834, '7.5 kg - 8 kg', 113.41),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21056, 'Croatia', 33835, '8 kg - 8.5 kg', 116.55)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -57478,15 +57677,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21064, 'Ecuador', 33829, '5 kg - 5.5 kg', 223.79),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21064, 'Ecuador', 33830, '5.5 kg - 6 kg', 238.73),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21064, 'Ecuador', 33831, '6 kg - 6.5 kg', 253.67)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -57998,15 +58198,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21072, 'Finland', 33825, '3 kg - 3.5 kg', 76.43),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21072, 'Finland', 33826, '3.5 kg - 4 kg', 79.76),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21072, 'Finland', 33827, '4 kg - 4.5 kg', 83.1)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -58518,15 +58719,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21080, 'Ghana', 33821, '1 kg - 1.5 kg', 74.31),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21080, 'Ghana', 33822, '1.5 kg - 2 kg', 80.34),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21080, 'Ghana', 33823, '2 kg - 2.5 kg', 86.38)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -59038,15 +59240,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21087, 'Guatemala', 33880, '30.5 kg - 31 kg', 487.68),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21087, 'Guatemala', 33881, '31 kg - 31.5 kg', 494.58),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21088, 'Guinea', 33819, '0 kg - 0.5 kg', 74.36)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -59558,15 +59761,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21095, 'India', 33876, '28.5 kg - 29 kg', 245.82),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21095, 'India', 33877, '29 kg - 29.5 kg', 249.93),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21095, 'India', 33878, '29.5 kg - 30 kg', 254.05)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -60078,15 +60282,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21103, 'Kazakhstan', 33872, '26.5 kg - 27 kg', 400.27),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21103, 'Kazakhstan', 33873, '27 kg - 27.5 kg', 407.29),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21103, 'Kazakhstan', 33874, '27.5 kg - 28 kg', 414.31)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -60598,15 +60803,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21111, 'Lesotho', 33868, '24.5 kg - 25 kg', 494.41),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21111, 'Lesotho', 33869, '25 kg - 25.5 kg', 503.8),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21111, 'Lesotho', 33870, '25.5 kg - 26 kg', 513.18)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -61118,15 +61324,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21119, 'Madagascar', 33864, '22.5 kg - 23 kg', 746.79),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21119, 'Madagascar', 33865, '23 kg - 23.5 kg', 761.74),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21119, 'Madagascar', 33866, '23.5 kg - 24 kg', 776.68)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -61638,15 +61845,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21127, 'Mayotte', 33860, '20.5 kg - 21 kg', 687.02),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21127, 'Mayotte', 33861, '21 kg - 21.5 kg', 701.96),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21127, 'Mayotte', 33862, '21.5 kg - 22 kg', 716.91)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -62158,15 +62366,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21135, 'Mozambique', 33856, '18.5 kg - 19 kg', 344.34),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21135, 'Mozambique', 33857, '19 kg - 19.5 kg', 352.12),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21135, 'Mozambique', 33858, '19.5 kg - 20 kg', 359.91)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -62678,15 +62887,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21143, 'Norway', 33852, '16.5 kg - 17 kg', 194.38),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21143, 'Norway', 33853, '17 kg - 17.5 kg', 198.85),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21143, 'Norway', 33854, '17.5 kg - 18 kg', 203.32)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -63198,15 +63408,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21151, 'Poland', 33848, '14.5 kg - 15 kg', 157.44),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21151, 'Poland', 33849, '15 kg - 15.5 kg', 160.58),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21151, 'Poland', 33850, '15.5 kg - 16 kg', 163.73)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -63718,15 +63929,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21159, 'Saudi Arabia', 33844, '12.5 kg - 13 kg', 208.86),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21159, 'Saudi Arabia', 33845, '13 kg - 13.5 kg', 216.34),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21159, 'Saudi Arabia', 33846, '13.5 kg - 14 kg', 223.82)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -64238,15 +64450,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21167, 'Spain', 33840, '10.5 kg - 11 kg', 126.41),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21167, 'Spain', 33841, '11 kg - 11.5 kg', 129.74),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21167, 'Spain', 33842, '11.5 kg - 12 kg', 133.08)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -64758,15 +64971,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21175, 'Sweden', 33836, '8.5 kg - 9 kg', 113.08),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21175, 'Sweden', 33837, '9 kg - 9.5 kg', 116.42),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21175, 'Sweden', 33838, '9.5 kg - 10 kg', 119.75)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -65278,15 +65492,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21183, 'Trinidad', 33832, '6.5 kg - 7 kg', 140.69),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21183, 'Trinidad', 33833, '7 kg - 7.5 kg', 146.73),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21183, 'Trinidad', 33834, '7.5 kg - 8 kg', 152.76)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -65798,15 +66013,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21191, 'USA', 33828, '4.5 kg - 5 kg', 78),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21191, 'USA', 33829, '5 kg - 5.5 kg', 80.97),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21191, 'USA', 33830, '5.5 kg - 6 kg', 83.95)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -66318,15 +66534,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21199, 'Zimbabwe', 33824, '2.5 kg - 3 kg', 92.41),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21199, 'Zimbabwe', 33825, '3 kg - 3.5 kg', 98.45),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21199, 'Zimbabwe', 33826, '3.5 kg - 4 kg', 104.48)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -66838,15 +67055,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22138, 'Antigua', 35303, '0.5 kg - 1 kg', 58.92),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22138, 'Antigua', 35304, '1 kg - 1.5 kg', 66.42),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22138, 'Antigua', 35305, '1.5 kg - 2 kg', 73.92)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -67358,15 +67576,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22145, 'Bahamas', 35362, '30 kg - 30.5 kg', 300.18),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22145, 'Bahamas', 35363, '30.5 kg - 31 kg', 304.48),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22145, 'Bahamas', 35364, '31 kg - 31.5 kg', 308.77)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -67878,15 +68097,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22153, 'Bermuda', 35358, '28 kg - 28.5 kg', 282.49),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22153, 'Bermuda', 35359, '28.5 kg - 29 kg', 286.75),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22153, 'Bermuda', 35360, '29 kg - 29.5 kg', 291.01)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -68398,15 +68618,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22161, 'Bulgaria', 35354, '26 kg - 26.5 kg', 49.76),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22161, 'Bulgaria', 35355, '26.5 kg - 27 kg', 50.03),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22161, 'Bulgaria', 35356, '27 kg - 27.5 kg', 50.29)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -68918,15 +69139,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22169, 'Chad', 35350, '24 kg - 24.5 kg', 267.36),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22169, 'Chad', 35351, '24.5 kg - 25 kg', 272.15),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22169, 'Chad', 35352, '25 kg - 25.5 kg', 276.94)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -69438,15 +69660,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22177, 'Cyprus', 35346, '22 kg - 22.5 kg', 207.66),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22177, 'Cyprus', 35347, '22.5 kg - 23 kg', 211.87),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22177, 'Cyprus', 35348, '23 kg - 23.5 kg', 216.08)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -69958,15 +70181,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22185, 'Egypt', 35342, '20 kg - 20.5 kg', 162.38),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22185, 'Egypt', 35343, '20.5 kg - 21 kg', 166.16),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22185, 'Egypt', 35344, '21 kg - 21.5 kg', 169.94)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -70478,15 +70702,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22193, 'France', 35338, '18 kg - 18.5 kg', 28.1),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22193, 'France', 35339, '18.5 kg - 19 kg', 28.22),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22193, 'France', 35340, '19 kg - 19.5 kg', 28.34)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -70998,15 +71223,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22201, 'Gibraltar', 35334, '16 kg - 16.5 kg', 186.13),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22201, 'Gibraltar', 35335, '16.5 kg - 17 kg', 190.52),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22201, 'Gibraltar', 35336, '17 kg - 17.5 kg', 194.92)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -71518,15 +71744,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22209, 'Guyana', 35330, '14 kg - 14.5 kg', 335.59),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22209, 'Guyana', 35331, '14.5 kg - 15 kg', 345.64),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22209, 'Guyana', 35332, '15 kg - 15.5 kg', 355.68)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -72038,15 +72265,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22217, 'Iraq', 35326, '12 kg - 12.5 kg', 169.14),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22217, 'Iraq', 35327, '12.5 kg - 13 kg', 173.36),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22217, 'Iraq', 35328, '13 kg - 13.5 kg', 177.59)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -72558,15 +72786,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22225, 'Korea South', 35322, '10 kg - 10.5 kg', 130.54),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22225, 'Korea South', 35323, '10.5 kg - 11 kg', 135.97),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22225, 'Korea South', 35324, '11 kg - 11.5 kg', 141.41)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -73078,15 +73307,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22233, 'Libya', 35318, '8 kg - 8.5 kg', 87.65),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22233, 'Libya', 35319, '8.5 kg - 9 kg', 92.24),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22233, 'Libya', 35320, '9 kg - 9.5 kg', 96.84)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -73598,15 +73828,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22241, 'Malaysia', 35314, '6 kg - 6.5 kg', 93.44),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22241, 'Malaysia', 35315, '6.5 kg - 7 kg', 100.3),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22241, 'Malaysia', 35316, '7 kg - 7.5 kg', 107.15)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -74118,15 +74349,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22249, 'Moldova', 35310, '4 kg - 4.5 kg', 28.07),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22249, 'Moldova', 35311, '4.5 kg - 5 kg', 29.99),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22249, 'Moldova', 35312, '5 kg - 5.5 kg', 31.91)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -74638,15 +74870,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22257, 'Netherlands', 35306, '2 kg - 2.5 kg', 24.29),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22257, 'Netherlands', 35307, '2.5 kg - 3 kg', 24.46),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22257, 'Netherlands', 35308, '3 kg - 3.5 kg', 24.62)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -75158,15 +75391,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22265, 'Panama', 35302, '0 kg - 0.5 kg', 42.67),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22265, 'Panama', 35303, '0.5 kg - 1 kg', 47.21),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22265, 'Panama', 35304, '1 kg - 1.5 kg', 51.74)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -75678,15 +75912,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22272, 'Qatar', 35361, '29.5 kg - 30 kg', 205.78),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22272, 'Qatar', 35362, '30 kg - 30.5 kg', 209.08),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22272, 'Qatar', 35363, '30.5 kg - 31 kg', 212.38)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -76198,15 +76433,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22280, 'Senegal', 35357, '27.5 kg - 28 kg', 411.98),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22280, 'Senegal', 35358, '28 kg - 28.5 kg', 418.88),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22280, 'Senegal', 35359, '28.5 kg - 29 kg', 425.78)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -76718,15 +76954,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22288, 'Sri Lanka', 35353, '25.5 kg - 26 kg', 223.81),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22288, 'Sri Lanka', 35354, '26 kg - 26.5 kg', 227.94),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22288, 'Sri Lanka', 35355, '26.5 kg - 27 kg', 232.07)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -77238,15 +77475,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22296, 'Switzerland', 35349, '23.5 kg - 24 kg', 121.5),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22296, 'Switzerland', 35350, '24 kg - 24.5 kg', 123.72),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22296, 'Switzerland', 35351, '24.5 kg - 25 kg', 125.94)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -77758,15 +77996,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22304, 'Tunisia', 35345, '21.5 kg - 22 kg', 218.59),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22304, 'Tunisia', 35346, '22 kg - 22.5 kg', 222.82),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22304, 'Tunisia', 35347, '22.5 kg - 23 kg', 227.04)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -78278,15 +78517,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22312, 'Uzbekistan', 35341, '19.5 kg - 20 kg', 276.16),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22312, 'Uzbekistan', 35342, '20 kg - 20.5 kg', 282.7),
       (v_c_id, 150, 'DPD', 'DPD', 2896, 'DPD-60DDP', 'DPD Air Classic DDP', 22312, 'Uzbekistan', 35343, '20.5 kg - 21 kg', 289.24)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -78798,15 +79038,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22320, 'Afghanistan', 35400, '17.5 kg - 18 kg', 334.97),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22320, 'Afghanistan', 35401, '18 kg - 18.5 kg', 342.85),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22320, 'Afghanistan', 35402, '18.5 kg - 19 kg', 350.74)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -79318,15 +79559,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22328, 'Argentina', 35396, '15.5 kg - 16 kg', 175.99),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22328, 'Argentina', 35397, '16 kg - 16.5 kg', 180.25),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22328, 'Argentina', 35398, '16.5 kg - 17 kg', 184.51)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -79838,15 +80080,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22336, 'Bangladesh', 35392, '13.5 kg - 14 kg', 135.85),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22336, 'Bangladesh', 35393, '14 kg - 14.5 kg', 140.38),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22336, 'Bangladesh', 35394, '14.5 kg - 15 kg', 144.9)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -80358,15 +80601,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22344, 'Bolivia', 35388, '11.5 kg - 12 kg', 141.91),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22344, 'Bolivia', 35389, '12 kg - 12.5 kg', 146.17),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22344, 'Bolivia', 35390, '12.5 kg - 13 kg', 150.43)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -80878,15 +81122,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22352, 'Cambodia', 35384, '9.5 kg - 10 kg', 112.39),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22352, 'Cambodia', 35385, '10 kg - 10.5 kg', 116.15),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22352, 'Cambodia', 35386, '10.5 kg - 11 kg', 119.9)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -81398,15 +81643,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22360, 'China', 35380, '7.5 kg - 8 kg', 157.69),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22360, 'China', 35381, '8 kg - 8.5 kg', 164.57),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22360, 'China', 35382, '8.5 kg - 9 kg', 171.44)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -81918,15 +82164,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22368, 'Djibouti', 35376, '5.5 kg - 6 kg', 94.57),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22368, 'Djibouti', 35377, '6 kg - 6.5 kg', 99.6),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22368, 'Djibouti', 35378, '6.5 kg - 7 kg', 104.63)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -82438,15 +82685,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22376, 'Estonia', 35372, '3.5 kg - 4 kg', 66.96),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22376, 'Estonia', 35373, '4 kg - 4.5 kg', 69.31),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22376, 'Estonia', 35374, '4.5 kg - 5 kg', 71.66)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -82958,15 +83206,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22384, 'Gabon', 35368, '1.5 kg - 2 kg', 84.13),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22384, 'Gabon', 35369, '2 kg - 2.5 kg', 94.68),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22384, 'Gabon', 35370, '2.5 kg - 3 kg', 105.23)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -83478,15 +83727,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22391, 'Greenland', 35427, '31 kg - 31.5 kg', 308.05),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22392, 'Grenada', 35365, '0 kg - 0.5 kg', 43.93),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22392, 'Grenada', 35366, '0.5 kg - 1 kg', 48.19)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -83998,15 +84248,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22399, 'Honduras', 35423, '29 kg - 29.5 kg', 664.27),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22399, 'Honduras', 35424, '29.5 kg - 30 kg', 674.82),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22399, 'Honduras', 35425, '30 kg - 30.5 kg', 685.37)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -84518,15 +84769,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22407, 'Italy', 35419, '27 kg - 27.5 kg', 166.85),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22407, 'Italy', 35420, '27.5 kg - 28 kg', 169.2),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22407, 'Italy', 35421, '28 kg - 28.5 kg', 171.55)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -85038,15 +85290,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22415, 'Kyrgystan', 35415, '25 kg - 25.5 kg', 443.59),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22415, 'Kyrgystan', 35416, '25.5 kg - 26 kg', 451.48),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22415, 'Kyrgystan', 35417, '26 kg - 26.5 kg', 459.36)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -85558,15 +85811,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22423, 'Lithuania', 35411, '23 kg - 23.5 kg', 158.69),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22423, 'Lithuania', 35412, '23.5 kg - 24 kg', 161.04),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22423, 'Lithuania', 35413, '24 kg - 24.5 kg', 163.39)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -86078,15 +86332,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22431, 'Malta', 35407, '21 kg - 21.5 kg', 162.32),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22431, 'Malta', 35408, '21.5 kg - 22 kg', 165.61),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22431, 'Malta', 35409, '22 kg - 22.5 kg', 168.9)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -86598,15 +86853,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22439, 'Mongolia', 35403, '19 kg - 19.5 kg', 431.81),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22439, 'Mongolia', 35404, '19.5 kg - 20 kg', 441.85),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22439, 'Mongolia', 35405, '20 kg - 20.5 kg', 451.9)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -87118,15 +87374,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22447, 'New Caledonia', 35399, '17 kg - 17.5 kg', 179.11),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22447, 'New Caledonia', 35400, '17.5 kg - 18 kg', 183.1),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22447, 'New Caledonia', 35401, '18 kg - 18.5 kg', 187.08)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -87638,15 +87895,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22455, 'Papua New Guinea', 35395, '15 kg - 15.5 kg', 285.91),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22455, 'Papua New Guinea', 35396, '15.5 kg - 16 kg', 293.8),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22455, 'Papua New Guinea', 35397, '16 kg - 16.5 kg', 301.68)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -88158,15 +88416,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22463, 'Reunion Island', 35391, '13 kg - 13.5 kg', 154.69),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22463, 'Reunion Island', 35392, '13.5 kg - 14 kg', 158.95),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22463, 'Reunion Island', 35393, '14 kg - 14.5 kg', 163.21)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -88678,15 +88937,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22471, 'Singapore', 35387, '11 kg - 11.5 kg', 159.44),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22471, 'Singapore', 35388, '11.5 kg - 12 kg', 166.03),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22471, 'Singapore', 35389, '12 kg - 12.5 kg', 172.62)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -89198,15 +89458,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22479, 'St Pierre & Miquilon', 35383, '9 kg - 9.5 kg', 191.3),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22479, 'St Pierre & Miquilon', 35384, '9.5 kg - 10 kg', 199.19),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22479, 'St Pierre & Miquilon', 35385, '10 kg - 10.5 kg', 207.07)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -89718,15 +89979,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22487, 'Tajikistan', 35379, '7 kg - 7.5 kg', 111.08),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22487, 'Tajikistan', 35380, '7.5 kg - 8 kg', 115.78),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22487, 'Tajikistan', 35381, '8 kg - 8.5 kg', 120.47)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -90238,15 +90500,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22495, 'Turks & Caicos Islands', 35375, '5 kg - 5.5 kg', 86.53),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22495, 'Turks & Caicos Islands', 35376, '5.5 kg - 6 kg', 90.79),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22495, 'Turks & Caicos Islands', 35377, '6 kg - 6.5 kg', 95.05)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -90758,15 +91021,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22503, 'Vietnam', 35371, '3 kg - 3.5 kg', 49.94),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22503, 'Vietnam', 35372, '3.5 kg - 4 kg', 55.33),
       (v_c_id, 150, 'DPD', 'DPD', 2897, 'DPD-10DDP', 'DPD Air Express DDP', 22503, 'Vietnam', 35373, '4 kg - 4.5 kg', 60.72)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -91137,15 +91401,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2899, 'DPD-19DDP', 'DPD Classic Road DDP', 22558, 'Switzerland', 35429, 'Parcel', 19.51),
       (v_c_id, 150, 'DPD', 'DPD', 2899, 'DPD-19DDP', 'DPD Classic Road DDP', 22559, 'Greece', 35429, 'Parcel', 26.35),
       (v_c_id, 150, 'DPD', 'DPD', 2900, 'DPD-2DAYOFF', 'DPD 2 Day Offshore', 22560, 'Offshore', 35430, 'Parcel', 12.5)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -91194,15 +91459,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 9.5),
       (v_c_id, 150, 'DPD', 'DPD', 2272, 'DPD-NIAR5K', 'DPD NI At Risk 5K Insurance', 17501, 'N Ireland', 29447, 'Parcel', 17.45),
       (v_c_id, 150, 'DPD', 'DPD', 2565, 'DPD-SAT5K', 'DPD Saturday 5k Insurance', 19256, 'Mainland', 31944, 'Parcel', 14.45)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -91273,15 +91539,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14125, 'Scottish Highlands', 25332, 'Parcel', 18.39),
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14126, 'Scottish Islands', 25332, 'Parcel', 18.39),
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 9.5)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -91322,15 +91589,16 @@ BEGIN
       (v_c_id, 253, 'UPS', 'UPS', 1578, 'UPS-65UK', 'UPS Express Saver', 14036, 'Mainland', 25297, '15-20 KG', 8.36),
       (v_c_id, 253, 'UPS', 'UPS', 1578, 'UPS-65UK', 'UPS Express Saver', 14036, 'Mainland', 25298, '20-25 KG', 9.67),
       (v_c_id, 253, 'UPS', 'UPS', 1578, 'UPS-65UK', 'UPS Express Saver', 14036, 'Mainland', 25299, '25-30 KG', 9.67)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -91842,15 +92110,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20830, 'Antigua', 33742, '9 kg - 9.5 kg', 287.4),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20830, 'Antigua', 33743, '9.5 kg - 10 kg', 298.96),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20830, 'Antigua', 33744, '10 kg - 10.5 kg', 310.52)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -92362,15 +92631,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20838, 'Bahrain', 33738, '7 kg - 7.5 kg', 97.01),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20838, 'Bahrain', 33739, '7.5 kg - 8 kg', 102.6),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20838, 'Bahrain', 33740, '8 kg - 8.5 kg', 108.19)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -92882,15 +93152,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20846, 'Bhutan', 33734, '5 kg - 5.5 kg', 131.68),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20846, 'Bhutan', 33735, '5.5 kg - 6 kg', 139.06),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20846, 'Bhutan', 33736, '6 kg - 6.5 kg', 146.45)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -93402,15 +93673,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20854, 'Burkina Faso', 33730, '3 kg - 3.5 kg', 102.16),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20854, 'Burkina Faso', 33731, '3.5 kg - 4 kg', 109.54),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20854, 'Burkina Faso', 33732, '4 kg - 4.5 kg', 116.92)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -93922,15 +94194,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20862, 'Chile', 33726, '1 kg - 1.5 kg', 114.77),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20862, 'Chile', 33727, '1.5 kg - 2 kg', 130.26),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20862, 'Chile', 33728, '2 kg - 2.5 kg', 145.74)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -94442,15 +94715,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20869, 'Cyprus', 33785, '30.5 kg - 31 kg', 430.53),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20869, 'Cyprus', 33786, '31 kg - 31.5 kg', 437.03),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20870, 'Czech Republic', 33724, '0 kg - 0.5 kg', 55.94)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -94962,15 +95236,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20877, 'Egypt', 33781, '28.5 kg - 29 kg', 349.41),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20877, 'Egypt', 33782, '29 kg - 29.5 kg', 355.24),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20877, 'Egypt', 33783, '29.5 kg - 30 kg', 361.06)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -95482,15 +95757,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20885, 'France', 33777, '26.5 kg - 27 kg', 46.47),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20885, 'France', 33778, '27 kg - 27.5 kg', 46.66),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20885, 'France', 33779, '27.5 kg - 28 kg', 46.84)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -96002,15 +96278,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20893, 'Gibraltar', 33773, '24.5 kg - 25 kg', 402.06),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20893, 'Gibraltar', 33774, '25 kg - 25.5 kg', 408.83),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20893, 'Gibraltar', 33775, '25.5 kg - 26 kg', 415.6)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -96522,15 +96799,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20901, 'Guyana', 33769, '22.5 kg - 23 kg', 780.61),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20901, 'Guyana', 33770, '23 kg - 23.5 kg', 796.09),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20901, 'Guyana', 33771, '23.5 kg - 24 kg', 811.58)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -97042,15 +97320,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20909, 'Iraq', 33765, '20.5 kg - 21 kg', 371.46),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20909, 'Iraq', 33766, '21 kg - 21.5 kg', 377.97),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20909, 'Iraq', 33767, '21.5 kg - 22 kg', 384.49)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -97562,15 +97841,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20917, 'Korea South', 33761, '18.5 kg - 19 kg', 343.71),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20917, 'Korea South', 33762, '19 kg - 19.5 kg', 352.09),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20917, 'Korea South', 33763, '19.5 kg - 20 kg', 360.47)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -98082,15 +98362,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20925, 'Libya', 33757, '16.5 kg - 17 kg', 255.58),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20925, 'Libya', 33758, '17 kg - 17.5 kg', 262.66),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20925, 'Libya', 33759, '17.5 kg - 18 kg', 269.75)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -98602,15 +98883,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20933, 'Malaysia', 33753, '14.5 kg - 15 kg', 323.64),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20933, 'Malaysia', 33754, '15 kg - 15.5 kg', 334.2),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20933, 'Malaysia', 33755, '15.5 kg - 16 kg', 344.77)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -99122,15 +99404,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20941, 'Moldova', 33749, '12.5 kg - 13 kg', 93.59),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20941, 'Moldova', 33750, '13 kg - 13.5 kg', 96.55),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20941, 'Moldova', 33751, '13.5 kg - 14 kg', 99.51)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -99642,15 +99925,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20949, 'Netherlands', 33745, '10.5 kg - 11 kg', 41.85),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20949, 'Netherlands', 33746, '11 kg - 11.5 kg', 42.11),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20949, 'Netherlands', 33747, '11.5 kg - 12 kg', 42.37)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -100162,15 +100446,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20957, 'Panama', 33741, '8.5 kg - 9 kg', 184.67),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20957, 'Panama', 33742, '9 kg - 9.5 kg', 191.66),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20957, 'Panama', 33743, '9.5 kg - 10 kg', 198.65)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -100682,15 +100967,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20965, 'Republic of Kosovo', 33737, '6.5 kg - 7 kg', 156.42),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20965, 'Republic of Kosovo', 33738, '7 kg - 7.5 kg', 163.39),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20965, 'Republic of Kosovo', 33739, '7.5 kg - 8 kg', 170.37)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -101202,15 +101488,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20973, 'Serbia', 33733, '4.5 kg - 5 kg', 139.62),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20973, 'Serbia', 33734, '5 kg - 5.5 kg', 147.7),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20973, 'Serbia', 33735, '5.5 kg - 6 kg', 155.79)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -101722,15 +102009,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20981, 'St Kitts & Nevis', 33729, '2.5 kg - 3 kg', 137.09),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20981, 'St Kitts & Nevis', 33730, '3 kg - 3.5 kg', 148.65),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20981, 'St Kitts & Nevis', 33731, '3.5 kg - 4 kg', 160.21)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -102242,15 +102530,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20989, 'Tahiti', 33725, '0.5 kg - 1 kg', 65.25),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20989, 'Tahiti', 33726, '1 kg - 1.5 kg', 72.63),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20989, 'Tahiti', 33727, '1.5 kg - 2 kg', 80.01)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -102762,15 +103051,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20996, 'Tunisia', 33784, '30 kg - 30.5 kg', 447.7),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20996, 'Tunisia', 33785, '30.5 kg - 31 kg', 454.21),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 20996, 'Tunisia', 33786, '31 kg - 31.5 kg', 460.72)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -103282,15 +103572,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 21004, 'Uzbekistan', 33780, '28 kg - 28.5 kg', 597.14),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 21004, 'Uzbekistan', 33781, '28.5 kg - 29 kg', 607.23),
       (v_c_id, 150, 'DPD', 'DPD', 770, 'DPD-60', 'DPD Classic Air', 21004, 'Uzbekistan', 33782, '29 kg - 29.5 kg', 617.31)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -103802,15 +104093,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1735, 'DPD-20', 'DPD Direct Lite', 15301, 'Turkey', 25972, '0 kg - 0.5 kg', 20.92),
       (v_c_id, 150, 'DPD', 'DPD', 1735, 'DPD-20', 'DPD Direct Lite', 15302, 'United States', 25972, '0 kg - 0.5 kg', 14.06),
       (v_c_id, 150, 'DPD', 'DPD', 1735, 'DPD-20', 'DPD Direct Lite', 15265, 'Australia', 25973, '0.5 kg - 1 kg', 27.12)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -104322,15 +104614,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21018, 'Anguilla', 33819, '0 kg - 0.5 kg', 67.73),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21018, 'Anguilla', 33820, '0.5 kg - 1 kg', 74.3),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21018, 'Anguilla', 33821, '1 kg - 1.5 kg', 80.86)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -104842,15 +105135,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21025, 'Azerbaijan', 33878, '29.5 kg - 30 kg', 653.31),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21025, 'Azerbaijan', 33879, '30 kg - 30.5 kg', 663.76),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21025, 'Azerbaijan', 33880, '30.5 kg - 31 kg', 674.21)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -105362,15 +105656,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21033, 'Benin', 33874, '27.5 kg - 28 kg', 542.49),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21033, 'Benin', 33875, '28 kg - 28.5 kg', 551.49),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21033, 'Benin', 33876, '28.5 kg - 29 kg', 560.48)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -105882,15 +106177,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21041, 'Brunei', 33870, '25.5 kg - 26 kg', 358.57),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21041, 'Brunei', 33871, '26 kg - 26.5 kg', 364.36),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21041, 'Brunei', 33872, '26.5 kg - 27 kg', 370.15)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -106402,15 +106698,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21049, 'Central African Republic', 33866, '23.5 kg - 24 kg', 409.96),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21049, 'Central African Republic', 33867, '24 kg - 24.5 kg', 417.19),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21049, 'Central African Republic', 33868, '24.5 kg - 25 kg', 424.43)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -106922,15 +107219,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21057, 'Cyprus', 33862, '21.5 kg - 22 kg', 232.95),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21057, 'Cyprus', 33863, '22 kg - 22.5 kg', 237.6),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21057, 'Cyprus', 33864, '22.5 kg - 23 kg', 242.24)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -107442,15 +107740,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21065, 'Egypt', 33858, '19.5 kg - 20 kg', 236.84),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21065, 'Egypt', 33859, '20 kg - 20.5 kg', 242.46),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21065, 'Egypt', 33860, '20.5 kg - 21 kg', 248.09)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -107962,15 +108261,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21073, 'France', 33854, '17.5 kg - 18 kg', 129.15),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21073, 'France', 33855, '18 kg - 18.5 kg', 131.26),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21073, 'France', 33856, '18.5 kg - 19 kg', 133.37)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -108482,15 +108782,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21081, 'Gibraltar', 33850, '15.5 kg - 16 kg', 201.8),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21081, 'Gibraltar', 33851, '16 kg - 16.5 kg', 206.66),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21081, 'Gibraltar', 33852, '16.5 kg - 17 kg', 211.53)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -109002,15 +109303,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21089, 'Guyana', 33846, '13.5 kg - 14 kg', 519.98),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21089, 'Guyana', 33847, '14 kg - 14.5 kg', 536.24),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21089, 'Guyana', 33848, '14.5 kg - 15 kg', 552.5)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -109522,15 +109824,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21097, 'Iraq', 33842, '11.5 kg - 12 kg', 218.78),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21097, 'Iraq', 33843, '12 kg - 12.5 kg', 225.35),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21097, 'Iraq', 33844, '12.5 kg - 13 kg', 231.92)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -110042,15 +110345,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21105, 'Korea South', 33838, '9.5 kg - 10 kg', 206.65),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21105, 'Korea South', 33839, '10 kg - 10.5 kg', 215.17),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21105, 'Korea South', 33840, '10.5 kg - 11 kg', 223.7)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -110562,15 +110866,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21113, 'Libya', 33834, '7.5 kg - 8 kg', 127.56),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21113, 'Libya', 33835, '8 kg - 8.5 kg', 134.57),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21113, 'Libya', 33836, '8.5 kg - 9 kg', 141.58)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -111082,15 +111387,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21121, 'Malaysia', 33830, '5.5 kg - 6 kg', 114.22),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21121, 'Malaysia', 33831, '6 kg - 6.5 kg', 122.14),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21121, 'Malaysia', 33832, '6.5 kg - 7 kg', 130.06)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -111602,15 +111908,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21129, 'Moldova', 33826, '3.5 kg - 4 kg', 98.09),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21129, 'Moldova', 33827, '4 kg - 4.5 kg', 104.23),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21129, 'Moldova', 33828, '4.5 kg - 5 kg', 110.37)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -112122,15 +112429,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21137, 'Nepal', 33822, '1.5 kg - 2 kg', 55.28),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21137, 'Nepal', 33823, '2 kg - 2.5 kg', 64.86),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21137, 'Nepal', 33824, '2.5 kg - 3 kg', 74.44)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -112642,15 +112950,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21144, 'Oman', 33881, '31 kg - 31.5 kg', 346.56),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21145, 'Pakistan', 33819, '0 kg - 0.5 kg', 28.55),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21145, 'Pakistan', 33820, '0.5 kg - 1 kg', 34.95)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -113162,15 +113471,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21152, 'Portugal', 33877, '29 kg - 29.5 kg', 289.19),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21152, 'Portugal', 33878, '29.5 kg - 30 kg', 293.11),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21152, 'Portugal', 33879, '30 kg - 30.5 kg', 297.04)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -113682,15 +113992,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21160, 'Senegal', 33873, '27 kg - 27.5 kg', 655.75),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21160, 'Senegal', 33874, '27.5 kg - 28 kg', 666.93),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21160, 'Senegal', 33875, '28 kg - 28.5 kg', 678.1)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -114202,15 +114513,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21168, 'Sri Lanka', 33869, '25 kg - 25.5 kg', 341.18),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21168, 'Sri Lanka', 33870, '25.5 kg - 26 kg', 347.58),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21168, 'Sri Lanka', 33871, '26 kg - 26.5 kg', 353.98)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -114722,15 +115034,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21176, 'Switzerland', 33865, '23 kg - 23.5 kg', 199.15),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21176, 'Switzerland', 33866, '23.5 kg - 24 kg', 202.85),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21176, 'Switzerland', 33867, '24 kg - 24.5 kg', 206.55)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -115242,15 +115555,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21184, 'Tunisia', 33861, '21 kg - 21.5 kg', 325.27),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21184, 'Tunisia', 33862, '21.5 kg - 22 kg', 331.41),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21184, 'Tunisia', 33863, '22 kg - 22.5 kg', 337.55)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -115762,15 +116076,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21192, 'Uzbekistan', 33857, '19 kg - 19.5 kg', 436.05),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21192, 'Uzbekistan', 33858, '19.5 kg - 20 kg', 446.63),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21192, 'Uzbekistan', 33859, '20 kg - 20.5 kg', 457.21)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -116246,15 +116561,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21199, 'Zimbabwe', 33880, '30.5 kg - 31 kg', 468.35),
       (v_c_id, 150, 'DPD', 'DPD', 2781, 'DPD-10', 'DPD Air Express', 21199, 'Zimbabwe', 33881, '31 kg - 31.5 kg', 474.91),
       (v_c_id, 150, 'DPD', 'DPD', 2900, 'DPD-2DAYOFF', 'DPD 2 Day Offshore', 22560, 'Offshore', 35430, 'Parcel', 12.5)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -116278,15 +116594,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 765, 'DPD-11', 'DPD Two Day', 9532, 'Scottish Islands', 17517, 'Parcel', 10.89),
       (v_c_id, 150, 'DPD', 'DPD', 773, 'DPD-13', 'DPD Next Day 12.00', 9549, 'Mainland', 17523, 'Parcel', 7.95),
       (v_c_id, 150, 'DPD', 'DPD', 1026, 'DPD-12OOG', 'DPD Next Day Out of Gauge', 12159, 'Mainland', 21247, 'Parcel', 14.45)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -116322,15 +116639,16 @@ BEGIN
       (v_c_id, 450, 'AGL', 'AGL', 2754, 'AGL-2VSN', 'Yodel Xpect Mini 48', 20734, 'Mainland', 33688, 'Packet', 2.55),
       (v_c_id, 450, 'AGL', 'AGL', 2755, 'AGL-1VMN', 'Yodel Xpect Medium 24', 20736, 'Mainland', 33689, 'Parcel', 4.15),
       (v_c_id, 450, 'AGL', 'AGL', 2756, 'AGL-2VMN', 'Yodel Xpect Medium 48', 20735, 'Mainland', 33690, 'Parcel', 3.75)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -116352,15 +116670,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 15865, 'Highlands and Islands', 25283, '10KG', 13.02),
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 15865, 'Highlands and Islands', 25284, '15KG', 13.02),
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 15865, 'Highlands and Islands', 25285, '20KG', 13.02)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -116415,15 +116734,16 @@ BEGIN
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2273, 'DHLPCUK1K-220', 'DHL Parcel 1K Insurance', 17504, 'Zone C', 29448, 'Parcel', 20.24),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2273, 'DHLPCUK1K-220', 'DHL Parcel 1K Insurance', 17505, 'Zone D', 29448, 'Parcel', 20.24),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2376, 'DHLPUK-72', 'DHL 72 Hour', 18257, 'Out of Area', 30580, 'Parcel', 15.25)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -116476,15 +116796,16 @@ BEGIN
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2273, 'DHLPCUK1K-220', 'DHL Parcel 1K Insurance', 17504, 'Zone C', 29448, 'Parcel', 19.99),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2273, 'DHLPCUK1K-220', 'DHL Parcel 1K Insurance', 17505, 'Zone D', 29448, 'Parcel', 19.99),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2376, 'DHLPUK-72', 'DHL 72 Hour', 18257, 'Out of Area', 30580, 'Parcel', 15)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -116684,15 +117005,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1735, 'DPD-20', 'DPD Direct Lite', 15302, 'United States', 25975, '1.5 kg - 2 kg', 24.14),
       (v_c_id, 150, 'DPD', 'DPD', 1922, 'DPD-NIAR', 'DPD N Ireland At Risk', 15614, 'N Ireland', 26489, 'Parcel', 9.95),
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 9.5)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -116739,15 +117061,16 @@ BEGIN
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2273, 'DHLPCUK1K-220', 'DHL Parcel 1K Insurance', 17504, 'Zone C', 29448, 'Parcel', 19.99),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2273, 'DHLPCUK1K-220', 'DHL Parcel 1K Insurance', 17505, 'Zone D', 29448, 'Parcel', 19.99),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2376, 'DHLPUK-72', 'DHL 72 Hour', 18257, 'Out of Area', 30580, 'Parcel', 15)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -116787,15 +117110,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1344, 'DPD-16OOG', 'DPD Saturday Out of Gauge', 12724, 'Mainland', 23073, 'Parcel', 16.45),
       (v_c_id, 150, 'DPD', 'DPD', 1634, 'DPD-32', 'DPD Expresspak', 14857, 'Mainland', 26022, 'Expresspak 1', 4.2),
       (v_c_id, 150, 'DPD', 'DPD', 1634, 'DPD-32', 'DPD Expresspak', 14857, 'Mainland', 32042, 'Expresspak 5', 4.2)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -116817,15 +117141,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 13423, 'Mainland', 25283, '10KG', 6.55),
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 13423, 'Mainland', 25284, '15KG', 6.55),
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 13423, 'Mainland', 25285, '20KG', 6.55)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -117031,15 +117356,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1735, 'DPD-20', 'DPD Direct Lite', 15302, 'United States', 25975, '1.5 kg - 2 kg', 24.14),
       (v_c_id, 150, 'DPD', 'DPD', 1922, 'DPD-NIAR', 'DPD N Ireland At Risk', 15614, 'N Ireland', 26489, 'Parcel', 10.25),
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 9.95)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -117247,15 +117573,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1735, 'DPD-20', 'DPD Direct Lite', 15302, 'United States', 25975, '1.5 kg - 2 kg', 24.14),
       (v_c_id, 150, 'DPD', 'DPD', 1922, 'DPD-NIAR', 'DPD N Ireland At Risk', 15614, 'N Ireland', 26489, 'Parcel', 9.95),
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 9.5)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -117305,15 +117632,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 9.95),
       (v_c_id, 150, 'DPD', 'DPD', 2272, 'DPD-NIAR5K', 'DPD NI At Risk 5K Insurance', 17501, 'N Ireland', 29447, 'Parcel', 17.75),
       (v_c_id, 150, 'DPD', 'DPD', 2565, 'DPD-SAT5K', 'DPD Saturday 5k Insurance', 19256, 'Mainland', 31944, 'Parcel', 14.75)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -117338,15 +117666,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2530, 'DPD-12DROPQR', 'DPD Drop Off Next Day QR Code', 19135, 'Mainland', 31775, '10KG', 5.5),
       (v_c_id, 150, 'DPD', 'DPD', 2530, 'DPD-12DROPQR', 'DPD Drop Off Next Day QR Code', 19135, 'Mainland', 31776, '15KG', 6),
       (v_c_id, 150, 'DPD', 'DPD', 2530, 'DPD-12DROPQR', 'DPD Drop Off Next Day QR Code', 19135, 'Mainland', 31777, '20KG', 6.5)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -117360,15 +117689,16 @@ BEGIN
     VALUES
       (v_c_id, 455, 'API TEST', 'API TEST', 2777, 'Testy Service 1', 'Testy Service 1', 20809, 'Mainland', 33799, 'Parcek', 16),
       (v_c_id, 455, 'API TEST', 'API TEST', 2777, 'Testy Service 1', 'Testy Service 1', 20810, 'OOA', 33799, 'Parcek', 17)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -117423,15 +117753,16 @@ BEGIN
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2273, 'DHLPCUK1K-220', 'DHL Parcel 1K Insurance', 17504, 'Zone C', 29448, 'Parcel', 19.99),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2273, 'DHLPCUK1K-220', 'DHL Parcel 1K Insurance', 17505, 'Zone D', 29448, 'Parcel', 19.99),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2376, 'DHLPUK-72', 'DHL 72 Hour', 18257, 'Out of Area', 30580, 'Parcel', 15.25)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -117478,15 +117809,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1697, 'DPD-5000TWO', 'DPD Two Day 5k Insurance', 14126, 'Scottish Islands', 25332, 'Parcel', 18.89),
       (v_c_id, 150, 'DPD', 'DPD', 1922, 'DPD-NIAR', 'DPD N Ireland At Risk', 15614, 'N Ireland', 26489, 'Parcel', 8.95),
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 9.5)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -117518,15 +117850,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 937, 'DPD-5000', 'DPD Next Day 5k Insurance', 11465, 'Mainland', 19694, 'Parcel', 12.45),
       (v_c_id, 150, 'DPD', 'DPD', 1634, 'DPD-32', 'DPD Expresspak', 14857, 'Mainland', 26022, 'Expresspak 1', 4.45),
       (v_c_id, 150, 'DPD', 'DPD', 1634, 'DPD-32', 'DPD Expresspak', 14857, 'Mainland', 32042, 'Expresspak 5', 4.45)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -117564,15 +117897,16 @@ BEGIN
       (v_c_id, 450, 'AGL', 'AGL', 2788, 'AGL-2VSNNI', 'Yodel Xpect Mini N.I.', 21213, 'Northern Ireland', 33888, 'Packet', 6.9),
       (v_c_id, 450, 'AGL', 'AGL', 2789, 'AGL-2VMNNI', 'Xpect Medium Northern Ireland', 21214, 'Northern Ireland', 33889, 'Parcel', 7.5),
       (v_c_id, 450, 'AGL', 'AGL', 2845, 'AGL-1VN', 'Xpect Large 24', 21987, 'Mainland', 35167, 'Parcel', 4.89)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -117649,15 +117983,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2272, 'DPD-NIAR5K', 'DPD NI At Risk 5K Insurance', 17501, 'N Ireland', 29447, 'Parcel', 17.75),
       (v_c_id, 150, 'DPD', 'DPD', 2565, 'DPD-SAT5K', 'DPD Saturday 5k Insurance', 19256, 'Mainland', 31944, 'Parcel', 16.45),
       (v_c_id, 150, 'DPD', 'DPD', 2900, 'DPD-2DAYOFF', 'DPD 2 Day Offshore', 22560, 'Offshore', 35430, 'Parcel', 14.25)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -117679,15 +118014,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 15865, 'Highlands and Islands', 25283, '10KG', 13.32),
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 15865, 'Highlands and Islands', 25284, '15KG', 13.32),
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 15865, 'Highlands and Islands', 25285, '20KG', 13.32)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -117714,15 +118050,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2530, 'DPD-12DROPQR', 'DPD Drop Off Next Day QR Code', 19135, 'Mainland', 31775, '10KG', 6.25),
       (v_c_id, 150, 'DPD', 'DPD', 2530, 'DPD-12DROPQR', 'DPD Drop Off Next Day QR Code', 19135, 'Mainland', 31776, '15KG', 6.25),
       (v_c_id, 150, 'DPD', 'DPD', 2530, 'DPD-12DROPQR', 'DPD Drop Off Next Day QR Code', 19135, 'Mainland', 31777, '20KG', 6.25)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -117749,15 +118086,16 @@ BEGIN
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2192, 'DHLPCUK-48', 'DHL Ecommerce 48 Hour', 17460, 'Zone A', 29446, 'Parcel', 15),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2192, 'DHLPCUK-48', 'DHL Ecommerce 48 Hour', 17461, 'Zone B', 29446, 'Parcel', 15),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2376, 'DHLPUK-72', 'DHL 72 Hour', 18257, 'Out of Area', 30580, 'Parcel', 15)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -117806,15 +118144,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 12.5),
       (v_c_id, 150, 'DPD', 'DPD', 2272, 'DPD-NIAR5K', 'DPD NI At Risk 5K Insurance', 17501, 'N Ireland', 29447, 'Parcel', 17.75),
       (v_c_id, 150, 'DPD', 'DPD', 2565, 'DPD-SAT5K', 'DPD Saturday 5k Insurance', 19256, 'Mainland', 31944, 'Parcel', 16.45)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -117860,15 +118199,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 9.95),
       (v_c_id, 150, 'DPD', 'DPD', 2272, 'DPD-NIAR5K', 'DPD NI At Risk 5K Insurance', 17501, 'N Ireland', 29447, 'Parcel', 17.75),
       (v_c_id, 150, 'DPD', 'DPD', 2565, 'DPD-SAT5K', 'DPD Saturday 5k Insurance', 19256, 'Mainland', 31944, 'Parcel', 14.75)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -117910,15 +118250,16 @@ BEGIN
       (v_c_id, 450, 'AGL', 'AGL', 2845, 'AGL-1VN', 'Xpect Large 24', 21987, 'Mainland', 35167, 'Parcel', 5.15),
       (v_c_id, 450, 'AGL', 'AGL', 3409, 'AGL-2VN', 'Xpect Large 48', 31191, 'Mainland', 38273, 'Parcel', 4.85),
       (v_c_id, 450, 'AGL', 'AGL', 3414, 'AGL-2VNNI', 'Yodel Xpect 48 NI', 31198, 'Northern Ireland', 38278, 'Parcel', 9.1)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -117950,15 +118291,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2530, 'DPD-12DROPQR', 'DPD Drop Off Next Day QR Code', 19135, 'Mainland', 31775, '10KG', 6.25),
       (v_c_id, 150, 'DPD', 'DPD', 2530, 'DPD-12DROPQR', 'DPD Drop Off Next Day QR Code', 19135, 'Mainland', 31776, '15KG', 6.25),
       (v_c_id, 150, 'DPD', 'DPD', 2530, 'DPD-12DROPQR', 'DPD Drop Off Next Day QR Code', 19135, 'Mainland', 31777, '20KG', 6.25)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -117986,15 +118328,16 @@ BEGIN
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2192, 'DHLPCUK-48', 'DHL Ecommerce 48 Hour', 17500, 'Zone D', 29446, 'Parcel', 15.95),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2192, 'DHLPCUK-48', 'DHL Ecommerce 48 Hour', 17461, 'Zone B', 29446, 'Parcel', 15.95),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2192, 'DHLPCUK-48', 'DHL Ecommerce 48 Hour', 17460, 'Zone A', 29446, 'Parcel', 15.95)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -118021,15 +118364,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2529, 'DPD-DROP5KND', 'DPD Drop Off Next Day 5k Ins', 19134, 'Mainland', 31770, '10KG', 13.35),
       (v_c_id, 150, 'DPD', 'DPD', 2529, 'DPD-DROP5KND', 'DPD Drop Off Next Day 5k Ins', 19134, 'Mainland', 31771, '15KG', 13.35),
       (v_c_id, 150, 'DPD', 'DPD', 2529, 'DPD-DROP5KND', 'DPD Drop Off Next Day 5k Ins', 19134, 'Mainland', 31772, '20KG', 13.35)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -118082,15 +118426,16 @@ BEGIN
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2273, 'DHLPCUK1K-220', 'DHL Parcel 1K Insurance', 17504, 'Zone C', 29448, 'Parcel', 21.13),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2273, 'DHLPCUK1K-220', 'DHL Parcel 1K Insurance', 17505, 'Zone D', 29448, 'Parcel', 21.13),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2376, 'DHLPUK-72', 'DHL 72 Hour', 18257, 'Out of Area', 30580, 'Parcel', 15.95)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -118118,15 +118463,16 @@ BEGIN
       (v_c_id, 275, 'YODC2C', 'Yodel C2C', 1644, 'YODC2C', 'Yodel C2C', 14017, 'Out of Area', 25269, '0 - 1 KG', 5.75),
       (v_c_id, 275, 'YODC2C', 'Yodel C2C', 1644, 'YODC2C', 'Yodel C2C', 14017, 'Out of Area', 25270, '1 - 2 KG', 6.2),
       (v_c_id, 275, 'YODC2C', 'Yodel C2C', 1644, 'YODC2C', 'Yodel C2C', 14017, 'Out of Area', 25271, '2 - 5 KG', 7.25)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -118153,15 +118499,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2529, 'DPD-DROP5KND', 'DPD Drop Off Next Day 5k Ins', 19134, 'Mainland', 31770, '10KG', 13.25),
       (v_c_id, 150, 'DPD', 'DPD', 2529, 'DPD-DROP5KND', 'DPD Drop Off Next Day 5k Ins', 19134, 'Mainland', 31771, '15KG', 13.25),
       (v_c_id, 150, 'DPD', 'DPD', 2529, 'DPD-DROP5KND', 'DPD Drop Off Next Day 5k Ins', 19134, 'Mainland', 31772, '20KG', 13.25)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -118185,15 +118532,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 767, 'DPD-01', 'DPD Sunday', 9536, 'Mainland', 17520, 'Parcel', 9.95),
       (v_c_id, 150, 'DPD', 'DPD', 1634, 'DPD-32', 'DPD Expresspak', 14857, 'Mainland', 26022, 'Expresspak 1', 4.35),
       (v_c_id, 150, 'DPD', 'DPD', 1634, 'DPD-32', 'DPD Expresspak', 14857, 'Mainland', 32042, 'Expresspak 5', 4.35)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -118231,15 +118579,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1344, 'DPD-16OOG', 'DPD Saturday Out of Gauge', 12724, 'Mainland', 23073, 'Parcel', 18.9),
       (v_c_id, 150, 'DPD', 'DPD', 1360, 'DPD-42', 'DPD Swap IT Next Day', 12796, 'Mainland', 23134, 'Parcel', 8.05),
       (v_c_id, 150, 'DPD', 'DPD', 1922, 'DPD-NIAR', 'DPD N Ireland At Risk', 15614, 'N Ireland', 26489, 'Parcel', 10.25)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -118268,15 +118617,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 872, 'DPD-12OFF', 'DPD Next Day N Ireland', 9827, 'DPD Offshore', 18023, 'Parcel', 32.4),
       (v_c_id, 150, 'DPD', 'DPD', 937, 'DPD-5000', 'DPD Next Day 5k Insurance', 11465, 'Mainland', 19694, 'Parcel', 12.45),
       (v_c_id, 150, 'DPD', 'DPD', 1026, 'DPD-12OOG', 'DPD Next Day Out of Gauge', 12159, 'Mainland', 21247, 'Parcel', 14.9)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -118298,15 +118648,16 @@ BEGIN
       (v_c_id, 450, 'AGL', 'AGL', 2788, 'AGL-2VSNNI', 'Yodel Xpect Mini N.I.', 21213, 'Northern Ireland', 33888, 'Packet', 7.1),
       (v_c_id, 450, 'AGL', 'AGL', 2789, 'AGL-2VMNNI', 'Xpect Medium Northern Ireland', 21214, 'Northern Ireland', 33889, 'Parcel', 7.63),
       (v_c_id, 450, 'AGL', 'AGL', 2845, 'AGL-1VN', 'Xpect Large 24', 21987, 'Mainland', 35167, 'Parcel', 5.05)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -118328,15 +118679,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 15865, 'Highlands and Islands', 25283, '10KG', 13.32),
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 15865, 'Highlands and Islands', 25284, '15KG', 13.32),
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 15865, 'Highlands and Islands', 25285, '20KG', 13.32)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -118366,15 +118718,16 @@ BEGIN
       (v_c_id, 275, 'YODC2C', 'Yodel C2C', 1644, 'YODC2C', 'Yodel C2C', 14017, 'Out of Area', 25270, '1 - 2 KG', 6.3),
       (v_c_id, 275, 'YODC2C', 'Yodel C2C', 1644, 'YODC2C', 'Yodel C2C', 14017, 'Out of Area', 25271, '2 - 5 KG', 7.2),
       (v_c_id, 275, 'YODC2C', 'Yodel C2C', 1644, 'YODC2C', 'Yodel C2C', 14017, 'Out of Area', 25272, '5 - 10 KG', 8.1)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -118412,15 +118765,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1634, 'DPD-32', 'DPD Expresspak', 14857, 'Mainland', 32042, 'Expresspak 5', 4.75),
       (v_c_id, 150, 'DPD', 'DPD', 1922, 'DPD-NIAR', 'DPD N Ireland At Risk', 15614, 'N Ireland', 26489, 'Parcel', 10.25),
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 12.5)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -118440,15 +118794,16 @@ BEGIN
       (v_c_id, 275, 'YODC2C', 'Yodel C2C', 1644, 'YODC2C', 'Yodel C2C', 14017, 'Out of Area', 25270, '1 - 2 KG', 6.2),
       (v_c_id, 275, 'YODC2C', 'Yodel C2C', 1644, 'YODC2C', 'Yodel C2C', 14017, 'Out of Area', 25271, '2 - 5 KG', 7.2),
       (v_c_id, 275, 'YODC2C', 'Yodel C2C', 1644, 'YODC2C', 'Yodel C2C', 14017, 'Out of Area', 25272, '5 - 10 KG', 8.1)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -118480,15 +118835,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2530, 'DPD-12DROPQR', 'DPD Drop Off Next Day QR Code', 19135, 'Mainland', 31775, '10KG', 5.95),
       (v_c_id, 150, 'DPD', 'DPD', 2530, 'DPD-12DROPQR', 'DPD Drop Off Next Day QR Code', 19135, 'Mainland', 31776, '15KG', 5.95),
       (v_c_id, 150, 'DPD', 'DPD', 2530, 'DPD-12DROPQR', 'DPD Drop Off Next Day QR Code', 19135, 'Mainland', 31777, '20KG', 5.95)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -118520,15 +118876,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2530, 'DPD-12DROPQR', 'DPD Drop Off Next Day QR Code', 19135, 'Mainland', 31775, '10KG', 5.95),
       (v_c_id, 150, 'DPD', 'DPD', 2530, 'DPD-12DROPQR', 'DPD Drop Off Next Day QR Code', 19135, 'Mainland', 31776, '15KG', 5.95),
       (v_c_id, 150, 'DPD', 'DPD', 2530, 'DPD-12DROPQR', 'DPD Drop Off Next Day QR Code', 19135, 'Mainland', 31777, '20KG', 5.95)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -118575,15 +118932,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2272, 'DPD-NIAR5K', 'DPD NI At Risk 5K Insurance', 17501, 'N Ireland', 29447, 'Parcel', 17.75),
       (v_c_id, 150, 'DPD', 'DPD', 2565, 'DPD-SAT5K', 'DPD Saturday 5k Insurance', 19256, 'Mainland', 31944, 'Parcel', 16.45),
       (v_c_id, 150, 'DPD', 'DPD', 2900, 'DPD-2DAYOFF', 'DPD 2 Day Offshore', 22560, 'Offshore', 35430, 'Parcel', 14.25)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -118607,15 +118965,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1735, 'DPD-20', 'DPD Direct Lite', 15269, 'Canada', 25973, '0.5 kg - 1 kg', 18.32),
       (v_c_id, 150, 'DPD', 'DPD', 1735, 'DPD-20', 'DPD Direct Lite', 15269, 'Canada', 25974, '1 kg - 1.5 kg', 22.88),
       (v_c_id, 150, 'DPD', 'DPD', 1735, 'DPD-20', 'DPD Direct Lite', 15269, 'Canada', 25975, '1.5 kg - 2 kg', 27.44)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -118637,15 +118996,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 15865, 'Highlands and Islands', 25283, '10KG', 13.32),
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 15865, 'Highlands and Islands', 25284, '15KG', 13.32),
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 15865, 'Highlands and Islands', 25285, '20KG', 13.32)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -118707,15 +119067,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2530, 'DPD-12DROPQR', 'DPD Drop Off Next Day QR Code', 19135, 'Mainland', 31775, '10KG', 6.25),
       (v_c_id, 150, 'DPD', 'DPD', 2530, 'DPD-12DROPQR', 'DPD Drop Off Next Day QR Code', 19135, 'Mainland', 31776, '15KG', 6.25),
       (v_c_id, 150, 'DPD', 'DPD', 2530, 'DPD-12DROPQR', 'DPD Drop Off Next Day QR Code', 19135, 'Mainland', 31777, '20KG', 6.25)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -118747,15 +119108,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2530, 'DPD-12DROPQR', 'DPD Drop Off Next Day QR Code', 19135, 'Mainland', 31775, '10KG', 5.65),
       (v_c_id, 150, 'DPD', 'DPD', 2530, 'DPD-12DROPQR', 'DPD Drop Off Next Day QR Code', 19135, 'Mainland', 31776, '15KG', 5.65),
       (v_c_id, 150, 'DPD', 'DPD', 2530, 'DPD-12DROPQR', 'DPD Drop Off Next Day QR Code', 19135, 'Mainland', 31777, '20KG', 5.65)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -118806,15 +119168,16 @@ BEGIN
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2273, 'DHLPCUK1K-220', 'DHL Parcel 1K Insurance', 17504, 'Zone C', 29448, 'Parcel', 21.13),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2273, 'DHLPCUK1K-220', 'DHL Parcel 1K Insurance', 17505, 'Zone D', 29448, 'Parcel', 21.13),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2376, 'DHLPUK-72', 'DHL 72 Hour', 18257, 'Out of Area', 30580, 'Parcel', 15.95)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -118839,15 +119202,16 @@ BEGIN
       (v_c_id, 275, 'YODC2C', 'Yodel C2C', 1644, 'YODC2C', 'Yodel C2C', 14017, 'Out of Area', 25270, '1 - 2 KG', 10),
       (v_c_id, 275, 'YODC2C', 'Yodel C2C', 1644, 'YODC2C', 'Yodel C2C', 14017, 'Out of Area', 25271, '2 - 5 KG', 12),
       (v_c_id, 275, 'YODC2C', 'Yodel C2C', 1644, 'YODC2C', 'Yodel C2C', 14017, 'Out of Area', 25272, '5 - 10 KG', 12)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -118874,15 +119238,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 774, 'DPD-18', 'DPD Saturday 10.30', 9550, 'Mainland', 17524, 'Parcel', 20.95),
       (v_c_id, 150, 'DPD', 'DPD', 775, 'DPD-17', 'DPD Saturday 12.00', 9551, 'Mainland', 17525, 'Parcel', 15.3),
       (v_c_id, 150, 'DPD', 'DPD', 872, 'DPD-12OFF', 'DPD Next Day N Ireland', 9827, 'DPD Offshore', 18023, 'Parcel', 32.4)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -118922,15 +119287,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1634, 'DPD-32', 'DPD Expresspak', 14857, 'Mainland', 32042, 'Expresspak 5', 4.25),
       (v_c_id, 150, 'DPD', 'DPD', 1922, 'DPD-NIAR', 'DPD N Ireland At Risk', 15614, 'N Ireland', 26489, 'Parcel', 10.25),
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 9.95)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -118970,15 +119336,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1634, 'DPD-32', 'DPD Expresspak', 14857, 'Mainland', 32042, 'Expresspak 5', 5.95),
       (v_c_id, 150, 'DPD', 'DPD', 1922, 'DPD-NIAR', 'DPD N Ireland At Risk', 15614, 'N Ireland', 26489, 'Parcel', 10.25),
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 12.5)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -119018,15 +119385,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1634, 'DPD-32', 'DPD Expresspak', 14857, 'Mainland', 32042, 'Expresspak 5', 4.65),
       (v_c_id, 150, 'DPD', 'DPD', 1922, 'DPD-NIAR', 'DPD N Ireland At Risk', 15614, 'N Ireland', 26489, 'Parcel', 10.25),
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 12.5)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -119066,15 +119434,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1634, 'DPD-32', 'DPD Expresspak', 14857, 'Mainland', 32042, 'Expresspak 5', 4.25),
       (v_c_id, 150, 'DPD', 'DPD', 1922, 'DPD-NIAR', 'DPD N Ireland At Risk', 15614, 'N Ireland', 26489, 'Parcel', 10.25),
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 12.5)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -119128,15 +119497,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 2899, 'DPD-19DDP', 'DPD Classic Road DDP', 22557, 'Sweden', 35429, 'Parcel', 24.96),
       (v_c_id, 150, 'DPD', 'DPD', 2899, 'DPD-19DDP', 'DPD Classic Road DDP', 22558, 'Switzerland', 35429, 'Parcel', 27.64),
       (v_c_id, 150, 'DPD', 'DPD', 2899, 'DPD-19DDP', 'DPD Classic Road DDP', 22559, 'Greece', 35429, 'Parcel', 37.33)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -119158,15 +119528,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 15865, 'Highlands and Islands', 25283, '10KG', 13.32),
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 15865, 'Highlands and Islands', 25284, '15KG', 13.32),
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 15865, 'Highlands and Islands', 25285, '20KG', 13.32)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -119204,15 +119575,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 3415, 'DPD-11DROPQR', 'DPD Drop Off Two Day QR', 31199, 'Mainland', 38280, '10KG', 5.25),
       (v_c_id, 150, 'DPD', 'DPD', 3415, 'DPD-11DROPQR', 'DPD Drop Off Two Day QR', 31199, 'Mainland', 38281, '15KG', 5.95),
       (v_c_id, 150, 'DPD', 'DPD', 3415, 'DPD-11DROPQR', 'DPD Drop Off Two Day QR', 31199, 'Mainland', 38282, '20KG', 5.95)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -119234,15 +119606,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 15865, 'Highlands and Islands', 25283, '10KG', 13.32),
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 15865, 'Highlands and Islands', 25284, '15KG', 13.32),
       (v_c_id, 150, 'DPD', 'DPD', 1563, 'DPD12-DROP', 'DPD Drop Off Next Day', 15865, 'Highlands and Islands', 25285, '20KG', 13.32)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -119270,15 +119643,16 @@ BEGIN
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2273, 'DHLPCUK1K-220', 'DHL Parcel 1K Insurance', 17503, 'Zone B', 29448, 'Parcel', 10.63),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2273, 'DHLPCUK1K-220', 'DHL Parcel 1K Insurance', 17504, 'Zone C', 29448, 'Parcel', 21.13),
       (v_c_id, 229, 'DHL', 'DHL Ecommerce', 2273, 'DHLPCUK1K-220', 'DHL Parcel 1K Insurance', 17505, 'Zone D', 29448, 'Parcel', 21.13)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
@@ -119310,15 +119684,16 @@ BEGIN
       (v_c_id, 150, 'DPD', 'DPD', 1634, 'DPD-32', 'DPD Expresspak', 14857, 'Mainland', 26022, 'Expresspak 1', 4.45),
       (v_c_id, 150, 'DPD', 'DPD', 1634, 'DPD-32', 'DPD Expresspak', 14857, 'Mainland', 32042, 'Expresspak 5', 4.45),
       (v_c_id, 150, 'DPD', 'DPD', 2091, 'DPD-11ROI', 'DPD Ireland', 16910, 'Ireland', 28876, 'Parcel', 12.5)
-    ON CONFLICT (customer_id, service_id, zone_id, weight_class_id)
+    ON CONFLICT (customer_id, service_id, zone_name, weight_class_name)
     DO UPDATE SET 
       price = EXCLUDED.price,
+      courier_id = EXCLUDED.courier_id,
       courier_code = EXCLUDED.courier_code,
       courier_name = EXCLUDED.courier_name,
       service_code = EXCLUDED.service_code,
       service_name = EXCLUDED.service_name,
-      zone_name = EXCLUDED.zone_name,
-      weight_class_name = EXCLUDED.weight_class_name;
+      zone_id = EXCLUDED.zone_id,
+      weight_class_id = EXCLUDED.weight_class_id;
   END IF;
 END $$;
 
