@@ -612,9 +612,7 @@ export async function processShipment(payload) {
             `SELECT id, multi_box_pricing FROM customers
              WHERE EXISTS (
                SELECT 1 FROM unnest(billing_aliases) a
-               WHERE LOWER(a) = LOWER($1)
-                  OR LOWER($1) ILIKE '%' || LOWER(a) || '%'
-                  OR LOWER(a) ILIKE '%' || LOWER($1) || '%'
+               WHERE LOWER(TRIM(a)) = LOWER(TRIM($1))
              ) LIMIT 1`,
             [cand]
           );
