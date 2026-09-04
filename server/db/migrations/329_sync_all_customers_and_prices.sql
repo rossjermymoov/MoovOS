@@ -119697,9 +119697,23 @@ BEGIN
   END IF;
 END $$;
 
--- ── Re-link unassigned shipments to customers by dc_customer_id & account_number ──
-UPDATE shipments s
-SET customer_id = c.id
-FROM customers c
-WHERE (s.customer_dc_id = c.dc_customer_id OR s.customer_dc_id = c.account_number)
-  AND (s.customer_id IS NULL OR s.customer_id != c.id);
+-- ── Re-link unassigned charges to customers by webhook raw_payload ──
+DO $$
+BEGIN
+  UPDATE charges ch
+  SET customer_id = c.id
+  FROM customers c
+  WHERE (
+      ch.raw_payload->>'customer_dc_id' = c.dc_customer_id 
+      OR ch.raw_payload->>'customer_dc_id' = c.account_number
+      OR ch.raw_payload->>'account_number' = c.account_number
+    )
+    AND (ch.customer_id IS NULL OR ch.customer_id != c.id);
+
+  UPDATE shipments s
+  SET customer_id = ch.customer_id
+  FROM charges ch
+  WHERE s.id = ch.shipment_id
+    AND ch.customer_id IS NOT NULL
+    AND (s.customer_id IS NULL OR s.customer_id != ch.customer_id);
+END $$;
