@@ -135,9 +135,9 @@ export async function createOrUpdateShipment(payload, customerId) {
           tracking_codes, raw_payload
         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
         ON CONFLICT (platform_shipment_id) DO UPDATE SET
-          customer_id      = COALESCE(EXCLUDED.customer_id,      shipments.customer_id),
-          customer_account = COALESCE(EXCLUDED.customer_account, shipments.customer_account),
-          customer_name    = COALESCE(EXCLUDED.customer_name,    shipments.customer_name),
+          customer_id      = EXCLUDED.customer_id,
+          customer_account = EXCLUDED.customer_account,
+          customer_name    = EXCLUDED.customer_name,
           service_name     = COALESCE(EXCLUDED.service_name,     shipments.service_name),
           tracking_codes   = COALESCE(EXCLUDED.tracking_codes,   shipments.tracking_codes),
           dc_service_id    = COALESCE(EXCLUDED.dc_service_id,    shipments.dc_service_id),

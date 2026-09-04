@@ -1302,10 +1302,6 @@ export async function processShipmentCreatedWebhook(body) {
     const cr4 = await query('SELECT id FROM customers WHERE LOWER(business_name) = LOWER($1) OR LOWER(trading_name) = LOWER($1) LIMIT 1', [accountName.trim()]);
     if (cr4.rows.length) customerId = cr4.rows[0].id;
   }
-  if (!customerId && accountName) {
-    const cr4b = await query('SELECT id FROM customers WHERE LOWER(business_name) ILIKE $1 ORDER BY LENGTH(business_name) ASC LIMIT 1', [`%${accountName.trim()}%`]);
-    if (cr4b.rows.length) customerId = cr4b.rows[0].id;
-  }
 
   const effectiveAccount = accountNumber || customerDcId || null;
 
@@ -1335,8 +1331,8 @@ export async function processShipmentCreatedWebhook(body) {
          raw_payload)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29)
       ON CONFLICT (platform_shipment_id) DO UPDATE SET
-        customer_id                   = COALESCE(EXCLUDED.customer_id, shipments.customer_id),
-        customer_account              = COALESCE(EXCLUDED.customer_account, shipments.customer_account),
+        customer_id                   = EXCLUDED.customer_id,
+        customer_account              = EXCLUDED.customer_account,
         service_name                  = COALESCE(EXCLUDED.service_name, shipments.service_name),
         tracking_codes                = COALESCE(EXCLUDED.tracking_codes, shipments.tracking_codes),
         tracking_hash                 = COALESCE(EXCLUDED.tracking_hash, shipments.tracking_hash),
@@ -2329,21 +2325,57 @@ router.post('/full-reprice', async (req, res, next) => {
         const innerPayload   = unwrapPayload(rawPayload);
         const extracted      = extractShipmentFields(innerPayload);
 
-        let customerId = row.customer_id;
-        if (!customerId) {
-          const acctNum = row.customer_account || extracted.accountNumber;
-          if (acctNum) {
-            const cr  = await query('SELECT id FROM customers WHERE account_number = $1', [acctNum]);
-            const cr2 = cr.rows.length ? null : await query('SELECT id FROM customers WHERE dc_customer_id = $1', [acctNum]);
-            customerId = cr.rows[0]?.id || cr2?.rows[0]?.id || null;
-          }
-          if (!customerId && extracted.customerDcId) {
-            const cr3 = await query('SELECT id FROM customers WHERE dc_customer_id = $1', [extracted.customerDcId]);
-            customerId = cr3.rows[0]?.id || null;
+        let customerId = null;
+        const acctNum = extracted.accountNumber || row.customer_account;
+        const dcId = extracted.customerDcId;
+
+        if (acctNum) {
+          const cr  = await query('SELECT id, is_test_account FROM customers WHERE account_number = $1 OR dc_customer_id = $1 LIMIT 1', [acctNum]);
+          if (cr.rows.length) {
+            customerId = cr.rows[0].id;
           }
         }
+        if (!customerId && dcId) {
+          const cr3 = await query('SELECT id, is_test_account FROM customers WHERE dc_customer_id = $1 LIMIT 1', [dcId]);
+          if (cr3.rows.length) {
+            customerId = cr3.rows[0].id;
+          }
+        }
+        if (!customerId && !acctNum && !dcId && row.customer_id) {
+          customerId = row.customer_id;
+        }
 
-        if (!customerId) { summary.no_customer++; continue; }
+        if (!customerId) {
+          // Customer does not exist or does not match — unassign and clear price
+          await query(`
+            UPDATE charges
+            SET customer_id          = NULL,
+                price                = NULL,
+                price_auto           = false,
+                price_failure_reason = $1,
+                updated_at           = NOW()
+            WHERE id = $2
+          `, [`Customer not found: ${dcId || acctNum || 'unknown'}`, row.charge_id]);
+
+          if (row.shipment_id) {
+            await query(`
+              UPDATE shipments
+              SET customer_id = NULL, customer_account = $1, updated_at = NOW()
+              WHERE id = $2
+            `, [dcId || acctNum || null, row.shipment_id]);
+          }
+
+          summary.no_customer++;
+          continue;
+        }
+
+        // Keep charge and shipment customer_id updated to the correctly resolved customerId
+        if (row.customer_id !== customerId) {
+          await query(`UPDATE charges SET customer_id = $1, updated_at = NOW() WHERE id = $2`, [customerId, row.charge_id]);
+          if (row.shipment_id) {
+            await query(`UPDATE shipments SET customer_id = $1, customer_account = $2, updated_at = NOW() WHERE id = $3`, [customerId, dcId || acctNum || null, row.shipment_id]);
+          }
+        }
 
         // Test accounts always bill at £0 — skip rate lookup and restore £0 if the
         // price was incorrectly cleared by a previous reprice run.
