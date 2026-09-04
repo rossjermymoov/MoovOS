@@ -1,7 +1,7 @@
 -- Migration 332: Delete test, QA, and dummy customer accounts
 -- Removes all developer testing, QA, and dummy test accounts imported from Billing API.
 
-DO $migration$
+DO $$
 DECLARE
   v_test_dc_ids TEXT[] := ARRAY[
     'Cloud9',
@@ -131,4 +131,4 @@ BEGIN
   DELETE FROM customers
   WHERE dc_customer_id = ANY(v_test_dc_ids)
      OR account_number = ANY(v_test_dc_ids);
-END $migration$;
+END $$;
