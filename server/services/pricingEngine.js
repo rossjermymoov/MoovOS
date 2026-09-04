@@ -652,22 +652,17 @@ export async function processShipment(payload) {
       if (r.rows.length) pickCustomer(r.rows[0]);
     }
 
-    // Step 4: business_name / company_name / trading_name exact or partial match
-    const nameCandidates = [accountName, accountNumber, authCompany, customerDcId].filter(Boolean);
+    // Step 4: business_name / company_name / trading_name exact match only (strictly no fuzzy/LIKE matching)
+    const nameCandidates = [accountName, authCompany].filter(Boolean);
     for (const cand of nameCandidates) {
       if (!customerId && cand) {
         const r = await query(
           `SELECT id, multi_box_pricing FROM customers
-           WHERE LOWER(business_name) = LOWER($1)
-              OR LOWER(business_name) LIKE LOWER($2)
-              OR LOWER($1) LIKE '%' || LOWER(business_name) || '%'
-              OR LOWER(trading_name) = LOWER($1)
-              OR LOWER(trading_name) LIKE LOWER($2)
-              OR LOWER(company_name) = LOWER($1)
-              OR LOWER(company_name) LIKE LOWER($2)
-           ORDER BY (CASE WHEN LOWER(business_name) = LOWER($1) THEN 0 ELSE 1 END)
+           WHERE LOWER(TRIM(business_name)) = LOWER(TRIM($1))
+              OR LOWER(TRIM(trading_name)) = LOWER(TRIM($1))
+              OR LOWER(TRIM(company_name)) = LOWER(TRIM($1))
            LIMIT 1`,
-          [cand, `%${cand}%`]
+          [cand]
         );
         if (r.rows.length) {
           pickCustomer(r.rows[0]);
