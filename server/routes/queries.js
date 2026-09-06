@@ -19,6 +19,7 @@ import { evaluateAutomationRules } from '../services/automationEngine.js';
 import { triagePriority } from '../services/triageEngine.js';
 import { aiAutonomouslyLearnPreference } from '../services/learningEngine.js';
 import { recordApproval } from '../services/workflowTrust.js';
+import { sendQueryEmail } from '../services/sendGateway.js';
 
 const router = express.Router();
 
@@ -1473,14 +1474,32 @@ router.patch('/:id/emails/:emailId/approve', async (req, res, next) => {
     }
 
     const draft = existing.rows[0];
+    if (draft.sent_at || draft.send_status === 'sent') {
+      return res.status(409).json({ error: 'This draft has already been sent.' });
+    }
+
     const wasEdited = body_text && body_text.trim() !== (draft.body_text || '').trim();
     const finalBody = body_text || draft.body_text;
 
-    // Sandbox mode bypasses any live mail transport. (There is no live SendGrid/
-    // Gmail send wired into this endpoint yet, so today every approval is already
-    // DB-only — this flag makes the intent explicit and is the switch a future
-    // live-send must check before dispatching.)
+    // Sandbox mode bypasses any live mail transport — used by the demo loop-back
+    // below so a full ping-pong cycle can be watched with no real mail sent.
     const sandbox = req.query.sandbox === 'true' || req.body.sandbox === true;
+
+    // Live send — via the Gmail-backed Send Gateway, not SendGrid, so the reply
+    // lands in the same thread the customer/courier already sees. On failure,
+    // stop here: the draft stays in QA Bay for retry and none of the approval
+    // side-effects below (trust streak, first-response time) fire for a message
+    // that never actually left.
+    if (!sandbox) {
+      if (wasEdited) {
+        await query(`UPDATE query_emails SET body_text = $1 WHERE id = $2`, [finalBody, emailId]);
+      }
+      try {
+        await sendQueryEmail(emailId, { sentBy: 'human' });
+      } catch (e) {
+        return res.status(502).json({ error: e.message });
+      }
+    }
 
     // Approved → it's a real sent message now (is_ai_draft = false) so it prints
     // to the conversation timeline and leaves the QA Bay.
@@ -1563,14 +1582,17 @@ function scheduleSandboxLoopback(queryId) {
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/queries/:id/approve-strategy
 // Dual-approval dispatch: approve BOTH the pending customer + courier drafts for
-// a ticket in one shot. Applies any edits, marks them sent (is_ai_draft=false),
+// a ticket in one shot. Sends each for real via the Send Gateway (unless
+// sandbox), applies any edits, marks the ones that sent (is_ai_draft=false),
 // flips the ticket to awaiting external response, and clears the parent QA card.
-// Sandbox by default — no real mail transport is wired in yet.
+// A failed send is left as a draft for retry rather than rolling back or
+// silently marking it sent — the two sides are dispatched independently.
 // ─────────────────────────────────────────────────────────────────────────────
 router.post('/:id/approve-strategy', async (req, res, next) => {
   try {
     const queryId = req.params.id;
     const { customer_body, courier_body } = req.body || {};
+    const sandbox = req.query.sandbox === 'true' || req.body.sandbox === true;
 
     const pending = await query(
       `SELECT id, direction, body_text FROM query_emails
@@ -1581,6 +1603,7 @@ router.post('/:id/approve-strategy', async (req, res, next) => {
     if (!pending.rows.length) return res.status(404).json({ error: 'No pending drafts on this ticket' });
 
     const dispatched = [];
+    const failed = [];
     let anyCourier = false, anyEdited = false;
 
     for (const d of pending.rows) {
@@ -1588,6 +1611,19 @@ router.post('/:id/approve-strategy', async (req, res, next) => {
       const override  = isCourier ? courier_body : customer_body;
       const finalBody = (override != null && override !== '') ? override : d.body_text;
       const wasEdited = finalBody.trim() !== (d.body_text || '').trim();
+
+      if (!sandbox) {
+        try {
+          if (finalBody !== d.body_text) {
+            await query(`UPDATE query_emails SET body_text = $1 WHERE id = $2`, [finalBody, d.id]);
+          }
+          await sendQueryEmail(d.id, { sentBy: 'human' });
+        } catch (e) {
+          failed.push({ email_id: d.id, direction: d.direction, error: e.message });
+          continue; // leave this one as a draft for retry — don't mark sent, don't count it below
+        }
+      }
+
       if (wasEdited) anyEdited = true;
       if (isCourier) anyCourier = true;
 
@@ -1603,27 +1639,31 @@ router.post('/:id/approve-strategy', async (req, res, next) => {
       dispatched.push({ email_id: d.id, direction: d.direction, edited: wasEdited });
     }
 
-    // Flip ticket to "awaiting external response", set track states + trust streak.
-    const nextStatus = anyCourier ? 'awaiting_courier' : 'awaiting_customer';
-    await query(
-      `UPDATE queries
-          SET status = $2::query_status,
-              internal_automation_state = 'awaiting_courier_response',
-              track_a_status = 'Sent',
-              track_b_status = $4,
-              consecutive_approvals = CASE WHEN $3 THEN 0 ELSE consecutive_approvals + 1 END,
-              updated_at = NOW()
-        WHERE id = $1`,
-      [queryId, nextStatus, anyEdited, anyCourier ? 'Sent' : 'Standby'],
-    );
+    // Only move the ticket forward / touch the trust streak for what actually
+    // dispatched — if everything failed to send, leave ticket state untouched.
+    let nextStatus = null;
+    if (dispatched.length) {
+      nextStatus = anyCourier ? 'awaiting_courier' : 'awaiting_customer';
+      await query(
+        `UPDATE queries
+            SET status = $2::query_status,
+                internal_automation_state = 'awaiting_courier_response',
+                track_a_status = 'Sent',
+                track_b_status = $4,
+                consecutive_approvals = CASE WHEN $3 THEN 0 ELSE consecutive_approvals + 1 END,
+                updated_at = NOW()
+          WHERE id = $1`,
+        [queryId, nextStatus, anyEdited, anyCourier ? 'Sent' : 'Standby'],
+      );
 
-    // Per-category Probation→Autopilot calibration.
-    try {
-      const c = await query(`SELECT courier_code, triage_intent FROM queries WHERE id = $1`, [queryId]);
-      if (c.rows[0]) await recordApproval(c.rows[0].courier_code, c.rows[0].triage_intent, anyEdited);
-    } catch (e) { console.warn('[WorkflowTrust] strategy calibration failed:', e.message); }
+      // Per-category Probation→Autopilot calibration.
+      try {
+        const c = await query(`SELECT courier_code, triage_intent FROM queries WHERE id = $1`, [queryId]);
+        if (c.rows[0]) await recordApproval(c.rows[0].courier_code, c.rows[0].triage_intent, anyEdited);
+      } catch (e) { console.warn('[WorkflowTrust] strategy calibration failed:', e.message); }
+    }
 
-    res.json({ ok: true, dispatched, status: nextStatus });
+    res.json({ ok: failed.length === 0, dispatched, failed, status: nextStatus });
   } catch (err) { next(err); }
 });
 
