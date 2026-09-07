@@ -67,9 +67,10 @@ export default function CommsTemplates() {
     setSaving(true); setSaved(false);
     try {
       const payload = {
-        queries_email:    form.queries_email ?? '',
-        claims_email:     form.claims_email ?? '',
-        tracking_samples: form.tracking_samples ?? '',
+        queries_email:           form.queries_email ?? '',
+        claims_email:            form.claims_email ?? '',
+        tracking_samples:        form.tracking_samples ?? '',
+        generic_reply_patterns:  form.generic_reply_patterns ?? '',
         ...Object.fromEntries(FIELDS.map(f => [f.key, form[f.key] ?? ''])),
       };
       const r = await api.put(`/settings/couriers/${code}/templates`, payload);
@@ -154,6 +155,23 @@ export default function CommsTemplates() {
                 ))}
               </div>
             )}
+          </div>
+
+          {/* Known copy-paste non-answers — the Reply Interpreter treats a match as
+              "needs more info", never "resolved", so a courier's boilerplate can't
+              falsely close out a case. */}
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#94A3B8', marginBottom: 10 }}>
+            Known Non-Answer Phrases
+          </div>
+          <div style={{ marginBottom: 22 }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: '#334155', display: 'block', marginBottom: 4 }}>🚩 Generic reply phrases</label>
+            <p style={{ fontSize: 11, color: '#94A3B8', margin: '0 0 7px' }}>
+              One phrase per line. If a courier's reply contains any of these, we treat it as a non-answer and
+              follow up automatically instead of relaying it to the customer as a resolution.
+            </p>
+            <textarea value={form.generic_reply_patterns ?? ''} onChange={e => set('generic_reply_patterns', e.target.value)}
+              style={{ ...taSt, fontFamily: 'monospace', fontSize: 12 }} rows={3}
+              placeholder={'unexpected issue\nwe are investigating this for you'} />
           </div>
 
           {/* Top-and-Tail boilerplate templates. */}

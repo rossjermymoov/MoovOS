@@ -20,7 +20,7 @@ const SUPPORT_FROM = 'service@moovparcel.co.uk';
 // Issue types that should route to the courier's claims/disputes inbox.
 const CLAIM_ISSUES = new Set(['DAMAGED', 'LOST', 'RETURN_TO_SENDER']);
 
-async function insertDraft(queryId, direction, subject, body, toAddress = null) {
+export async function insertDraft(queryId, direction, subject, body, toAddress = null) {
   await query(
     `INSERT INTO query_emails
        (query_id, direction, subject, body_text, from_address, to_address, is_ai_draft, reply_to_message_id, created_at)
@@ -191,7 +191,7 @@ async function resolveTracking(courierCode, candidate) {
 // Resolve the live outbound courier address from courier_routing_rules.
 // Picks the claims inbox for claim-type issues, else the general queries inbox.
 // Falls back to the general address, then null, so drafting never blocks.
-async function resolveCourierEmail(courierCode, issueType) {
+export async function resolveCourierEmail(courierCode, issueType) {
   if (!courierCode) return null;
   try {
     const r = await query(
@@ -486,5 +486,8 @@ export async function recordCourierReply(queryId, { subject = '', body = '', fro
      VALUES ($1, 'inbound_courier'::email_direction, $2, $3, $4, false, NOW(), NOW())`,
     [queryId, subject || 'Courier update', body, from || 'courier@external.invalid'],
   );
-  return draftCustomerUpdateFromCourier(queryId, body);
+  // WISMO Phase 2 (MOS-3): classify before drafting, instead of always
+  // translating straight to the customer. See replyInterpreter.js.
+  const { interpretCourierReply } = await import('./replyInterpreter.js');
+  return interpretCourierReply(queryId, body);
 }
