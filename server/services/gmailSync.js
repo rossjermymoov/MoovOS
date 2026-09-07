@@ -105,7 +105,8 @@ import { query } from '../db/index.js';
 import { evaluateAutomationRules } from './automationEngine.js';
 import { triagePriority } from './triageEngine.js';
 import { isLikelyTracking } from './geminiService.js';
-import { identifyCourierByTracking, getAllTrackingExamples, draftCustomerUpdateFromCourier } from './courierAutomation.js';
+import { identifyCourierByTracking, getAllTrackingExamples } from './courierAutomation.js';
+import { interpretCourierReply } from './replyInterpreter.js';
 
 // Sender domains that are couriers / our wholesaler (AGL) — never the customer.
 const COURIER_DOMAINS = /@(?:[a-z0-9-]+\.)*(dpd|dhl|evri|hermes|myhermes|yodel|ups|parcelforce|royalmail|fedex|agl)\.[a-z.]{2,}/i;
@@ -419,11 +420,13 @@ async function upsertTicket(msg, gmail = null) {
   }
   if (isOurs) console.log(`[Gmail sync] Stored OUTBOUND reply on ticket ${queryId} (thread ${gmailThreadId}, from ${senderEmail})`);
 
-  // Courier reply stored on the original ticket → translate it into a draft back
-  // to the ORIGINAL customer (never reply to the courier).
+  // Courier reply stored on the original ticket → classify it (WISMO Phase 2,
+  // MOS-3) before deciding what to draft: resolves → customer update, needs more
+  // info / generic non-answer → follow-up to the courier, GDPR request →
+  // auto-confirm the address, ambiguous → escalate to a human.
   if (isCourierSender) {
-    try { await draftCustomerUpdateFromCourier(queryId, body); }
-    catch (e) { console.warn('[Gmail sync] courier→customer translation failed:', e.message); }
+    try { await interpretCourierReply(queryId, body); }
+    catch (e) { console.warn('[Gmail sync] courier reply interpretation failed:', e.message); }
   }
 
   return { status: 'imported', queryId };

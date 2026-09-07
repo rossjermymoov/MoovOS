@@ -21,6 +21,7 @@ const EDITABLE_COLS = [
   'tracking_samples',
   'tracking_pattern',
   'tracking_example',
+  'generic_reply_patterns',
   'courier_header_template',
   'courier_footer_template',
   'customer_header_template',
@@ -32,7 +33,7 @@ router.get('/couriers', async (req, res, next) => {
   try {
     const result = await query(`
       SELECT courier_code, courier_name, queries_email, claims_email, is_active,
-             tracking_samples, tracking_pattern, tracking_example,
+             tracking_samples, tracking_pattern, tracking_example, generic_reply_patterns,
              courier_header_template, courier_footer_template,
              customer_header_template, customer_footer_template
       FROM courier_routing_rules
