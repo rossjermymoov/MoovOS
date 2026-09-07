@@ -289,6 +289,7 @@ async function upsertTicket(msg, gmail = null) {
   const subject    = extractHeader(headers, 'subject') || '(no subject)';
   const fromHeader = extractHeader(headers, 'from');
   const inReplyTo  = extractHeader(headers, 'in-reply-to');
+  const rfcMessageId = extractHeader(headers, 'message-id') || null;
   const body       = extractBody(payload) || '(no body)';
   const bodyHtml   = gmail ? await buildInlineHtml(gmail, gmailMsgId, payload).catch(() => '') : '';
   const { name: senderName, email: senderEmail } = parseFrom(fromHeader);
@@ -404,9 +405,9 @@ async function upsertTicket(msg, gmail = null) {
   }
 
   await query(`
-    INSERT INTO query_emails (query_id, direction, from_address, subject, body_text, body_html, received_at, gmail_message_id, gmail_thread_id, in_reply_to, is_ai_draft, sent_at)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false, $11)
-  `, [queryId, direction, senderEmail, subject, body.slice(0, 50000), bodyHtml ? bodyHtml.slice(0, 2000000) : null, receivedAt, gmailMsgId, gmailThreadId || null, inReplyTo || null, isOurs ? receivedAt : null]);
+    INSERT INTO query_emails (query_id, direction, from_address, subject, body_text, body_html, received_at, gmail_message_id, gmail_thread_id, in_reply_to, rfc_message_id, is_ai_draft, sent_at)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, false, $12)
+  `, [queryId, direction, senderEmail, subject, body.slice(0, 50000), bodyHtml ? bodyHtml.slice(0, 2000000) : null, receivedAt, gmailMsgId, gmailThreadId || null, inReplyTo || null, rfcMessageId, isOurs ? receivedAt : null]);
 
   // Track the latest inbound timestamps + courier-track state for SLA/dual-track.
   if (isCourierSender) {

@@ -1,12 +1,21 @@
 /**
- * gmailService.js — Read-only Gmail OAuth2 wrapper
- * Scopes: gmail.readonly only. Never requests send permission.
+ * gmailService.js — Gmail OAuth2 wrapper
+ * Scopes: gmail.readonly (sync) + gmail.send (sendGateway.js). No modify/delete
+ * scope requested — this account can read and send, never alter/erase mail.
+ *
+ * NOTE: any refresh token already stored in gmail_oauth_config was granted under
+ * the old readonly-only scope set. After deploying a scope change, whoever
+ * administers Settings → Gmail must disconnect and reconnect to re-consent —
+ * the stored token does not retroactively pick up a newly added scope.
  */
 
 import { google } from 'googleapis';
 import { query } from '../db/index.js';
 
-const SCOPES = ['https://www.googleapis.com/auth/gmail.readonly'];
+const SCOPES = [
+  'https://www.googleapis.com/auth/gmail.readonly',
+  'https://www.googleapis.com/auth/gmail.send',
+];
 
 // Read an OAuth env var, trimmed — a stray space/newline in a hosting dashboard
 // is a classic cause of redirect_uri / client mismatches.
