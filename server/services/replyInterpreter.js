@@ -25,7 +25,15 @@ import {
   draftCustomerUpdateFromCourier,
 } from './courierAutomation.js';
 
-const GDPR_PATTERN = /\b(gdpr|data protection)\b.{0,80}\b(confirm|reconfirm).{0,40}(address|delivery details)/is;
+// Two independent checks, order-agnostic — real phrasing puts the "confirm the
+// address" ask either before or after the GDPR justification (e.g. "can you
+// confirm the delivery address for GDPR purposes" vs "for GDPR reasons please
+// reconfirm the address"), so a single sequential pattern is too brittle.
+const GDPR_MENTION_PATTERN   = /\b(gdpr|data protection)\b/i;
+const ADDRESS_CONFIRM_PATTERN = /\b(confirm|reconfirm)\b[\s\S]{0,60}\b(address|delivery details)\b|\b(address|delivery details)\b[\s\S]{0,60}\b(confirm|reconfirm)\b/i;
+function isGdprAddressRequest(body) {
+  return GDPR_MENTION_PATTERN.test(body) && ADDRESS_CONFIRM_PATTERN.test(body);
+}
 const DEFAULT_GENERIC_PATTERNS = ['unexpected issue'];
 const HISTORY_LIMIT = 10;
 
@@ -174,7 +182,7 @@ export async function interpretCourierReply(queryId, body) {
   if (!tRes.rows.length) return { status: 'error', reason: 'ticket not found' };
   const ticket = tRes.rows[0];
 
-  if (GDPR_PATTERN.test(body)) return handleGdprRequest(queryId, ticket);
+  if (isGdprAddressRequest(body)) return handleGdprRequest(queryId, ticket);
 
   const patterns = await getGenericPatterns(ticket.courier_code);
   const lower = body.toLowerCase();
