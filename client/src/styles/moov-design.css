@@ -10,21 +10,25 @@
    ============================================================================ */
 
 :root {
-  /* grounds & ink */
-  --color-bg:          #f3f2f2;   /* page ground */
-  --color-surface:     #eae9e9;   /* left rail, raised areas */
-  --color-text:        #201e1d;   /* ink */
-  --color-divider:     rgba(32, 30, 29, .4);   /* 2px section rules */
+  /* grounds & ink — Moov brand palette (moov-color-palette.md), light mode */
+  --color-bg:          #F7F8FA;   /* page ground */
+  --color-surface:     #FFFFFF;   /* left rail, raised areas */
+  --color-text:        #171B2D;   /* ink */
+  --color-divider:     #DFE0EB;   /* 2px section rules */
 
-  /* the four meanings */
-  --color-accent:      #7B2FBE;   /* Moov purple — interactive, automation */
-  --color-accent-600:  #6A28A5;   /* pressed */
-  --color-accent-100:  #F4EDFA;   /* tinted fill */
-  --moov-green:        #00C853;   /* fills, marks, bars */
-  --moov-green-deep:   #0A8F43;   /* green TEXT (contrast) */
-  --moov-magenta:      #E91E8C;   /* fills, marks, bars */
-  --moov-magenta-deep: #B81470;   /* magenta TEXT (contrast) */
-  --moov-teal:         #00BCD4;   /* per-kg rates only */
+  /* the four meanings. NOTE — variable names are historical (kept so call
+     sites don't need touching); --color-accent now carries brand green
+     (was purple), --moov-magenta is now brand red (was magenta — this
+     reverses the old "never red" rule), --moov-teal is brand blue. */
+  --color-accent:      #0F7A46;   /* Moov brand green — interactive, automation */
+  --color-accent-600:  #065F39;   /* pressed */
+  --color-accent-100:  #E7F2EC;   /* tinted fill */
+  --color-on-accent:   #FFFFFF;   /* text/icons placed directly on a solid --color-accent fill */
+  --moov-green:        #0F7A46;   /* fills, marks, bars */
+  --moov-green-deep:   #065F39;   /* green TEXT (contrast) */
+  --moov-magenta:      #CD1D69;   /* fills, marks, bars (brand red) */
+  --moov-magenta-deep: #CD1D69;   /* magenta TEXT (contrast) */
+  --moov-teal:         #276E93;   /* per-kg rates only (brand blue) */
 
   /* derived lines & muted ink */
   --ds-hairline: 1px solid color-mix(in srgb, var(--color-text) 12%, transparent);
@@ -43,6 +47,29 @@
   --shadow-sm: 0 1px 2px color-mix(in srgb, #2d2b2b 14%, transparent);
   --shadow-md: 0 3px 10px color-mix(in srgb, #2d2b2b 16%, transparent);
   --shadow-lg: 0 12px 32px color-mix(in srgb, #2d2b2b 22%, transparent);
+}
+
+/* Dark mode — see moov.css for the same palette + the contrast reasoning
+   behind --color-on-accent flipping to navy here. */
+:root[data-theme="dark"] {
+  --color-bg:          #12141D;
+  --color-surface:     #171B2D;
+  --color-text:        #FDFFFF;
+  --color-divider:     rgba(255,255,255,.4);
+
+  --color-accent:      #1DFB9D;
+  --color-accent-600:  #04A562;
+  --color-accent-100:  rgba(29,251,157,.14);
+  --color-on-accent:   #171B2D;
+  --moov-green:        #1DFB9D;
+  --moov-green-deep:   #1DFB9D;
+  --moov-magenta:      #DE6C9E;
+  --moov-magenta-deep: #DE6C9E;
+  --moov-teal:         #73A1B9;
+
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.4);
+  --shadow-md: 0 3px 10px rgba(0,0,0,.45);
+  --shadow-lg: 0 12px 32px rgba(0,0,0,.55);
 }
 
 /* ── opt-in root ─────────────────────────────────────────────────────────────
@@ -86,7 +113,7 @@
 /* ── buttons (labels flush left, never centred) ─────────────────────────────── */
 .ds-btn { font-family: var(--font-body); font-weight: 600; font-size: 13px; padding: 9px 15px; border: 1px solid transparent; background: transparent; color: var(--color-text); cursor: pointer; display: inline-flex; align-items: center; gap: 8px; text-align: left; transition: background .12s, border-color .12s; }
 .ds-btn svg { width: 15px; height: 15px; }
-.ds-btn-primary   { background: var(--color-accent); color: #fff; }
+.ds-btn-primary   { background: var(--color-accent); color: var(--color-on-accent); }
 .ds-btn-primary:hover { background: var(--color-accent-600); }
 .ds-btn-secondary { border-color: var(--color-text); }
 .ds-btn-secondary:hover { background: color-mix(in srgb, var(--color-text) 6%, transparent); }
