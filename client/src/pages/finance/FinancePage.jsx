@@ -32,8 +32,8 @@ function StatCard({ label, value, sub, color = '#64748B', bg = 'rgba(0,0,0,0.03)
       onClick={onClick}
       style={{
         background: bg || '#FFFFFF',
-        border: `1px solid rgba(0,200,83,0.18)`,
-        boxShadow: '0 0 12px rgba(0,200,83,0.07)',
+        border: `1px solid rgba(15,122,70,0.18)`,
+        boxShadow: '0 0 12px rgba(15,122,70,0.07)',
         borderRadius: 10,
         padding: '14px 18px',
         minWidth: 140,
@@ -55,8 +55,8 @@ function FlagBadge({ value, trueLabel = 'Yes', falseLabel = 'No' }) {
   if (value) {
     return (
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4,
-        background: 'rgba(0,200,83,0.12)', border: '1px solid rgba(0,200,83,0.3)',
-        color: '#00C853', borderRadius: 20, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>
+        background: 'rgba(15,122,70,0.12)', border: '1px solid rgba(15,122,70,0.3)',
+        color: 'var(--mv-green)', borderRadius: 20, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>
         <Check size={10} /> {trueLabel}
       </span>
     );
@@ -79,7 +79,7 @@ function BreakdownTooltip({ charge, mode, anchorRect }) {
   const base      = mode === 'sell' ? parseFloat(charge.price || 0) : parseFloat(charge.cost_price || 0);
   const lines     = Array.isArray(charge.charge_lines) ? charge.charge_lines : [];
   const total     = base + lines.reduce((s, l) => s + parseFloat(mode === 'sell' ? (l.price || 0) : (l.cost_price || l.price || 0)), 0);
-  const accentCol = mode === 'sell' ? '#00C853' : '#B39DDB';
+  const accentCol = mode === 'sell' ? 'var(--mv-green)' : '#B39DDB';
 
   if (!anchorRect) return null;
 
@@ -198,7 +198,7 @@ function MoreMenu({ charge, onBill, onReprice, onLog, onDebug, onCancel }) {
   }, [open]);
 
   const items = [
-    charge.price != null && !charge.billed && { label: 'Bill', action: onBill, color: '#00C853' },
+    charge.price != null && !charge.billed && { label: 'Bill', action: onBill, color: 'var(--mv-green)' },
     { label: 'Reprice', action: onReprice, color: '#64748B' },
     { label: 'View payload', action: onLog, color: '#64748B' },
     { label: 'Diagnose', action: onDebug, color: '#D97706' },
@@ -297,11 +297,11 @@ function PriceCell({ charge, onSave, onDebug }) {
           onChange={e => setVal(e.target.value)}
           onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') cancel(); }}
           style={{
-            width: 72, background: 'rgba(0,0,0,0.08)', border: '1px solid #00C853',
+            width: 72, background: 'rgba(0,0,0,0.08)', border: '1px solid var(--mv-green)',
             borderRadius: 9999, color: '#0F172A', padding: '3px 10px', fontSize: 13, fontWeight: 700,
           }}
         />
-        <button onClick={commit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#00C853', padding: 2 }}>
+        <button onClick={commit} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--mv-green)', padding: 2 }}>
           <Check size={13} />
         </button>
         <button onClick={cancel} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: 2 }}>
@@ -335,8 +335,8 @@ function PriceCell({ charge, onSave, onDebug }) {
 
   return (
     <button onClick={startEdit} style={{
-      background: 'rgba(0,200,83,0.08)', border: '1px solid rgba(0,200,83,0.25)',
-      borderRadius: 5, color: '#00C853', padding: '3px 10px', fontSize: 13, fontWeight: 700,
+      background: 'rgba(15,122,70,0.08)', border: '1px solid rgba(15,122,70,0.25)',
+      borderRadius: 5, color: 'var(--mv-green)', padding: '3px 10px', fontSize: 13, fontWeight: 700,
       cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5,
     }}>
       {gbp(displayTotal)}
@@ -379,7 +379,7 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
     if (t === 'Surcharges' && !step.surcharges?.length && !step.fuel) return '#475569';
     // Volumetric — amber if no dims available (can't calculate)
     if (t === 'Volumetric weight' && step.volumetric_divisor == null) return '#64748B';
-    return '#00C853';
+    return 'var(--mv-green)';
   };
 
   // Conclusion is green if the charge already has a price OR the engine would price it
@@ -396,14 +396,14 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
   const pricesMatch = alreadyPriced && trace?.conclusion?.priced &&
     currentTotal != null &&
     Math.abs(currentTotal - (trace.conclusion.total ?? 0)) < 0.015;
-  const conclusionColor = (alreadyPriced || trace?.conclusion?.priced) ? '#00C853' : '#F44336';
+  const conclusionColor = (alreadyPriced || trace?.conclusion?.priced) ? 'var(--mv-green)' : '#F44336';
 
   // Shared row style for ✓/✗ check lists
   const checkRow = (matched) => ({
     display: 'flex', alignItems: 'center', gap: 8,
     padding: '4px 8px', marginTop: 3, borderRadius: 5,
-    background: matched ? 'rgba(0,200,83,0.07)' : 'rgba(0,0,0,0.02)',
-    borderLeft: `2px solid ${matched ? '#00C853' : 'rgba(0,0,0,0.08)'}`,
+    background: matched ? 'rgba(15,122,70,0.07)' : 'rgba(0,0,0,0.02)',
+    borderLeft: `2px solid ${matched ? 'var(--mv-green)' : 'rgba(0,0,0,0.08)'}`,
   });
 
   const overlay = {
@@ -460,15 +460,15 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
               {/* Already-priced banner */}
               {alreadyPriced && (
                 <div style={{
-                  background: 'rgba(0,200,83,0.09)',
-                  border: '1px solid rgba(0,200,83,0.3)',
+                  background: 'rgba(15,122,70,0.09)',
+                  border: '1px solid rgba(15,122,70,0.3)',
                   borderRadius: 8, padding: '10px 14px',
                   marginBottom: 14,
                   display: 'flex', alignItems: 'center', gap: 10,
                 }}>
-                  <span style={{ color: '#00C853', fontWeight: 700, fontSize: 14 }}>✓</span>
+                  <span style={{ color: 'var(--mv-green)', fontWeight: 700, fontSize: 14 }}>✓</span>
                   <div>
-                    <div style={{ color: '#00C853', fontWeight: 700, fontSize: 13 }}>
+                    <div style={{ color: 'var(--mv-green)', fontWeight: 700, fontSize: 13 }}>
                       Already priced — £{currentTotal != null ? currentTotal.toFixed(2) : parseFloat(charge.price).toFixed(2)}
                     </div>
                     <div style={{ color: '#64748B', fontSize: 11, marginTop: 1 }}>
@@ -547,7 +547,7 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
                               </div>
                               <div style={{ marginTop: 6, paddingTop: 6, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
                                 <span style={{ color: '#64748B' }}>charged weight:</span>{' '}
-                                <span style={{ color: '#00C853', fontWeight: 700 }}>
+                                <span style={{ color: 'var(--mv-green)', fontWeight: 700 }}>
                                   {step.charged_kg} kg
                                 </span>{' '}
                                 <span style={{ color: '#64748B', fontSize: 11 }}>
@@ -566,7 +566,7 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
 
                     {/* ── Step 2: Customer resolution ── */}
                     {step.step === 2 && <>
-                      <div><span style={{ color: '#64748B' }}>customer_found:</span> <span style={{ color: step.customer_found ? '#00C853' : '#F44336', fontWeight: 700 }}>{step.customer_found ? 'YES' : 'NO'}</span></div>
+                      <div><span style={{ color: '#64748B' }}>customer_found:</span> <span style={{ color: step.customer_found ? 'var(--mv-green)' : '#F44336', fontWeight: 700 }}>{step.customer_found ? 'YES' : 'NO'}</span></div>
                       {step.customer_found && (
                         <div><span style={{ color: '#64748B' }}>customer_name:</span> <span style={{ color: '#0F172A' }}>{step.customer_name}</span></div>
                       )}
@@ -584,7 +584,7 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
                             <div style={{ color: '#64748B', fontSize: 11, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1 }}>Zones</div>
                             {step.zones.map((z, i) => (
                               <div key={i} style={checkRow(z.matched)}>
-                                <span style={{ color: z.matched ? '#00C853' : '#F44336', fontWeight: 700, minWidth: 14 }}>{z.matched ? '✓' : '✗'}</span>
+                                <span style={{ color: z.matched ? 'var(--mv-green)' : '#F44336', fontWeight: 700, minWidth: 14 }}>{z.matched ? '✓' : '✗'}</span>
                                 <span style={{ color: z.matched ? '#0F172A' : '#64748B' }}>{z.zone_name}</span>
                               </div>
                             ))}
@@ -596,7 +596,7 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
                             <div style={{ color: '#64748B', fontSize: 11, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1 }}>Weight bands</div>
                             {step.weight_bands.map((b, i) => (
                               <div key={i} style={checkRow(b.matched)}>
-                                <span style={{ color: b.matched ? '#00C853' : '#F44336', fontWeight: 700, minWidth: 14 }}>{b.matched ? '✓' : '✗'}</span>
+                                <span style={{ color: b.matched ? 'var(--mv-green)' : '#F44336', fontWeight: 700, minWidth: 14 }}>{b.matched ? '✓' : '✗'}</span>
                                 <span style={{ color: b.matched ? '#0F172A' : '#64748B' }}>{b.weight_class_name}</span>
                                 {b.min_weight_kg != null && b.max_weight_kg != null && (
                                   <span style={{ color: '#64748B', marginLeft: 6 }}>
@@ -621,8 +621,8 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
                         <div style={{ color: '#F44336' }}>✗ {step.error}</div>
                       )}
                       {!step.error && <>
-                        <div><span style={{ color: '#64748B' }}>zone:</span> <span style={{ color: '#00C853' }}>{step.zone}</span></div>
-                        <div><span style={{ color: '#64748B' }}>weight_band:</span> <span style={{ color: '#00C853' }}>{step.weight_band}</span></div>
+                        <div><span style={{ color: '#64748B' }}>zone:</span> <span style={{ color: 'var(--mv-green)' }}>{step.zone}</span></div>
+                        <div><span style={{ color: '#64748B' }}>weight_band:</span> <span style={{ color: 'var(--mv-green)' }}>{step.weight_band}</span></div>
                         <div><span style={{ color: '#64748B' }}>price_per_parcel:</span> <span style={{ color: '#0F172A' }}>£{step.price_per_parcel?.toFixed(2)}</span></div>
                         {step.price_sub != null && (
                           <div><span style={{ color: '#64748B' }}>price_sub (per additional parcel):</span> <span style={{ color: '#0F172A' }}>£{step.price_sub.toFixed(2)}</span></div>
@@ -644,11 +644,11 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
                           <div style={{ color: '#64748B', fontSize: 11, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1 }}>Rules</div>
                           {step.surcharges.map((s, i) => (
                             <div key={i} style={checkRow(s.matched)}>
-                              <span style={{ color: s.matched ? '#00C853' : '#F44336', fontWeight: 700, minWidth: 14 }}>{s.matched ? '✓' : '✗'}</span>
+                              <span style={{ color: s.matched ? 'var(--mv-green)' : '#F44336', fontWeight: 700, minWidth: 14 }}>{s.matched ? '✓' : '✗'}</span>
                               <span style={{ color: s.matched ? '#0F172A' : '#64748B', flex: 1 }}>{s.name}</span>
                               {s.matched && <>
                                 <span style={{ color: '#64748B', fontSize: 11 }}>{s.calc}</span>
-                                <span style={{ color: '#00C853', fontWeight: 700, marginLeft: 8 }}>+£{s.price?.toFixed(2)}</span>
+                                <span style={{ color: 'var(--mv-green)', fontWeight: 700, marginLeft: 8 }}>+£{s.price?.toFixed(2)}</span>
                               </>}
                               {!s.matched && (
                                 <span style={{ color: '#475569', fontSize: 11 }}>{s.reason}</span>
@@ -662,13 +662,13 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
                         <div>
                           <div style={{ color: '#64748B', fontSize: 11, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1 }}>Fuel surcharge</div>
                           <div style={checkRow(true)}>
-                            <span style={{ color: '#00C853', fontWeight: 700, minWidth: 14 }}>✓</span>
+                            <span style={{ color: 'var(--mv-green)', fontWeight: 700, minWidth: 14 }}>✓</span>
                             <span style={{ color: '#0F172A', flex: 1 }}>{step.fuel.fuel_group}</span>
                             <span style={{ color: '#64748B', fontSize: 11 }}>
                               {step.fuel.pct}% of £{step.fuel.base?.toFixed(2)}
                               {step.fuel.rate_type === 'customer-specific' ? ' (customer rate)' : ' (standard rate)'}
                             </span>
-                            <span style={{ color: '#00C853', fontWeight: 700, marginLeft: 8 }}>+£{step.fuel.price?.toFixed(2)}</span>
+                            <span style={{ color: 'var(--mv-green)', fontWeight: 700, marginLeft: 8 }}>+£{step.fuel.price?.toFixed(2)}</span>
                           </div>
                         </div>
                       )}
@@ -689,7 +689,7 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
               {/* Conclusion */}
               {trace.conclusion && (
                 <div style={{
-                  background: (alreadyPriced || trace.conclusion.priced) ? 'rgba(0,200,83,0.07)' : 'rgba(244,67,54,0.07)',
+                  background: (alreadyPriced || trace.conclusion.priced) ? 'rgba(15,122,70,0.07)' : 'rgba(244,67,54,0.07)',
                   border: `1px solid ${conclusionColor}33`,
                   borderRadius: 10, padding: '14px 16px',
                   fontFamily: 'monospace', fontSize: 13,
@@ -726,7 +726,7 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
                       fontWeight: 700,
                     }}>
                       <span style={{ color: '#334155' }}>Total</span>
-                      <span style={{ color: '#00C853', fontSize: 15 }}>£{trace.conclusion.total?.toFixed(2)}</span>
+                      <span style={{ color: 'var(--mv-green)', fontSize: 15 }}>£{trace.conclusion.total?.toFixed(2)}</span>
                     </div>
                   </>}
 
@@ -755,10 +755,10 @@ function PriceDebugModal({ charge, onClose, onRepriced }) {
               onClick={() => repriceMut.mutate()}
               disabled={repriceMut.isLoading}
               style={{
-                background: alreadyPriced ? 'rgba(99,102,241,0.15)' : 'rgba(0,200,83,0.15)',
-                border: `1px solid ${alreadyPriced ? 'rgba(99,102,241,0.4)' : 'rgba(0,200,83,0.4)'}`,
+                background: alreadyPriced ? 'rgba(99,102,241,0.15)' : 'rgba(15,122,70,0.15)',
+                border: `1px solid ${alreadyPriced ? 'rgba(99,102,241,0.4)' : 'rgba(15,122,70,0.4)'}`,
                 borderRadius: 8,
-                color: alreadyPriced ? '#A5B4FC' : '#00C853',
+                color: alreadyPriced ? '#A5B4FC' : 'var(--mv-green)',
                 padding: '8px 18px',
                 cursor: 'pointer', fontSize: 13, fontWeight: 700,
                 display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -808,7 +808,7 @@ function WebhookPayloadModal({ charge, onClose }) {
           borderBottom: '1px solid rgba(0,0,0,0.08)',
           display: 'flex', alignItems: 'center', gap: 10,
         }}>
-          <FileJson size={16} style={{ color: '#00BCD4' }} />
+          <FileJson size={16} style={{ color: 'var(--mv-teal)' }} />
           <div style={{ flex: 1 }}>
             <div style={{ fontWeight: 700, color: '#0F172A', fontSize: 15 }}>Webhook Payload</div>
             <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
@@ -940,11 +940,11 @@ function AwaitingReconciliationTab({ customers, gbp, fmt, getCourierLogo }) {
           <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>Charges pending reconciliation</div>
         </div>
         <div style={{
-          background: 'rgba(0,200,83,0.04)', border: '1px solid rgba(0,200,83,0.15)',
+          background: 'rgba(15,122,70,0.04)', border: '1px solid rgba(15,122,70,0.15)',
           borderRadius: 10, padding: '14px 18px', minWidth: 140, flex: 1,
         }}>
           <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Total Sell</div>
-          <div style={{ fontSize: 22, fontWeight: 800, color: '#00C853' }}>{totalSell != null ? gbp(totalSell) : '—'}</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--mv-green)' }}>{totalSell != null ? gbp(totalSell) : '—'}</div>
           <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>All charges (excl. surcharges)</div>
         </div>
         <div style={{
@@ -961,7 +961,7 @@ function AwaitingReconciliationTab({ customers, gbp, fmt, getCourierLogo }) {
             borderRadius: 10, padding: '14px 18px', minWidth: 140, flex: 1,
           }}>
             <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Margin</div>
-            <div style={{ fontSize: 22, fontWeight: 800, color: parseFloat(margin) >= 15 ? '#00C853' : parseFloat(margin) >= 5 ? '#D97706' : '#F44336' }}>{margin}%</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: parseFloat(margin) >= 15 ? 'var(--mv-green)' : parseFloat(margin) >= 5 ? '#D97706' : '#F44336' }}>{margin}%</div>
             <div style={{ fontSize: 11, color: '#64748B', marginTop: 4 }}>Base courier charges</div>
           </div>
         )}
@@ -1053,11 +1053,11 @@ function AwaitingReconciliationTab({ customers, gbp, fmt, getCourierLogo }) {
                       {charge.zone_name || '—'}
                       {charge.weight_class_name && <div style={{ fontSize: 11, color: '#64748B' }}>{charge.weight_class_name}</div>}
                     </td>
-                    <td style={{ ...td, textAlign: 'right', color: '#00C853', fontWeight: 700 }}>{gbp(sellTotal)}</td>
+                    <td style={{ ...td, textAlign: 'right', color: 'var(--mv-green)', fontWeight: 700 }}>{gbp(sellTotal)}</td>
                     <td style={{ ...td, textAlign: 'right', color: '#B39DDB', fontWeight: 600 }}>{gbp(costTotal)}</td>
                     <td style={{ ...td, textAlign: 'right' }}>
                       {margin != null
-                        ? <span style={{ color: parseFloat(margin) >= 15 ? '#00C853' : parseFloat(margin) >= 5 ? '#D97706' : '#F44336', fontWeight: 700 }}>{margin}%</span>
+                        ? <span style={{ color: parseFloat(margin) >= 15 ? 'var(--mv-green)' : parseFloat(margin) >= 5 ? '#D97706' : '#F44336', fontWeight: 700 }}>{margin}%</span>
                         : <span style={{ color: '#64748B' }}>—</span>}
                     </td>
                   </tr>
@@ -1349,16 +1349,16 @@ export default function FinancePage() {
     <div style={{ position: 'relative' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 700, color: '#00C853' }}>Finance & Billing</h1>
+        <h1 style={{ fontSize: 24, fontWeight: 700, color: 'var(--mv-green)' }}>Finance & Billing</h1>
         <div style={{ display: 'flex', gap: 10 }}>
           <button
             onClick={runRelink}
             disabled={relinkRunning}
             style={{
               display: 'flex', alignItems: 'center', gap: 6,
-              background: 'rgba(0,188,212,0.08)',
-              border: '1px solid rgba(0,188,212,0.3)',
-              borderRadius: 8, color: '#00BCD4',
+              background: 'rgba(39,110,147,0.08)',
+              border: '1px solid rgba(39,110,147,0.3)',
+              borderRadius: 8, color: 'var(--mv-teal)',
               padding: '7px 14px', cursor: relinkRunning ? 'not-allowed' : 'pointer',
               fontSize: 13, fontWeight: 700,
             }}
@@ -1417,9 +1417,9 @@ export default function FinancePage() {
             title="Recalculate cost prices on all charges (including billed) without changing sell prices or invoices"
             style={{
               display: 'flex', alignItems: 'center', gap: 6,
-              background: fixCostsRunning ? 'rgba(0,200,83,0.08)' : 'rgba(0,200,83,0.12)',
-              border: '1px solid rgba(0,200,83,0.4)',
-              borderRadius: 8, color: '#00C853',
+              background: fixCostsRunning ? 'rgba(15,122,70,0.08)' : 'rgba(15,122,70,0.12)',
+              border: '1px solid rgba(15,122,70,0.4)',
+              borderRadius: 8, color: 'var(--mv-green)',
               padding: '7px 14px', cursor: fixCostsRunning ? 'not-allowed' : 'pointer',
               fontSize: 13, fontWeight: 700,
             }}
@@ -1454,9 +1454,9 @@ export default function FinancePage() {
             style={{
               background: 'none', border: 'none', cursor: 'pointer',
               padding: '10px 18px', fontSize: 13, fontWeight: 600,
-              color: activeTab === tab.key ? '#00C853' : '#666',
+              color: activeTab === tab.key ? 'var(--mv-green)' : '#666',
               borderBottom: activeTab === tab.key
-                ? '2px solid #00C853'
+                ? '2px solid var(--mv-green)'
                 : '2px solid transparent',
               marginBottom: -1,
               transition: 'color 0.15s, border-color 0.15s',
@@ -1474,8 +1474,8 @@ export default function FinancePage() {
       {/* Batch reprice result banner */}
       {batchResult && (
         <div style={{
-          background: batchResult.error ? 'rgba(244,67,54,0.08)' : 'rgba(0,200,83,0.08)',
-          border: `1px solid ${batchResult.error ? 'rgba(244,67,54,0.3)' : 'rgba(0,200,83,0.3)'}`,
+          background: batchResult.error ? 'rgba(244,67,54,0.08)' : 'rgba(15,122,70,0.08)',
+          border: `1px solid ${batchResult.error ? 'rgba(244,67,54,0.3)' : 'rgba(15,122,70,0.3)'}`,
           borderRadius: 10, padding: '12px 16px', marginBottom: 16,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
         }}>
@@ -1483,13 +1483,13 @@ export default function FinancePage() {
             <span style={{ color: '#F44336', fontSize: 13 }}>Error: {batchResult.error}</span>
           ) : batchResult.purge ? (
             <div style={{ fontSize: 13, display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-              <span style={{ color: '#00C853', fontWeight: 700 }}>✓ Purge complete</span>
+              <span style={{ color: 'var(--mv-green)', fontWeight: 700 }}>✓ Purge complete</span>
               <span style={{ color: '#F44336' }}>{batchResult.charges_deleted} charges removed</span>
               <span style={{ color: '#64748B' }}>{batchResult.shipments_deleted} shipment records removed</span>
             </div>
           ) : batchResult.relink ? (
             <div style={{ fontSize: 13, display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-              <span style={{ color: '#00C853', fontWeight: 700 }}>✓ {batchResult.linked} shipments relinked</span>
+              <span style={{ color: 'var(--mv-green)', fontWeight: 700 }}>✓ {batchResult.linked} shipments relinked</span>
               {batchResult.not_found > 0 && (
                 <span style={{ color: '#D97706' }}>{batchResult.not_found} account IDs not matched</span>
               )}
@@ -1497,7 +1497,7 @@ export default function FinancePage() {
             </div>
           ) : (
             <div style={{ fontSize: 13, display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-              <span style={{ color: '#00C853', fontWeight: 700 }}>
+              <span style={{ color: 'var(--mv-green)', fontWeight: 700 }}>
                 ✓ {batchResult.priced} charges priced
               </span>
               {batchResult.no_customer > 0 && (
@@ -1543,7 +1543,7 @@ export default function FinancePage() {
           ) : (
             <div style={{ fontSize: 13, display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'center' }}>
               <span style={{ color: '#A5B4FC', fontWeight: 700 }}>✓ Full reprice complete</span>
-              <span style={{ color: '#00C853' }}>{fullRepriceResult.repriced} courier charges updated</span>
+              <span style={{ color: 'var(--mv-green)' }}>{fullRepriceResult.repriced} courier charges updated</span>
               {fullRepriceResult.changed > 0 && (
                 <span style={{ color: '#D97706' }}>{fullRepriceResult.changed} prices actually changed</span>
               )}
@@ -1569,8 +1569,8 @@ export default function FinancePage() {
       {/* Fix Costs result banner */}
       {fixCostsResult && (
         <div style={{
-          background: fixCostsResult.error ? 'rgba(244,67,54,0.08)' : 'rgba(0,200,83,0.08)',
-          border: `1px solid ${fixCostsResult.error ? 'rgba(244,67,54,0.3)' : 'rgba(0,200,83,0.35)'}`,
+          background: fixCostsResult.error ? 'rgba(244,67,54,0.08)' : 'rgba(15,122,70,0.08)',
+          border: `1px solid ${fixCostsResult.error ? 'rgba(244,67,54,0.3)' : 'rgba(15,122,70,0.35)'}`,
           borderRadius: 10, padding: '12px 16px', marginBottom: 16,
           display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
         }}>
@@ -1578,13 +1578,13 @@ export default function FinancePage() {
             <span style={{ color: '#F44336', fontSize: 13 }}>Error: {fixCostsResult.error}</span>
           ) : fixCostsResult.started ? (
             <div style={{ fontSize: 13, display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'center' }}>
-              <span style={{ color: '#00C853', fontWeight: 700 }}>⟳ Cost fix started</span>
-              <span style={{ color: '#00C853' }}>{fixCostsResult.total} charges queued — refresh in a moment to see updated profit figures</span>
+              <span style={{ color: 'var(--mv-green)', fontWeight: 700 }}>⟳ Cost fix started</span>
+              <span style={{ color: 'var(--mv-green)' }}>{fixCostsResult.total} charges queued — refresh in a moment to see updated profit figures</span>
             </div>
           ) : (
             <div style={{ fontSize: 13, display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'center' }}>
-              <span style={{ color: '#00C853', fontWeight: 700 }}>✓ Cost fix complete</span>
-              <span style={{ color: '#00C853' }}>{fixCostsResult.repriced} cost prices corrected</span>
+              <span style={{ color: 'var(--mv-green)', fontWeight: 700 }}>✓ Cost fix complete</span>
+              <span style={{ color: 'var(--mv-green)' }}>{fixCostsResult.repriced} cost prices corrected</span>
               {fixCostsResult.fuel_updated > 0 && (
                 <span style={{ color: '#34D399' }}>{fixCostsResult.fuel_updated} fuel costs recalculated</span>
               )}
@@ -1697,8 +1697,8 @@ export default function FinancePage() {
           label="Profit"
           value={gbp(stats?.profit)}
           sub={stats?.profit_pct != null ? `${stats.profit_pct}% margin` : undefined}
-          color={stats?.profit > 0 ? '#00C853' : stats?.profit < 0 ? '#F44336' : '#64748B'}
-          bg={stats?.profit > 0 ? 'rgba(0,200,83,0.05)' : stats?.profit < 0 ? 'rgba(244,67,54,0.05)' : 'rgba(0,0,0,0.03)'}
+          color={stats?.profit > 0 ? 'var(--mv-green)' : stats?.profit < 0 ? '#F44336' : '#64748B'}
+          bg={stats?.profit > 0 ? 'rgba(15,122,70,0.05)' : stats?.profit < 0 ? 'rgba(244,67,54,0.05)' : 'rgba(0,0,0,0.03)'}
         />
         <StatCard
           label="Awaiting Reconciliation"
@@ -1710,8 +1710,8 @@ export default function FinancePage() {
         <StatCard
           label="Billed"
           value={stats?.billed ?? '—'}
-          color="#00C853"
-          bg="rgba(0,200,83,0.05)"
+          color="var(--mv-green)"
+          bg="rgba(15,122,70,0.05)"
         />
       </div>
 
@@ -1781,9 +1781,9 @@ export default function FinancePage() {
                 style={{
                   padding: '5px 11px', borderRadius: 20, fontSize: 12, fontWeight: 600,
                   border: '1px solid',
-                  borderColor: filters.verified === o.value ? '#00BCD4' : 'rgba(0,0,0,0.10)',
-                  background: filters.verified === o.value ? 'rgba(0,188,212,0.12)' : 'transparent',
-                  color: filters.verified === o.value ? '#00BCD4' : '#64748B',
+                  borderColor: filters.verified === o.value ? 'var(--mv-teal)' : 'rgba(0,0,0,0.10)',
+                  background: filters.verified === o.value ? 'rgba(39,110,147,0.12)' : 'transparent',
+                  color: filters.verified === o.value ? 'var(--mv-teal)' : '#64748B',
                   cursor: 'pointer',
                 }}
               >
@@ -1800,9 +1800,9 @@ export default function FinancePage() {
               style={{
                 padding: '6px 14px', borderRadius: 20, fontSize: 12, fontWeight: 600,
                 border: '1px solid',
-                borderColor: filters.billed === o.value ? '#00C853' : 'rgba(0,0,0,0.10)',
-                background: filters.billed === o.value ? 'rgba(0,200,83,0.12)' : 'transparent',
-                color: filters.billed === o.value ? '#00C853' : '#64748B',
+                borderColor: filters.billed === o.value ? 'var(--mv-green)' : 'rgba(0,0,0,0.10)',
+                background: filters.billed === o.value ? 'rgba(15,122,70,0.12)' : 'transparent',
+                color: filters.billed === o.value ? 'var(--mv-green)' : '#64748B',
                 cursor: 'pointer',
               }}
             >
@@ -1871,7 +1871,7 @@ export default function FinancePage() {
           ) : (
             <div style={{ fontSize: 13, display: 'flex', gap: 20, flexWrap: 'wrap', alignItems: 'center' }}>
               <span style={{ color: '#A5B4FC', fontWeight: 700 }}>✓ Customer reprice complete</span>
-              <span style={{ color: '#00C853' }}>{customerRepriceResult.repriced} charges updated</span>
+              <span style={{ color: 'var(--mv-green)' }}>{customerRepriceResult.repriced} charges updated</span>
               {customerRepriceResult.changed > 0 && (
                 <span style={{ color: '#D97706' }}>{customerRepriceResult.changed} prices changed</span>
               )}
@@ -1952,7 +1952,7 @@ export default function FinancePage() {
                       {charge.order_id || '—'}
                     </span>
                     {charge.tracking_codes?.length > 0 && (
-                      <div style={{ fontFamily: 'monospace', fontSize: 11, color: '#00BCD4', marginTop: 2 }}>
+                      <div style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--mv-teal)', marginTop: 2 }}>
                         {charge.tracking_codes[0]}
                         {charge.tracking_codes.length > 1 && (
                           <span style={{ color: '#64748B', marginLeft: 4 }}>+{charge.tracking_codes.length - 1}</span>
@@ -1990,7 +1990,7 @@ export default function FinancePage() {
                     {charge.zone_name && (
                       <div style={{ fontSize: 10, color: '#64748B', marginTop: 2 }}>
                         {charge.zone_name}{charge.weight_class_name ? ` · ${charge.weight_class_name}` : ''}
-                        {charge.price_auto && <span style={{ color: '#00C853', marginLeft: 4 }}>●</span>}
+                        {charge.price_auto && <span style={{ color: 'var(--mv-green)', marginLeft: 4 }}>●</span>}
                       </div>
                     )}
                   </td>
@@ -2026,7 +2026,7 @@ export default function FinancePage() {
                       const sellTotal = parseFloat(charge.price) + lines.reduce((s, l) => s + parseFloat(l.price || 0), 0);
                       const costTotal = parseFloat(charge.cost_price) + lines.reduce((s, l) => s + parseFloat(l.cost_price ?? l.price ?? 0), 0);
                       const profit    = sellTotal - costTotal;
-                      const color     = profit > 0 ? '#00C853' : profit < 0 ? '#F44336' : '#64748B';
+                      const color     = profit > 0 ? 'var(--mv-green)' : profit < 0 ? '#F44336' : '#64748B';
                       return <span style={{ color, fontWeight: 700, fontSize: 13 }}>{gbp(profit)}</span>;
                     })() : <span style={{ color: '#64748B' }}>—</span>}
                   </td>

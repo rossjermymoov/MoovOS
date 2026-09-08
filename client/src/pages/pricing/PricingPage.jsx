@@ -54,7 +54,7 @@ const STATUS = {
   sent:             { label: 'Sent',              color: '#A78BFA', bg: 'rgba(167,139,250,0.12)', border: 'rgba(167,139,250,0.3)' },
   form_returned:    { label: 'Form Returned',     color: '#F59E0B', bg: 'rgba(245,158,11,0.12)',  border: 'rgba(245,158,11,0.3)' },
   onboarding:       { label: 'Onboarding',        color: '#34D399', bg: 'rgba(52,211,153,0.12)',  border: 'rgba(52,211,153,0.3)' },
-  converted:        { label: 'Converted',         color: '#00C853', bg: 'rgba(0,200,83,0.12)',    border: 'rgba(0,200,83,0.3)' },
+  converted:        { label: 'Converted',         color: 'var(--mv-green)', bg: 'rgba(15,122,70,0.12)',    border: 'rgba(15,122,70,0.3)' },
   lost:             { label: 'Lost',              color: '#EF4444', bg: 'rgba(239,68,68,0.12)',   border: 'rgba(239,68,68,0.3)' },
 };
 
@@ -133,8 +133,8 @@ function StepIndicator({ current }) {
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
             <div style={{
               width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: i < current ? '#00C853' : i === current ? '#6366F1' : 'rgba(0,0,0,0.08)',
-              border: `2px solid ${i < current ? '#00C853' : i === current ? '#818CF8' : 'rgba(0,0,0,0.10)'}`,
+              background: i < current ? 'var(--mv-green)' : i === current ? '#6366F1' : 'rgba(0,0,0,0.08)',
+              border: `2px solid ${i < current ? 'var(--mv-green)' : i === current ? '#818CF8' : 'rgba(0,0,0,0.10)'}`,
               fontSize: 12, fontWeight: 700, color: i <= current ? '#fff' : '#475569',
             }}>
               {i < current ? <Check size={13} /> : i + 1}
@@ -142,7 +142,7 @@ function StepIndicator({ current }) {
             <div style={{ fontSize: 10, color: i === current ? '#A5B4FC' : '#475569', fontWeight: 600 }}>{s}</div>
           </div>
           {i < steps.length - 1 && (
-            <div style={{ flex: 1, height: 2, background: i < current ? '#00C853' : 'rgba(0,0,0,0.08)', margin: '0 8px', marginBottom: 18 }} />
+            <div style={{ flex: 1, height: 2, background: i < current ? 'var(--mv-green)' : 'rgba(0,0,0,0.08)', margin: '0 8px', marginBottom: 18 }} />
           )}
         </div>
       ))}
@@ -382,10 +382,10 @@ function CreateWizard({ onClose, onCreated }) {
           </button>
           <button onClick={handleNext} disabled={busy}
             style={{ display: 'flex', alignItems: 'center', gap: 6,
-              background: step === 1 ? 'rgba(0,200,83,0.12)' : 'rgba(99,102,241,0.2)',
-              border: `1px solid ${step === 1 ? 'rgba(0,200,83,0.4)' : '#6366F1'}`,
+              background: step === 1 ? 'rgba(15,122,70,0.12)' : 'rgba(99,102,241,0.2)',
+              border: `1px solid ${step === 1 ? 'rgba(15,122,70,0.4)' : '#6366F1'}`,
               borderRadius: 7, padding: '8px 20px',
-              color: step === 1 ? '#00C853' : '#A5B4FC',
+              color: step === 1 ? 'var(--mv-green)' : '#A5B4FC',
               fontSize: 13, cursor: 'pointer', fontWeight: 700, opacity: busy ? 0.6 : 1 }}>
             {busy ? <RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> : null}
             {step === 0 ? <><span>Next</span><ArrowRight size={14} /></> : <><span>Open Rate Editor</span><ArrowRight size={14} /></>}
@@ -491,8 +491,8 @@ function ReviewModal({ approval, onClose, onDone, staffList }) {
             <X size={13} style={{ marginRight: 5, verticalAlign: 'middle' }} />Reject
           </button>
           <button onClick={() => reviewMut.mutate({ status: 'approved' })} disabled={!reviewerId || reviewMut.isPending}
-            style={{ flex: 1, padding: '9px 0', background: 'rgba(0,200,83,0.12)', border: '1px solid rgba(0,200,83,0.35)',
-              borderRadius: 7, color: '#00C853', fontWeight: 700, fontSize: 13, cursor: 'pointer', opacity: !reviewerId ? 0.5 : 1 }}>
+            style={{ flex: 1, padding: '9px 0', background: 'rgba(15,122,70,0.12)', border: '1px solid rgba(15,122,70,0.35)',
+              borderRadius: 7, color: 'var(--mv-green)', fontWeight: 700, fontSize: 13, cursor: 'pointer', opacity: !reviewerId ? 0.5 : 1 }}>
             <Check size={13} style={{ marginRight: 5, verticalAlign: 'middle' }} />Approve
           </button>
         </div>
@@ -812,7 +812,7 @@ export default function PricingPage() {
         <StatCard label="In Onboarding"  value={stats?.in_onboarding ?? '—'} color="#34D399"
           bg={stats?.in_onboarding > 0 ? 'rgba(52,211,153,0.06)' : 'rgba(0,0,0,0.03)'}
           tooltip={stats?.onboarding_list} />
-        <StatCard label="Converted" value={stats?.converted ?? '—'} color="#00C853" bg="rgba(0,200,83,0.05)" />
+        <StatCard label="Converted" value={stats?.converted ?? '—'} color="var(--mv-green)" bg="rgba(15,122,70,0.05)" />
         <StatCard label="Lost"      value={stats?.lost      ?? '—'} color="#EF4444" />
       </div>
 

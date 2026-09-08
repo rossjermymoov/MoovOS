@@ -27,16 +27,16 @@ const api = axios.create({ baseURL: '/api' });
 // server-side). Keys are stable — renaming only changes the label, so existing
 // tasks keep working. These defaults seed a board that has never been configured.
 const DEFAULT_SPACES = [
-  { key: 'cs',      label: 'Customer Service', colour: '#00BCD4' },
-  { key: 'sales',   label: 'Sales',            colour: '#E91E8C' },
+  { key: 'cs',      label: 'Customer Service', colour: 'var(--mv-teal)' },
+  { key: 'sales',   label: 'Sales',            colour: 'var(--mv-magenta)' },
   { key: 'ops',     label: 'Operations',       colour: '#F59E0B' },
-  { key: 'product', label: 'Product & Data',   colour: '#7B2FBE' },
+  { key: 'product', label: 'Product & Data',   colour: 'var(--mv-purple)' },
 ];
 const DEFAULT_STATUSES = [
   { key: 'todo',     label: 'To do',       colour: '#94A3B8', isComplete: false },
   { key: 'progress', label: 'In progress', colour: '#F59E0B', isComplete: false },
-  { key: 'review',   label: 'In review',   colour: '#7B2FBE', isComplete: false },
-  { key: 'done',     label: 'Complete',    colour: '#00C853', isComplete: true },
+  { key: 'review',   label: 'In review',   colour: 'var(--mv-purple)', isComplete: false },
+  { key: 'done',     label: 'Complete',    colour: 'var(--mv-green)', isComplete: true },
 ];
 const PRIORITY = {
   urgent: { label: 'Urgent', colour: '#EF4444', soft: '#FDECEC', text: '#B91C1C' },
@@ -71,7 +71,7 @@ function applyConfig(data) {
   FIRST_STATUS = statuses[0]?.key || 'todo';
 }
 applyConfig(null); // seed defaults at load
-const AV_PALETTE = ['#7B2FBE', '#00BCD4', '#E91E8C', '#00C853', '#F59E0B', '#2563EB', '#EA4335', '#0F9D58', '#B45309', '#6B4423'];
+const AV_PALETTE = ['var(--mv-purple)', 'var(--mv-teal)', 'var(--mv-magenta)', 'var(--mv-green)', '#F59E0B', '#2563EB', '#EA4335', '#0F9D58', '#B45309', '#6B4423'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -125,7 +125,7 @@ const PICKERS = {
     ph: 'Search customers by name or account…', noun: 'in Moov', empty: 'No matching customer in Moov. You can only link a customer that already exists — create the customer record first.',
     search: (q) => api.get('/customers', { params: { search: q, limit: 8 } }).then(r => normList(r.data)),
     key: (c) => c.id,
-    row: (c) => (<><span className="mt-sq" style={{ background: '#1D4ED8' }}>{initials(c.business_name)}</span><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontWeight: 600 }}>{c.business_name}</div><div style={{ fontSize: 11, color: '#94A3B8' }}>{c.account_number}{c.city ? ' · ' + c.city : ''}</div></div>{c.tier ? <span className="mt-badge" style={{ background: '#F1E9F8', color: '#7B2FBE' }}>{c.tier}</span> : null}</>),
+    row: (c) => (<><span className="mt-sq" style={{ background: '#1D4ED8' }}>{initials(c.business_name)}</span><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontWeight: 600 }}>{c.business_name}</div><div style={{ fontSize: 11, color: '#94A3B8' }}>{c.account_number}{c.city ? ' · ' + c.city : ''}</div></div>{c.tier ? <span className="mt-badge" style={{ background: '#F1E9F8', color: 'var(--mv-purple)' }}>{c.tier}</span> : null}</>),
     norm: (c) => ({ type: 'customer', ref: c.id, label: c.business_name, sub: c.account_number }),
   },
   carrier: {
@@ -714,7 +714,7 @@ function MyTasksView({ myTasks, me, bypass, staffList, taskById, onOpen, onNew }
     { key: 'today', label: 'Due today', colour: '#F59E0B', items: dueToday },
     { key: 'week', label: 'Due this week', colour: '#F59E0B', items: thisWeek },
     { key: 'later', label: 'Later & no date', colour: '#94A3B8', items: later },
-    { key: 'done', label: 'Completed', colour: '#00C853', items: done },
+    { key: 'done', label: 'Completed', colour: 'var(--mv-green)', items: done },
   ];
 
   return (
@@ -725,7 +725,7 @@ function MyTasksView({ myTasks, me, bypass, staffList, taskById, onOpen, onNew }
         <Tile label="Overdue" count={overdue.length} colour="#EF4444" soft="#FDECEC" icon={<AlertTriangle size={20} />} />
         <Tile label="Due this week" count={dueToday.length + thisWeek.length} colour="#F59E0B" soft="#FEF3E2" icon={<Clock size={20} />} />
         <Tile label="In progress" count={inProgress} colour="#2563EB" soft="#E7EEFD" icon={<CircleDashed size={20} />} />
-        <Tile label="Completed" count={done.length} colour="#00C853" soft="#E7F8EE" icon={<CheckCircle2 size={20} />} />
+        <Tile label="Completed" count={done.length} colour="var(--mv-green)" soft="#E7F8EE" icon={<CheckCircle2 size={20} />} />
       </div>
 
       {overdue.length > 0 && (
@@ -811,7 +811,7 @@ function SettingsModal({ initSpaces, initStatuses, spaceCounts, statusCounts, sa
             <input className="mt-input" value={it.label} placeholder={isStatus ? 'Status name' : 'Space name'} onChange={e => upd(arr, setArr, i, { label: e.target.value })} style={{ flex: 1 }} />
             {isStatus && (
               <button onClick={() => upd(arr, setArr, i, { isComplete: !it.isComplete })} title="Tasks in this column count as complete"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, fontWeight: 600, padding: '6px 9px', borderRadius: 7, cursor: 'pointer', flexShrink: 0, border: '1px solid ' + (it.isComplete ? '#00C853' : '#E2E8F0'), background: it.isComplete ? '#E7F8EE' : '#fff', color: it.isComplete ? '#047857' : '#94A3B8' }}>
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, fontWeight: 600, padding: '6px 9px', borderRadius: 7, cursor: 'pointer', flexShrink: 0, border: '1px solid ' + (it.isComplete ? 'var(--mv-green)' : '#E2E8F0'), background: it.isComplete ? '#E7F8EE' : '#fff', color: it.isComplete ? '#047857' : '#94A3B8' }}>
                 <Check size={12} />Complete
               </button>
             )}

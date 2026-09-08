@@ -104,17 +104,17 @@ function Field({ label, error, required, children }) {
   return (
     <div>
       <label style={{ display: 'block', fontSize: 12, color: '#64748B', marginBottom: 6 }}>
-        {label}{required && <span style={{ color: '#E91E8C', marginLeft: 3 }}>*</span>}
+        {label}{required && <span style={{ color: 'var(--mv-magenta)', marginLeft: 3 }}>*</span>}
       </label>
       {children}
-      {error && <p style={{ fontSize: 11, color: '#E91E8C', marginTop: 4 }}>{error}</p>}
+      {error && <p style={{ fontSize: 11, color: 'var(--mv-magenta)', marginTop: 4 }}>{error}</p>}
     </div>
   );
 }
 
 const inputStyle = (error) => ({
   width: '100%', boxSizing: 'border-box',
-  background: '#FFFFFF', border: `1px solid ${error ? '#E91E8C' : 'rgba(0,0,0,0.08)'}`,
+  background: '#FFFFFF', border: `1px solid ${error ? 'var(--mv-magenta)' : 'rgba(0,0,0,0.08)'}`,
   borderRadius: 9999, padding: '10px 18px', color: '#0F172A', fontSize: 14, outline: 'none',
 });
 
@@ -127,7 +127,7 @@ const selectStyle = {
 const grid2 = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 };
 const grid3 = { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 };
 
-const sectionHeading = { fontSize: 11, color: '#7B2FBE', fontWeight: 600, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 1 };
+const sectionHeading = { fontSize: 11, color: 'var(--mv-purple)', fontWeight: 600, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 1 };
 
 // ─── Step 1: Business Details ─────────────────────────────────
 function StepBusiness({ form, set, errors }) {
@@ -255,8 +255,8 @@ function StepAccount({ form, set, errors }) {
           {TIERS.map(t => (
             <button key={t.value} onClick={() => set('tier', t.value)} style={{
               padding: '12px 16px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
-              background: form.tier === t.value ? 'rgba(123,47,190,0.2)' : 'rgba(0,0,0,0.03)',
-              border: form.tier === t.value ? '1px solid #7B2FBE' : '1px solid rgba(0,0,0,0.08)',
+              background: form.tier === t.value ? 'rgba(15,122,70,0.2)' : 'rgba(0,0,0,0.03)',
+              border: form.tier === t.value ? '1px solid var(--mv-purple)' : '1px solid rgba(0,0,0,0.08)',
               color: '#0F172A',
             }}>
               <div style={{ fontSize: 13, fontWeight: 600 }}>{t.label}</div>
@@ -277,9 +277,9 @@ function StepAccount({ form, set, errors }) {
           {BILLING_PERIODS.map(bp => (
             <button key={bp.value} onClick={() => set('billing_cycle', bp.value)} style={{
               flex: 1, padding: '10px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600,
-              background: form.billing_cycle === bp.value ? 'rgba(0,200,83,0.15)' : 'rgba(0,0,0,0.03)',
-              border: form.billing_cycle === bp.value ? '1px solid #00C853' : '1px solid rgba(0,0,0,0.08)',
-              color: form.billing_cycle === bp.value ? '#00C853' : '#64748B',
+              background: form.billing_cycle === bp.value ? 'rgba(15,122,70,0.15)' : 'rgba(0,0,0,0.03)',
+              border: form.billing_cycle === bp.value ? '1px solid var(--mv-green)' : '1px solid rgba(0,0,0,0.08)',
+              color: form.billing_cycle === bp.value ? 'var(--mv-green)' : '#64748B',
             }}>
               {bp.label}
             </button>
@@ -293,9 +293,9 @@ function StepAccount({ form, set, errors }) {
           {PAYMENT_TERMS.map(pt => (
             <button key={pt.value} onClick={() => set('payment_terms_days', pt.value)} style={{
               flex: 1, padding: '10px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600,
-              background: form.payment_terms_days === pt.value ? 'rgba(0,200,83,0.15)' : 'rgba(0,0,0,0.03)',
-              border: form.payment_terms_days === pt.value ? '1px solid #00C853' : '1px solid rgba(0,0,0,0.08)',
-              color: form.payment_terms_days === pt.value ? '#00C853' : '#64748B',
+              background: form.payment_terms_days === pt.value ? 'rgba(15,122,70,0.15)' : 'rgba(0,0,0,0.03)',
+              border: form.payment_terms_days === pt.value ? '1px solid var(--mv-green)' : '1px solid rgba(0,0,0,0.08)',
+              color: form.payment_terms_days === pt.value ? 'var(--mv-green)' : '#64748B',
             }}>
               <div>{pt.label}</div>
               {pt.note && <div style={{ fontSize: 10, marginTop: 2, opacity: 0.7 }}>{pt.note}</div>}
@@ -334,12 +334,12 @@ function StepContact({ form, set, errors }) {
       <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: '#64748B' }}>
           <input type="checkbox" checked={form.contact_is_main}
-            onChange={e => set('contact_is_main', e.target.checked)} style={{ accentColor: '#7B2FBE' }} />
+            onChange={e => set('contact_is_main', e.target.checked)} style={{ accentColor: 'var(--mv-purple)' }} />
           Main contact
         </label>
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: '#64748B' }}>
           <input type="checkbox" checked={form.contact_is_finance}
-            onChange={e => set('contact_is_finance', e.target.checked)} style={{ accentColor: '#7B2FBE' }} />
+            onChange={e => set('contact_is_finance', e.target.checked)} style={{ accentColor: 'var(--mv-purple)' }} />
           Finance contact
         </label>
       </div>
@@ -360,8 +360,8 @@ function StepIndicator({ steps, current }) {
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
               <div style={{
                 width: 36, height: 36, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: done ? '#00C853' : active ? '#7B2FBE' : 'rgba(0,0,0,0.04)',
-                border: `2px solid ${done ? '#00C853' : active ? '#7B2FBE' : 'rgba(0,0,0,0.08)'}`,
+                background: done ? 'var(--mv-green)' : active ? 'var(--mv-purple)' : 'rgba(0,0,0,0.04)',
+                border: `2px solid ${done ? 'var(--mv-green)' : active ? 'var(--mv-purple)' : 'rgba(0,0,0,0.08)'}`,
                 color: done || active ? '#fff' : '#666',
               }}>
                 {done ? <Check size={16} /> : <Icon size={16} />}
@@ -369,7 +369,7 @@ function StepIndicator({ steps, current }) {
               <span style={{ fontSize: 11, color: active ? '#fff' : '#666', whiteSpace: 'nowrap' }}>{s.label}</span>
             </div>
             {i < steps.length - 1 && (
-              <div style={{ flex: 1, height: 2, background: done ? '#00C853' : 'rgba(0,0,0,0.08)', margin: '0 8px', marginBottom: 20 }} />
+              <div style={{ flex: 1, height: 2, background: done ? 'var(--mv-green)' : 'rgba(0,0,0,0.08)', margin: '0 8px', marginBottom: 20 }} />
             )}
           </div>
         );
@@ -391,12 +391,12 @@ function stepSubtitle(step) {
 function SuccessScreen({ customer, navigate }) {
   return (
     <div style={{ maxWidth: 480, margin: '80px auto', textAlign: 'center' }}>
-      <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(0,200,83,0.15)', border: '2px solid #00C853', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
-        <Check size={28} color="#00C853" />
+      <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(15,122,70,0.15)', border: '2px solid var(--mv-green)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+        <Check size={28} color="var(--mv-green)" />
       </div>
       <h2 style={{ fontSize: 22, fontWeight: 700, color: '#0F172A', marginBottom: 8 }}>Customer Created</h2>
       <p style={{ color: '#64748B', marginBottom: 4 }}>{customer.business_name}</p>
-      <p style={{ color: '#00C853', fontWeight: 600, marginBottom: 28 }}>{customer.account_number}</p>
+      <p style={{ color: 'var(--mv-green)', fontWeight: 600, marginBottom: 28 }}>{customer.account_number}</p>
       <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
         <button className="btn-primary" onClick={() => navigate(`/customers/${customer.id}`)}>View Customer</button>
         <button className="btn-ghost" onClick={() => navigate('/customers/new')}>Add Another</button>
@@ -490,12 +490,12 @@ export default function CustomerNew() {
         <span style={{ fontSize: 13, color: '#0F172A' }}>Add Customer</span>
       </div>
 
-      <h1 style={{ fontSize: 24, fontWeight: 700, color: '#00C853', marginBottom: 24 }}>Add Customer</h1>
+      <h1 style={{ fontSize: 24, fontWeight: 700, color: 'var(--mv-green)', marginBottom: 24 }}>Add Customer</h1>
 
       <StepIndicator steps={STEPS} current={step} />
 
       <div className="moov-card" style={{ padding: 32, marginTop: 24 }}>
-        <h2 style={{ fontSize: 18, fontWeight: 600, color: '#7B2FBE', marginBottom: 4 }}>
+        <h2 style={{ fontSize: 18, fontWeight: 600, color: 'var(--mv-purple)', marginBottom: 4 }}>
           {STEPS[step].label}
         </h2>
         <p style={{ fontSize: 13, color: '#64748B', marginBottom: 28 }}>
@@ -508,7 +508,7 @@ export default function CustomerNew() {
         {step === 3 && <StepContact    form={form} set={set} errors={errors} />}
 
         {createCustomer.isError && (
-          <div style={{ marginTop: 16, padding: 12, background: 'rgba(233,30,140,0.1)', border: '1px solid #E91E8C', borderRadius: 8, fontSize: 13, color: '#E91E8C' }}>
+          <div style={{ marginTop: 16, padding: 12, background: 'rgba(205,29,105,0.1)', border: '1px solid var(--mv-magenta)', borderRadius: 8, fontSize: 13, color: 'var(--mv-magenta)' }}>
             Something went wrong. Please try again.
           </div>
         )}

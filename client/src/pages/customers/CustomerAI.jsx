@@ -9,7 +9,7 @@ const api = axios.create({ baseURL: '/api' });
 // ─── Shared styles ─────────────────────────────────────────────
 const inputStyle = (error) => ({
   width: '100%', boxSizing: 'border-box',
-  background: '#FFFFFF', border: `1px solid ${error ? '#E91E8C' : 'rgba(0,0,0,0.08)'}`,
+  background: '#FFFFFF', border: `1px solid ${error ? 'var(--mv-magenta)' : 'rgba(0,0,0,0.08)'}`,
   borderRadius: 9999, padding: '10px 18px', color: '#0F172A', fontSize: 14, outline: 'none',
 });
 const selectStyle = {
@@ -25,16 +25,16 @@ const textareaStyle = {
 };
 const grid2 = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 };
 const grid3 = { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 };
-const sectionH = { fontSize: 11, color: '#7B2FBE', fontWeight: 600, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 1 };
+const sectionH = { fontSize: 11, color: 'var(--mv-purple)', fontWeight: 600, marginBottom: 12, textTransform: 'uppercase', letterSpacing: 1 };
 
 function Field({ label, error, required, children }) {
   return (
     <div>
       <label style={{ display: 'block', fontSize: 12, color: '#64748B', marginBottom: 6 }}>
-        {label}{required && <span style={{ color: '#E91E8C', marginLeft: 3 }}>*</span>}
+        {label}{required && <span style={{ color: 'var(--mv-magenta)', marginLeft: 3 }}>*</span>}
       </label>
       {children}
-      {error && <p style={{ fontSize: 11, color: '#E91E8C', marginTop: 4 }}>{error}</p>}
+      {error && <p style={{ fontSize: 11, color: 'var(--mv-magenta)', marginTop: 4 }}>{error}</p>}
     </div>
   );
 }
@@ -74,8 +74,8 @@ function DocumentInput({ label, hint, onReady, loading, loadingMsg }) {
   if (loading) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, padding: '40px 0' }}>
-        <Loader2 size={32} color="#7B2FBE" style={{ animation: 'spin 1s linear infinite' }} />
-        <p style={{ fontSize: 14, color: '#7B2FBE', margin: 0 }}>{loadingMsg || 'Processing…'}</p>
+        <Loader2 size={32} color="var(--mv-purple)" style={{ animation: 'spin 1s linear infinite' }} />
+        <p style={{ fontSize: 14, color: 'var(--mv-purple)', margin: 0 }}>{loadingMsg || 'Processing…'}</p>
       </div>
     );
   }
@@ -90,7 +90,7 @@ function DocumentInput({ label, hint, onReady, loading, loadingMsg }) {
             onClick={() => setMode(m)}
             style={{
               padding: '7px 16px', fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer',
-              background: mode === m ? 'rgba(123,47,190,0.25)' : 'rgba(0,0,0,0.03)',
+              background: mode === m ? 'rgba(15,122,70,0.25)' : 'rgba(0,0,0,0.03)',
               color: mode === m ? '#A78BFA' : '#666',
               borderRight: m === 'upload' ? '1px solid rgba(0,0,0,0.08)' : 'none',
             }}
@@ -109,19 +109,19 @@ function DocumentInput({ label, hint, onReady, loading, loadingMsg }) {
             onDrop={handleDrop}
             onClick={() => fileRef.current?.click()}
             style={{
-              border: `2px dashed ${dragOver ? '#7B2FBE' : fileName ? 'rgba(0,200,83,0.4)' : 'rgba(0,0,0,0.10)'}`,
+              border: `2px dashed ${dragOver ? 'var(--mv-purple)' : fileName ? 'rgba(15,122,70,0.4)' : 'rgba(0,0,0,0.10)'}`,
               borderRadius: 12, padding: '36px 24px',
               display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
               gap: 10, cursor: 'pointer',
-              background: dragOver ? 'rgba(123,47,190,0.06)' : fileName ? 'rgba(0,200,83,0.04)' : 'rgba(0,0,0,0.02)',
+              background: dragOver ? 'rgba(15,122,70,0.06)' : fileName ? 'rgba(15,122,70,0.04)' : 'rgba(0,0,0,0.02)',
               transition: 'all 0.15s',
             }}
           >
             {fileName ? (
               <>
-                <FileText size={28} color="#00C853" />
+                <FileText size={28} color="var(--mv-green)" />
                 <div style={{ textAlign: 'center' }}>
-                  <p style={{ fontSize: 13, color: '#00C853', fontWeight: 600, margin: 0 }}>{fileName}</p>
+                  <p style={{ fontSize: 13, color: 'var(--mv-green)', fontWeight: 600, margin: 0 }}>{fileName}</p>
                   <p style={{ fontSize: 12, color: '#64748B', margin: '4px 0 0' }}>PDF uploaded — AI will extract the data</p>
                 </div>
                 <button
@@ -177,11 +177,11 @@ function StepDcId({ moovAccountNumber, setMoovAccountNumber, moovAccountError })
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div style={{
         padding: '16px 20px', borderRadius: 10,
-        background: 'rgba(123,47,190,0.1)', border: '1px solid rgba(123,47,190,0.3)',
+        background: 'rgba(15,122,70,0.1)', border: '1px solid rgba(15,122,70,0.3)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-          <Sparkles size={16} color="#7B2FBE" />
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#7B2FBE' }}>AI-Assisted Onboarding</span>
+          <Sparkles size={16} color="var(--mv-purple)" />
+          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--mv-purple)' }}>AI-Assisted Onboarding</span>
         </div>
         <p style={{ fontSize: 13, color: '#64748B', lineHeight: 1.6, margin: 0 }}>
           Provide the Moov account number, upload (or paste) the customer's application form PDF, then upload their rate card PDF.
@@ -210,7 +210,7 @@ function CustomerFields({ customer, setCustomer, contact, setContact }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <div style={{ padding: '10px 14px', background: 'rgba(0,200,83,0.08)', border: '1px solid rgba(0,200,83,0.3)', borderRadius: 8, fontSize: 13, color: '#00C853', display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ padding: '10px 14px', background: 'rgba(15,122,70,0.08)', border: '1px solid rgba(15,122,70,0.3)', borderRadius: 8, fontSize: 13, color: 'var(--mv-green)', display: 'flex', alignItems: 'center', gap: 8 }}>
         <Check size={14} /> AI extracted the details below — review and correct anything that needs changing.
       </div>
 
@@ -443,7 +443,7 @@ function StepRateCard({ rates, setRates, ratesExtracted, setRatesExtracted, extr
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ padding: '10px 14px', background: 'rgba(0,200,83,0.08)', border: '1px solid rgba(0,200,83,0.3)', borderRadius: 8, fontSize: 13, color: '#00C853', display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ padding: '10px 14px', background: 'rgba(15,122,70,0.08)', border: '1px solid rgba(15,122,70,0.3)', borderRadius: 8, fontSize: 13, color: 'var(--mv-green)', display: 'flex', alignItems: 'center', gap: 8 }}>
         <Check size={14} /> {rates.length} rate{rates.length !== 1 ? 's' : ''} extracted — review, correct service codes, and remove any incorrect rows.
       </div>
 
@@ -469,7 +469,7 @@ function StepRateCard({ rates, setRates, ratesExtracted, setRatesExtracted, extr
                 <td style={{ padding: '5px 4px', width: 70 }}>{cellInput(r.price, v => updateRate(i, 'price', v), '0.00')}</td>
                 <td style={{ padding: '5px 4px', width: 70 }}>{cellInput(r.price_sub, v => updateRate(i, 'price_sub', v === '' ? null : parseFloat(v)), '')}</td>
                 <td style={{ padding: '5px 4px' }}>
-                  <button onClick={() => removeRate(i)} style={{ background: 'none', border: 'none', color: '#E91E8C', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                  <button onClick={() => removeRate(i)} style={{ background: 'none', border: 'none', color: 'var(--mv-magenta)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
                     <Trash2 size={13} />
                   </button>
                 </td>
@@ -527,7 +527,7 @@ function StepConfirm({ dcId, moovAccountNumber, customer, contact, rates }) {
         ) : (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {validRates.map((r, i) => (
-              <span key={i} style={{ fontSize: 11, padding: '3px 8px', background: 'rgba(0,200,83,0.1)', border: '1px solid rgba(0,200,83,0.2)', borderRadius: 999, color: '#00C853' }}>
+              <span key={i} style={{ fontSize: 11, padding: '3px 8px', background: 'rgba(15,122,70,0.1)', border: '1px solid rgba(15,122,70,0.2)', borderRadius: 999, color: 'var(--mv-green)' }}>
                 {r.service_code} · {r.zone_name} · {r.weight_class_name || 'flat'} · £{parseFloat(r.price).toFixed(2)}
               </span>
             ))}
@@ -566,8 +566,8 @@ function StepIndicator({ current }) {
               <div style={{
                 width: 32, height: 32, borderRadius: '50%',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: done ? '#00C853' : active ? '#7B2FBE' : 'rgba(0,0,0,0.04)',
-                border: `2px solid ${done ? '#00C853' : active ? '#7B2FBE' : 'rgba(0,0,0,0.08)'}`,
+                background: done ? 'var(--mv-green)' : active ? 'var(--mv-purple)' : 'rgba(0,0,0,0.04)',
+                border: `2px solid ${done ? 'var(--mv-green)' : active ? 'var(--mv-purple)' : 'rgba(0,0,0,0.08)'}`,
                 color: done || active ? '#fff' : '#666', fontSize: 13, fontWeight: 700,
               }}>
                 {done ? <Check size={14} /> : i + 1}
@@ -575,7 +575,7 @@ function StepIndicator({ current }) {
               <span style={{ fontSize: 11, color: active ? '#fff' : '#666', whiteSpace: 'nowrap' }}>{s.label}</span>
             </div>
             {i < STEPS.length - 1 && (
-              <div style={{ flex: 1, height: 2, background: done ? '#00C853' : 'rgba(0,0,0,0.08)', margin: '0 8px', marginBottom: 20 }} />
+              <div style={{ flex: 1, height: 2, background: done ? 'var(--mv-green)' : 'rgba(0,0,0,0.08)', margin: '0 8px', marginBottom: 20 }} />
             )}
           </div>
         );
@@ -588,12 +588,12 @@ function StepIndicator({ current }) {
 function SuccessScreen({ customer, rateResults, navigate }) {
   return (
     <div style={{ maxWidth: 480, margin: '60px auto', textAlign: 'center' }}>
-      <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(0,200,83,0.15)', border: '2px solid #00C853', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
-        <Check size={28} color="#00C853" />
+      <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(15,122,70,0.15)', border: '2px solid var(--mv-green)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+        <Check size={28} color="var(--mv-green)" />
       </div>
       <h2 style={{ fontSize: 22, fontWeight: 700, color: '#0F172A', marginBottom: 8 }}>Customer Created</h2>
       <p style={{ color: '#64748B', marginBottom: 4 }}>{customer.business_name}</p>
-      <p style={{ color: '#00C853', fontWeight: 600, marginBottom: 8 }}>{customer.account_number}</p>
+      <p style={{ color: 'var(--mv-green)', fontWeight: 600, marginBottom: 8 }}>{customer.account_number}</p>
       {rateResults && (
         <p style={{ fontSize: 13, color: '#64748B', marginBottom: 20 }}>
           {rateResults.inserted} rate{rateResults.inserted !== 1 ? 's' : ''} imported
@@ -708,14 +708,14 @@ export default function CustomerAI() {
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24 }}>
-        <Sparkles size={20} color="#7B2FBE" />
-        <h1 style={{ fontSize: 24, fontWeight: 700, color: '#7B2FBE', margin: 0 }}>AI-Assisted Add Customer</h1>
+        <Sparkles size={20} color="var(--mv-purple)" />
+        <h1 style={{ fontSize: 24, fontWeight: 700, color: 'var(--mv-purple)', margin: 0 }}>AI-Assisted Add Customer</h1>
       </div>
 
       <StepIndicator current={step} />
 
       <div className="moov-card" style={{ padding: 32 }}>
-        <h2 style={{ fontSize: 18, fontWeight: 600, color: '#7B2FBE', marginBottom: 4 }}>{stepTitles[step]}</h2>
+        <h2 style={{ fontSize: 18, fontWeight: 600, color: 'var(--mv-purple)', marginBottom: 4 }}>{stepTitles[step]}</h2>
         <p style={{ fontSize: 13, color: '#64748B', marginBottom: 28 }}>{stepSubtitles[step]}</p>
 
         {step === 0 && <StepDcId moovAccountNumber={moovAccountNumber} setMoovAccountNumber={setMoovAccountNumber} moovAccountError={moovAccountError} />}
@@ -742,7 +742,7 @@ export default function CustomerAI() {
         {step === 3 && <StepConfirm moovAccountNumber={moovAccountNumber} customer={customer} contact={contact} rates={rates} />}
 
         {(formError || rateError || saveError) && (
-          <div style={{ marginTop: 16, padding: 12, background: 'rgba(233,30,140,0.1)', border: '1px solid #E91E8C', borderRadius: 8, fontSize: 13, color: '#E91E8C', display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+          <div style={{ marginTop: 16, padding: 12, background: 'rgba(205,29,105,0.1)', border: '1px solid var(--mv-magenta)', borderRadius: 8, fontSize: 13, color: 'var(--mv-magenta)', display: 'flex', alignItems: 'flex-start', gap: 8 }}>
             <AlertCircle size={14} style={{ marginTop: 1, flexShrink: 0 }} />
             {formError || rateError || saveError}
           </div>

@@ -23,8 +23,8 @@ function ConfidencePill({ score }) {
   // score is 0–100
   const high   = score >= 80;
   const medium = score >= 50;
-  const col    = high ? '#00C853' : medium ? '#D97706' : '#EF4444';
-  const bg     = high ? 'rgba(0,200,83,0.1)' : medium ? 'rgba(255,193,7,0.1)' : 'rgba(239,68,68,0.1)';
+  const col    = high ? 'var(--mv-green)' : medium ? '#D97706' : '#EF4444';
+  const bg     = high ? 'rgba(15,122,70,0.1)' : medium ? 'rgba(255,193,7,0.1)' : 'rgba(239,68,68,0.1)';
   return (
     <span style={{
       fontSize: 11, fontWeight: 700, padding: '2px 7px', borderRadius: 20,
@@ -118,12 +118,12 @@ function CustomerRow({ customer, suggestion, onLink, onUnlink, linking, unlinkin
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         padding: '9px 14px', borderRadius: 8,
-        background: 'rgba(0,200,83,0.03)', border: '1px solid rgba(0,200,83,0.08)',
+        background: 'rgba(15,122,70,0.03)', border: '1px solid rgba(15,122,70,0.08)',
         gap: 12,
       }}>
         {/* Our name */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: 1 }}>
-          <div style={{ width: 7, height: 7, borderRadius: '50%', background: '#00C853', flexShrink: 0 }} />
+          <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--mv-green)', flexShrink: 0 }} />
           <span style={{ fontSize: 13, color: '#334155', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {customer.business_name}
           </span>
@@ -189,8 +189,8 @@ function CustomerRow({ customer, suggestion, onLink, onUnlink, linking, unlinkin
               onClick={() => onLink(suggestion.xero_id, suggestion.xero_name)}
               disabled={linking}
               style={{
-                background: 'rgba(0,200,83,0.1)', border: '1px solid rgba(0,200,83,0.25)',
-                color: '#00C853', borderRadius: 6, padding: '3px 10px', fontSize: 11,
+                background: 'rgba(15,122,70,0.1)', border: '1px solid rgba(15,122,70,0.25)',
+                color: 'var(--mv-green)', borderRadius: 6, padding: '3px 10px', fontSize: 11,
                 cursor: 'pointer', fontWeight: 700, opacity: linking ? 0.5 : 1,
               }}
             >
@@ -362,7 +362,7 @@ function CustomerMatchingPanel({ connected }) {
         <div>
           <div style={{ fontWeight: 700, fontSize: 14, color: '#1E293B' }}>Customer matching</div>
           <div style={{ fontSize: 12, color: '#64748B', marginTop: 3 }}>
-            <span style={{ color: '#00C853', fontWeight: 600 }}>{linked.length} linked</span>
+            <span style={{ color: 'var(--mv-green)', fontWeight: 600 }}>{linked.length} linked</span>
             {' / '}
             <span style={{ color: unlinked.length > 0 ? '#EF4444' : '#666', fontWeight: 600 }}>{unlinked.length} unlinked</span>
             {' of '}{customers.length}
@@ -388,10 +388,10 @@ function CustomerMatchingPanel({ connected }) {
       {/* Auto-match result banner */}
       {autoMatchResult && !autoMatchResult.error && (
         <div style={{
-          background: 'rgba(0,200,83,0.08)', border: '1px solid rgba(0,200,83,0.2)',
+          background: 'rgba(15,122,70,0.08)', border: '1px solid rgba(15,122,70,0.2)',
           borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 12,
         }}>
-          <span style={{ color: '#00C853', fontWeight: 700 }}>
+          <span style={{ color: 'var(--mv-green)', fontWeight: 700 }}>
             {autoMatchResult.matched?.length || 0} matched automatically.
           </span>
           {autoMatchResult.suggestions?.length > 0 && (
@@ -412,7 +412,7 @@ function CustomerMatchingPanel({ connected }) {
 
       {/* Legend */}
       <div style={{ fontSize: 11, color: '#64748B', marginBottom: 10, display: 'flex', gap: 16 }}>
-        <span>Confidence: <span style={{ color: '#00C853' }}>≥80% auto-accepted</span></span>
+        <span>Confidence: <span style={{ color: 'var(--mv-green)' }}>≥80% auto-accepted</span></span>
         <span><span style={{ color: '#D97706' }}>50–79%</span> needs review</span>
         <span><span style={{ color: '#475569' }}>&lt;50%</span> search manually</span>
       </div>
@@ -565,9 +565,9 @@ function NominalCodesPanel() {
               disabled={!isDirty || saveMutation.isPending}
               style={{
                 display: 'flex', alignItems: 'center', gap: 6,
-                background: saved ? 'rgba(0,200,83,0.12)' : isDirty ? 'rgba(19,181,234,0.12)' : 'rgba(0,0,0,0.04)',
-                border: `1px solid ${saved ? 'rgba(0,200,83,0.3)' : isDirty ? 'rgba(19,181,234,0.3)' : 'rgba(0,0,0,0.08)'}`,
-                color: saved ? '#00C853' : isDirty ? '#13B5EA' : '#94A3B8',
+                background: saved ? 'rgba(15,122,70,0.12)' : isDirty ? 'rgba(19,181,234,0.12)' : 'rgba(0,0,0,0.04)',
+                border: `1px solid ${saved ? 'rgba(15,122,70,0.3)' : isDirty ? 'rgba(19,181,234,0.3)' : 'rgba(0,0,0,0.08)'}`,
+                color: saved ? 'var(--mv-green)' : isDirty ? '#13B5EA' : '#94A3B8',
                 borderRadius: 8, padding: '8px 16px', fontSize: 12,
                 cursor: (!isDirty || saveMutation.isPending) ? 'not-allowed' : 'pointer',
                 fontWeight: 600, whiteSpace: 'nowrap',

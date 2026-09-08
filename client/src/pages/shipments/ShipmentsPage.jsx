@@ -220,7 +220,7 @@ export default function ShipmentsPage() {
               Shipments & Ingested Parcels
             </h1>
           </div>
-          <div style={{ fontSize: 13, color: 'var(--mv-ink-60)', marginTop: 4 }}>
+          <div style={{ fontSize: 13, color: 'var(--mv-ink-62)', marginTop: 4 }}>
             Live stream of parcel webhooks, tracking barcodes, DC service codes, and linked billing charges.
           </div>
         </div>
@@ -321,7 +321,7 @@ export default function ShipmentsPage() {
       {/* ── Filter Bar ──────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16 }}>
         <div style={{ position: 'relative', flex: 1, maxWidth: 360 }}>
-          <Search size={14} style={{ position: 'absolute', left: 12, top: 10, color: 'var(--mv-ink-40)' }} />
+          <Search size={14} style={{ position: 'absolute', left: 12, top: 10, color: 'var(--mv-ink-45)' }} />
           <input
             type="text"
             placeholder="Search tracking, reference, customer, service..."
@@ -385,13 +385,13 @@ export default function ShipmentsPage() {
         <tbody>
           {loading ? (
             <tr>
-              <td colSpan={13} style={{ textAlign: 'center', padding: '36px 0', color: 'var(--mv-ink-50)' }}>
+              <td colSpan={13} style={{ textAlign: 'center', padding: '36px 0', color: 'var(--mv-ink-52)' }}>
                 Loading shipments...
               </td>
             </tr>
           ) : shipments.length === 0 ? (
             <tr>
-              <td colSpan={13} style={{ textAlign: 'center', padding: '48px 0', color: 'var(--mv-ink-50)' }}>
+              <td colSpan={13} style={{ textAlign: 'center', padding: '48px 0', color: 'var(--mv-ink-52)' }}>
                 <Package size={24} style={{ display: 'block', margin: '0 auto 8px', opacity: 0.4 }} />
                 No shipments found. New webhooks will appear here automatically.
               </td>
@@ -414,7 +414,7 @@ export default function ShipmentsPage() {
                   </td>
                   <td className="mv-num" style={{ fontSize: 12.5, whiteSpace: 'nowrap' }}>
                     {new Date(s.created_at).toLocaleDateString('en-GB')}
-                    <div style={{ fontSize: 11, color: 'var(--mv-ink-50)' }}>
+                    <div style={{ fontSize: 11, color: 'var(--mv-ink-52)' }}>
                       {new Date(s.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
                     </div>
                   </td>
@@ -430,7 +430,7 @@ export default function ShipmentsPage() {
                   </td>
                   <td>
                     <div style={{ fontWeight: 600 }}>{s.customer_display_name || s.customer_name || 'Unmapped Customer'}</div>
-                    <div style={{ fontSize: 11, color: 'var(--mv-ink-50)' }}>
+                    <div style={{ fontSize: 11, color: 'var(--mv-ink-52)' }}>
                       Acct: {s.customer_account || '—'}
                     </div>
                   </td>
@@ -441,7 +441,7 @@ export default function ShipmentsPage() {
                     <div style={{ fontWeight: 700, fontSize: 12.5 }}>
                       {s.dc_service_id || '—'}
                     </div>
-                    <div style={{ fontSize: 11, color: 'var(--mv-ink-50)' }}>
+                    <div style={{ fontSize: 11, color: 'var(--mv-ink-52)' }}>
                       {s.service_name || '—'}
                     </div>
                   </td>
@@ -452,20 +452,20 @@ export default function ShipmentsPage() {
                     <div style={{ fontSize: 12.5, fontWeight: 500 }}>
                       {s.ship_to_postcode || '—'} ({s.ship_to_country_iso || 'GB'})
                     </div>
-                    <div style={{ fontSize: 11, color: 'var(--mv-ink-50)', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div style={{ fontSize: 11, color: 'var(--mv-ink-52)', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {s.ship_to_name || '—'}
                     </div>
                   </td>
                   <td style={{ fontSize: 12 }} className="mv-num">
                     {s.reference || '—'}
                     {s.reference_2 && (
-                      <div style={{ fontSize: 10.5, color: 'var(--mv-ink-50)' }}>
+                      <div style={{ fontSize: 10.5, color: 'var(--mv-ink-52)' }}>
                         Ref2: {s.reference_2}
                       </div>
                     )}
                   </td>
                   <td className="tar mv-num" style={{ fontWeight: 500 }}>
-                    {costVal != null ? `£${costVal.toFixed(2)}` : <span style={{ color: 'var(--mv-ink-40)' }}>—</span>}
+                    {costVal != null ? `£${costVal.toFixed(2)}` : <span style={{ color: 'var(--mv-ink-45)' }}>—</span>}
                   </td>
                   <td className="tar mv-num" style={{ fontWeight: 700 }}>
                     {sellVal != null ? (
@@ -497,7 +497,7 @@ export default function ShipmentsPage() {
                     <button
                       onClick={() => handleDeleteShipment(s.id)}
                       className="mv-btn-ghost"
-                      style={{ padding: '4px 6px', color: 'var(--mv-ink-40)' }}
+                      style={{ padding: '4px 6px', color: 'var(--mv-ink-45)' }}
                       title="Delete"
                     >
                       <Trash2 size={13} />
@@ -523,7 +523,7 @@ export default function ShipmentsPage() {
             <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 8px 0' }}>
               Inject DPD Invoice Test Shipments
             </h2>
-            <p style={{ fontSize: 13, color: 'var(--mv-ink-60)', margin: '0 0 16px 0', lineHeight: 1.5 }}>
+            <p style={{ fontSize: 13, color: 'var(--mv-ink-62)', margin: '0 0 16px 0', lineHeight: 1.5 }}>
               This tool creates sample parcel shipments matching the DPD invoice lines and assigns them to a chosen customer.
             </p>
 
@@ -584,7 +584,7 @@ export default function ShipmentsPage() {
                   <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>
                     Shipment {selectedShipment.tracking_codes?.[0] || selectedShipment.reference || selectedShipment.id}
                   </h3>
-                  <div style={{ fontSize: 12, color: 'var(--mv-ink-60)', marginTop: 2 }}>
+                  <div style={{ fontSize: 12, color: 'var(--mv-ink-62)', marginTop: 2 }}>
                     Service Code: <strong>{selectedShipment.dc_service_id || 'DPD-12'}</strong> | Customer: <strong>{selectedShipment.customer_display_name || selectedShipment.customer_name || 'Cranswick'}</strong>
                   </div>
                 </div>
@@ -611,7 +611,7 @@ export default function ShipmentsPage() {
                 style={{
                   padding: '10px 18px', fontSize: 13, fontWeight: 600, border: 'none', background: 'none', cursor: 'pointer',
                   borderBottom: activeModalTab === 'pricing' ? '2px solid var(--mv-ink)' : '2px solid transparent',
-                  color: activeModalTab === 'pricing' ? 'var(--mv-ink)' : 'var(--mv-ink-60)'
+                  color: activeModalTab === 'pricing' ? 'var(--mv-ink)' : 'var(--mv-ink-62)'
                 }}
               >
                 Pricing & Margin Audit
@@ -621,7 +621,7 @@ export default function ShipmentsPage() {
                 style={{
                   padding: '10px 18px', fontSize: 13, fontWeight: 600, border: 'none', background: 'none', cursor: 'pointer',
                   borderBottom: activeModalTab === 'response' ? '2px solid var(--mv-ink)' : '2px solid transparent',
-                  color: activeModalTab === 'response' ? 'var(--mv-ink)' : 'var(--mv-ink-60)'
+                  color: activeModalTab === 'response' ? 'var(--mv-ink)' : 'var(--mv-ink-62)'
                 }}
               >
                 Carrier Response JSON
@@ -631,7 +631,7 @@ export default function ShipmentsPage() {
                 style={{
                   padding: '10px 18px', fontSize: 13, fontWeight: 600, border: 'none', background: 'none', cursor: 'pointer',
                   borderBottom: activeModalTab === 'raw' ? '2px solid var(--mv-ink)' : '2px solid transparent',
-                  color: activeModalTab === 'raw' ? 'var(--mv-ink)' : 'var(--mv-ink-60)'
+                  color: activeModalTab === 'raw' ? 'var(--mv-ink)' : 'var(--mv-ink-62)'
                 }}
               >
                 Raw Webhook Payload
@@ -644,27 +644,27 @@ export default function ShipmentsPage() {
                 <div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
                     <div className="mv-card" style={{ padding: 14, background: 'var(--mv-surface)' }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--mv-ink-60)', textTransform: 'uppercase' }}>Customer Sell Price</div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--mv-ink-62)', textTransform: 'uppercase' }}>Customer Sell Price</div>
                       <div style={{ fontSize: 22, fontWeight: 800, marginTop: 4 }} className="mv-num">
                         {selectedShipment.charges?.[0]?.price != null ? `£${Number(selectedShipment.charges[0].price).toFixed(2)}` : '£0.00'}
                       </div>
-                      <div style={{ fontSize: 11.5, color: 'var(--mv-ink-50)', marginTop: 2 }}>
+                      <div style={{ fontSize: 11.5, color: 'var(--mv-ink-52)', marginTop: 2 }}>
                         Billed to {selectedShipment.customer_display_name || selectedShipment.customer_name || 'Customer'}
                       </div>
                     </div>
 
                     <div className="mv-card" style={{ padding: 14, background: 'var(--mv-surface)' }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--mv-ink-60)', textTransform: 'uppercase' }}>Carrier Buy Cost</div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--mv-ink-62)', textTransform: 'uppercase' }}>Carrier Buy Cost</div>
                       <div style={{ fontSize: 22, fontWeight: 800, marginTop: 4 }} className="mv-num">
                         {selectedShipment.charges?.[0]?.cost_price != null ? `£${Number(selectedShipment.charges[0].cost_price).toFixed(2)}` : '£0.00'}
                       </div>
-                      <div style={{ fontSize: 11.5, color: 'var(--mv-ink-50)', marginTop: 2 }}>
+                      <div style={{ fontSize: 11.5, color: 'var(--mv-ink-52)', marginTop: 2 }}>
                         Payable to {selectedShipment.courier || 'DPD'}
                       </div>
                     </div>
 
                     <div className="mv-card" style={{ padding: 14, background: 'var(--mv-surface)' }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--mv-ink-60)', textTransform: 'uppercase' }}>Profit Margin</div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--mv-ink-62)', textTransform: 'uppercase' }}>Profit Margin</div>
                       {(() => {
                         const sVal = selectedShipment.charges?.[0]?.price != null ? Number(selectedShipment.charges[0].price) : null;
                         const cVal = selectedShipment.charges?.[0]?.cost_price != null ? Number(selectedShipment.charges[0].cost_price) : null;
@@ -675,7 +675,7 @@ export default function ShipmentsPage() {
                             <div style={{ fontSize: 22, fontWeight: 800, marginTop: 4, color: mVal >= 0 ? 'var(--mv-green)' : 'var(--mv-red)' }} className="mv-num">
                               {mVal != null ? `${mVal >= 0 ? '+' : ''}£${mVal.toFixed(2)}` : '—'}
                             </div>
-                            <div style={{ fontSize: 11.5, color: 'var(--mv-ink-50)', marginTop: 2 }}>
+                            <div style={{ fontSize: 11.5, color: 'var(--mv-ink-52)', marginTop: 2 }}>
                               {pct != null ? `${pct}% margin` : 'Awaiting rate calculation'}
                             </div>
                           </>
@@ -691,19 +691,19 @@ export default function ShipmentsPage() {
                   <table className="mv-table" style={{ fontSize: 12.5, marginBottom: 20 }}>
                     <tbody>
                       <tr>
-                        <td style={{ width: 160, fontWeight: 600, color: 'var(--mv-ink-60)' }}>Matched Service Code</td>
+                        <td style={{ width: 160, fontWeight: 600, color: 'var(--mv-ink-62)' }}>Matched Service Code</td>
                         <td><code>{selectedShipment.dc_service_id || 'DPD-12'}</code> ({selectedShipment.service_name || 'DPD Domestic Parcel Next Day'})</td>
                       </tr>
                       <tr>
-                        <td style={{ fontWeight: 600, color: 'var(--mv-ink-60)' }}>Weight & Parcels</td>
+                        <td style={{ fontWeight: 600, color: 'var(--mv-ink-62)' }}>Weight & Parcels</td>
                         <td>{selectedShipment.total_weight_kg || 1} kg ({selectedShipment.parcel_count || 1} parcel)</td>
                       </tr>
                       <tr>
-                        <td style={{ fontWeight: 600, color: 'var(--mv-ink-60)' }}>Destination Postcode</td>
+                        <td style={{ fontWeight: 600, color: 'var(--mv-ink-62)' }}>Destination Postcode</td>
                         <td>{selectedShipment.ship_to_postcode || '—'} ({selectedShipment.ship_to_country_iso || 'GB'})</td>
                       </tr>
                       <tr>
-                        <td style={{ fontWeight: 600, color: 'var(--mv-ink-60)' }}>Matched Customer ID</td>
+                        <td style={{ fontWeight: 600, color: 'var(--mv-ink-62)' }}>Matched Customer ID</td>
                         <td><code>{selectedShipment.customer_id || 'Not linked'}</code></td>
                       </tr>
                     </tbody>
@@ -746,7 +746,7 @@ export default function ShipmentsPage() {
 
               {activeModalTab === 'response' && (
                 <div>
-                  <div style={{ marginBottom: 12, fontSize: 12.5, color: 'var(--mv-ink-60)' }}>
+                  <div style={{ marginBottom: 12, fontSize: 12.5, color: 'var(--mv-ink-62)' }}>
                     Carrier response details extracted from the webhook payload:
                   </div>
                   <pre style={{

@@ -131,7 +131,7 @@ function TestAccountSection({ customer, onToggle }) {
     finally { setBusy(false); }
   }
   return (
-    <div style={{ marginBottom: 18, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14, borderLeft: `3px solid ${enabled ? 'var(--mv-magenta)' : 'var(--mv-divider)'}`, background: enabled ? 'rgba(233,30,140,.06)' : 'transparent' }}>
+    <div style={{ marginBottom: 18, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14, borderLeft: `3px solid ${enabled ? 'var(--mv-magenta)' : 'var(--mv-divider)'}`, background: enabled ? 'rgba(205,29,105,.06)' : 'transparent' }}>
       <FlaskConical size={18} color={enabled ? 'var(--mv-magenta)' : 'var(--mv-ink-45)'} strokeWidth={1.5} />
       <div style={{ flex: 1 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -605,7 +605,7 @@ function FinancialTab({ c }) {
           </div>
         </div>
         {showStopForm && (
-          <div style={{ marginTop: 16, borderLeft: '3px solid var(--mv-magenta)', background: 'rgba(233,30,140,.05)', padding: 16 }}>
+          <div style={{ marginTop: 16, borderLeft: '3px solid var(--mv-magenta)', background: 'rgba(205,29,105,.05)', padding: 16 }}>
             <div className="mv-label">Reason for placing on stop</div>
             <textarea className="mv-input" value={stopReason} onChange={e => setStopReason(e.target.value)} rows={2} placeholder="e.g. Credit limit exceeded — awaiting payment of overdue invoices" style={{ minHeight: 60 }} />
             <div style={{ display: 'flex', gap: 8, marginTop: 10, justifyContent: 'flex-end' }}>

@@ -406,9 +406,9 @@ export default function RateCardEditor() {
               </button>
               <button onClick={() => setShowSubmit(p => !p)}
                 style={{ display: 'flex', alignItems: 'center', gap: 6,
-                  background: 'rgba(0,200,83,0.1)', border: '1px solid rgba(0,200,83,0.35)',
+                  background: 'rgba(15,122,70,0.1)', border: '1px solid rgba(15,122,70,0.35)',
                   borderRadius: 7, padding: '8px 16px',
-                  color: '#00C853', fontSize: 13, cursor: 'pointer', fontWeight: 700 }}>
+                  color: 'var(--mv-green)', fontSize: 13, cursor: 'pointer', fontWeight: 700 }}>
                 <Send size={13} /> Submit for Approval
               </button>
             </>
@@ -418,7 +418,7 @@ export default function RateCardEditor() {
 
       {/* Submit panel */}
       {showSubmit && isEditable && (
-        <div style={{ marginBottom: 16, background: 'rgba(0,200,83,0.06)', border: '1px solid rgba(0,200,83,0.2)',
+        <div style={{ marginBottom: 16, background: 'rgba(15,122,70,0.06)', border: '1px solid rgba(15,122,70,0.2)',
           borderRadius: 9, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ fontSize: 13, color: '#64748B' }}>Submit as:</span>
           <select value={submitStaff} onChange={e => setSubmitStaff(e.target.value)}
@@ -431,8 +431,8 @@ export default function RateCardEditor() {
           </select>
           <button onClick={() => submitMut.mutate()} disabled={!submitStaff || submitMut.isPending}
             style={{ display: 'flex', alignItems: 'center', gap: 6,
-              background: 'rgba(0,200,83,0.15)', border: '1px solid rgba(0,200,83,0.4)',
-              borderRadius: 7, padding: '7px 16px', color: '#00C853',
+              background: 'rgba(15,122,70,0.15)', border: '1px solid rgba(15,122,70,0.4)',
+              borderRadius: 7, padding: '7px 16px', color: 'var(--mv-green)',
               fontSize: 13, cursor: 'pointer', fontWeight: 700, opacity: !submitStaff ? 0.5 : 1 }}>
             {submitMut.isPending ? <RefreshCw size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={13} />}
             Confirm
@@ -530,7 +530,7 @@ export default function RateCardEditor() {
 
           {/* ── DOMESTIC SERVICES ──────────────────────────────────────────── */}
           <div style={{ marginBottom: 24 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#00C853', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--mv-green)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
               Domestic Services <span style={{ color: '#475569', fontWeight: 400, textTransform: 'none' }}>({domesticServices.length} services · {domesticRates.length} zones)</span>
             </div>
             {domesticServices.length === 0 && (
@@ -549,7 +549,7 @@ export default function RateCardEditor() {
                       cursor: 'pointer', background: svcOpen ? 'rgba(0,0,0,0.03)' : 'transparent' }}>
                     {svcOpen ? <ChevronDown size={13} color="#64748B"/> : <ChevronRight size={13} color="#64748B"/>}
                     <span style={{ fontWeight: 600, fontSize: 13, color: '#0F172A', flex: 1 }}>{svc.service_name}</span>
-                    <span style={{ fontFamily: 'monospace', fontSize: 11, color: '#00C853', background: 'rgba(0,200,83,0.08)', padding: '1px 8px', borderRadius: 9999 }}>{svc.service_code}</span>
+                    <span style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--mv-green)', background: 'rgba(15,122,70,0.08)', padding: '1px 8px', borderRadius: 9999 }}>{svc.service_code}</span>
                     {allPriced && <span style={{ fontSize: 10, color: '#34D399', background: 'rgba(52,211,153,0.1)', padding: '1px 7px', borderRadius: 9999 }}>✓ priced</span>}
                     <span style={{ fontSize: 11, color: '#64748B' }}>{svc.zones.length} zone{svc.zones.length !== 1 ? 's' : ''}</span>
                   </div>
@@ -561,7 +561,7 @@ export default function RateCardEditor() {
                             <th style={{ textAlign: 'left',  padding: '4px 8px', color: '#64748B', fontWeight: 600, fontSize: 11 }}>Zone</th>
                             <th style={{ textAlign: 'right', padding: '4px 8px', color: '#B39DDB', fontWeight: 600, fontSize: 11 }}>Cost (1st)</th>
                             <th style={{ textAlign: 'right', padding: '4px 8px', color: '#A5B4FC', fontWeight: 700, fontSize: 11 }}>Markup %</th>
-                            <th style={{ textAlign: 'right', padding: '4px 8px', color: '#00C853', fontWeight: 600, fontSize: 11 }}>Sell (1st)</th>
+                            <th style={{ textAlign: 'right', padding: '4px 8px', color: 'var(--mv-green)', fontWeight: 600, fontSize: 11 }}>Sell (1st)</th>
                             <th style={{ textAlign: 'right', padding: '4px 8px', color: '#D97706', fontWeight: 600, fontSize: 11 }}>Sell (sub)</th>
                             <th style={{ textAlign: 'right', padding: '4px 8px', color: '#64748B',    fontWeight: 600, fontSize: 11 }}>Margin</th>
                             <th style={{ width: 28 }}></th>
@@ -588,9 +588,9 @@ export default function RateCardEditor() {
                                     <input value={r.price ?? ''} type="number" step="0.01" placeholder="0.00"
                                       onChange={e => updateRate(origIdx, 'price', e.target.value)}
                                       style={{ width: 72, textAlign: 'right', fontFamily: 'monospace', fontSize: 12,
-                                        color: '#00C853', fontWeight: 700, background: 'rgba(0,200,83,0.08)',
-                                        border: '1px solid rgba(0,200,83,0.3)', borderRadius: 9999, padding: '2px 8px', outline: 'none' }} />
-                                  ) : <span style={{ color: '#00C853', fontFamily: 'monospace', fontWeight: 700 }}>{gbp(r.price)}</span>}
+                                        color: 'var(--mv-green)', fontWeight: 700, background: 'rgba(15,122,70,0.08)',
+                                        border: '1px solid rgba(15,122,70,0.3)', borderRadius: 9999, padding: '2px 8px', outline: 'none' }} />
+                                  ) : <span style={{ color: 'var(--mv-green)', fontFamily: 'monospace', fontWeight: 700 }}>{gbp(r.price)}</span>}
                                 </td>
                                 <td style={{ padding: '5px 8px', textAlign: 'right' }}>
                                   {isEditable ? (
@@ -624,7 +624,7 @@ export default function RateCardEditor() {
 
           {/* ── INTERNATIONAL SERVICES ─────────────────────────────────────────── */}
           <div>
-            <div style={{ fontSize: 11, fontWeight: 700, color: '#7B2FBE', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--mv-purple)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
               International Services <span style={{ color: '#475569', fontWeight: 400, textTransform: 'none' }}>({intlServices.length} services · {intlRates.length} zones)</span>
             </div>
 
@@ -640,16 +640,16 @@ export default function RateCardEditor() {
                 const svcOpen = openIntlSvcs.has(svc.service_code);
                 const filledZones = svc.zones.filter(z => z.markup_pct || z.price).length;
                 return (
-                  <div key={svc.service_code} style={{ border: '1px solid rgba(123,47,190,0.2)', borderRadius: 10,
-                    background: 'rgba(123,47,190,0.04)', overflow: 'hidden' }}>
+                  <div key={svc.service_code} style={{ border: '1px solid rgba(15,122,70,0.2)', borderRadius: 10,
+                    background: 'rgba(15,122,70,0.04)', overflow: 'hidden' }}>
                     <div style={{ padding: '12px 14px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
                         <span style={{ fontWeight: 600, fontSize: 13, color: '#0F172A', flex: 1 }}>{svc.service_name}</span>
-                        <span style={{ fontFamily: 'monospace', fontSize: 10, color: '#7B2FBE', background: 'rgba(123,47,190,0.12)', padding: '1px 7px', borderRadius: 9999 }}>{svc.service_code}</span>
+                        <span style={{ fontFamily: 'monospace', fontSize: 10, color: 'var(--mv-purple)', background: 'rgba(15,122,70,0.12)', padding: '1px 7px', borderRadius: 9999 }}>{svc.service_code}</span>
                       </div>
                       <div style={{ fontSize: 12, color: '#64748B', marginBottom: 10 }}>
                         {svc.zones.length} zone{svc.zones.length !== 1 ? 's' : ''}
-                        {filledZones > 0 && <span style={{ color: '#00C853', marginLeft: 8 }}>· {filledZones} priced</span>}
+                        {filledZones > 0 && <span style={{ color: 'var(--mv-green)', marginLeft: 8 }}>· {filledZones} priced</span>}
                       </div>
 
                       {/* Single markup % — applies to all zones in this service */}
@@ -670,9 +670,9 @@ export default function RateCardEditor() {
                               markDirty();
                             }}
                             style={{ width: 80, textAlign: 'right', fontFamily: 'monospace', fontSize: 13,
-                              color: '#C084FC', fontWeight: 700, background: 'rgba(123,47,190,0.12)',
-                              border: '1px solid rgba(123,47,190,0.45)', borderRadius: 8, padding: '5px 10px', outline: 'none' }} />
-                          <span style={{ fontSize: 13, color: '#7B2FBE', fontWeight: 700 }}>%</span>
+                              color: '#C084FC', fontWeight: 700, background: 'rgba(15,122,70,0.12)',
+                              border: '1px solid rgba(15,122,70,0.45)', borderRadius: 8, padding: '5px 10px', outline: 'none' }} />
+                          <span style={{ fontSize: 13, color: 'var(--mv-purple)', fontWeight: 700 }}>%</span>
                           <span style={{ fontSize: 11, color: '#64748B' }}>all zones</span>
                         </div>
                       )}
@@ -680,20 +680,20 @@ export default function RateCardEditor() {
                       <button onClick={() => toggleIntlSvc(svc.service_code)}
                         style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 12px',
                           borderRadius: 9999, fontSize: 11, fontWeight: 700,
-                          background: svcOpen ? 'rgba(123,47,190,0.2)' : 'rgba(123,47,190,0.12)',
-                          color: '#9B59E8', border: '1px solid rgba(123,47,190,0.3)', cursor: 'pointer' }}>
+                          background: svcOpen ? 'rgba(15,122,70,0.2)' : 'rgba(15,122,70,0.12)',
+                          color: '#9B59E8', border: '1px solid rgba(15,122,70,0.3)', cursor: 'pointer' }}>
                         <FileText size={11}/> {svcOpen ? 'Hide Rates' : 'Edit Rates'}
                       </button>
                     </div>
                     {svcOpen && (
-                      <div style={{ borderTop: '1px solid rgba(123,47,190,0.15)', padding: '10px 14px', maxHeight: 340, overflowY: 'auto' }}>
+                      <div style={{ borderTop: '1px solid rgba(15,122,70,0.15)', padding: '10px 14px', maxHeight: 340, overflowY: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                           <thead>
                             <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
                               <th style={{ textAlign: 'left',  padding: '4px 6px', color: '#64748B', fontWeight: 600, fontSize: 10 }}>Zone</th>
                               <th style={{ textAlign: 'right', padding: '4px 6px', color: '#B39DDB', fontWeight: 600, fontSize: 10 }}>Cost</th>
                               <th style={{ textAlign: 'right', padding: '4px 6px', color: '#A5B4FC', fontWeight: 700, fontSize: 10 }}>Markup %</th>
-                              <th style={{ textAlign: 'right', padding: '4px 6px', color: '#00C853', fontWeight: 600, fontSize: 10 }}>Sell</th>
+                              <th style={{ textAlign: 'right', padding: '4px 6px', color: 'var(--mv-green)', fontWeight: 600, fontSize: 10 }}>Sell</th>
                               <th style={{ textAlign: 'right', padding: '4px 6px', color: '#64748B',    fontWeight: 600, fontSize: 10 }}>Margin</th>
                               <th style={{ width: 24 }}></th>
                             </tr>
@@ -719,9 +719,9 @@ export default function RateCardEditor() {
                                       <input value={r.price ?? ''} type="number" step="0.01" placeholder="0.00"
                                         onChange={e => updateRate(origIdx, 'price', e.target.value)}
                                         style={{ width: 60, textAlign: 'right', fontFamily: 'monospace', fontSize: 11,
-                                          color: '#00C853', background: 'rgba(0,200,83,0.08)',
-                                          border: '1px solid rgba(0,200,83,0.25)', borderRadius: 9999, padding: '2px 6px', outline: 'none' }} />
-                                    ) : <span style={{ color: '#00C853', fontFamily: 'monospace' }}>{gbp(r.price)}</span>}
+                                          color: 'var(--mv-green)', background: 'rgba(15,122,70,0.08)',
+                                          border: '1px solid rgba(15,122,70,0.25)', borderRadius: 9999, padding: '2px 6px', outline: 'none' }} />
+                                    ) : <span style={{ color: 'var(--mv-green)', fontFamily: 'monospace' }}>{gbp(r.price)}</span>}
                                   </td>
                                   <td style={{ padding: '4px 6px', textAlign: 'right' }}><MarkupChip sell={r.price} cost={r.cost_price} /></td>
                                   <td style={{ padding: '4px 6px' }}>
@@ -765,14 +765,14 @@ export default function RateCardEditor() {
                     <div style={{ fontSize: 10, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Cost / wk</div>
                     <div style={{ fontSize: 20, fontWeight: 800, color: '#B39DDB' }}>{gbp(projections.cost)}</div>
                   </div>
-                  <div style={{ background: projections.profit >= 0 ? 'rgba(0,200,83,0.07)' : 'rgba(239,68,68,0.07)',
-                    border: `1px solid ${projections.profit >= 0 ? 'rgba(0,200,83,0.25)' : 'rgba(239,68,68,0.25)'}`,
+                  <div style={{ background: projections.profit >= 0 ? 'rgba(15,122,70,0.07)' : 'rgba(239,68,68,0.07)',
+                    border: `1px solid ${projections.profit >= 0 ? 'rgba(15,122,70,0.25)' : 'rgba(239,68,68,0.25)'}`,
                     borderRadius: 8, padding: '10px 12px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div>
                         <div style={{ fontSize: 10, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Profit / wk</div>
-                        <div style={{ fontSize: 20, fontWeight: 800, color: projections.profit >= 0 ? '#00C853' : '#EF4444' }}>{gbp(projections.profit)}</div>
-                        <div style={{ fontSize: 11, color: projections.profit >= 0 ? '#00C853' : '#EF4444', marginTop: 2 }}>{projections.margin.toFixed(1)}% margin</div>
+                        <div style={{ fontSize: 20, fontWeight: 800, color: projections.profit >= 0 ? 'var(--mv-green)' : '#EF4444' }}>{gbp(projections.profit)}</div>
+                        <div style={{ fontSize: 11, color: projections.profit >= 0 ? 'var(--mv-green)' : '#EF4444', marginTop: 2 }}>{projections.margin.toFixed(1)}% margin</div>
                       </div>
                       <button
                         onClick={() => setShowDebug(d => !d)}
@@ -832,7 +832,7 @@ export default function RateCardEditor() {
                           </span>
                         </div>
                         <div style={{ marginTop: 6, display: 'flex', gap: 16 }}>
-                          <span>Projected sell: <span style={{ color: '#00C853', fontFamily: 'monospace', fontWeight: 700 }}>{gbp(projections.dom.sell_rate)}</span>/parcel</span>
+                          <span>Projected sell: <span style={{ color: 'var(--mv-green)', fontFamily: 'monospace', fontWeight: 700 }}>{gbp(projections.dom.sell_rate)}</span>/parcel</span>
                           <span>Dom profit: <span style={{ fontFamily: 'monospace', fontWeight: 700,
                             color: projections.dom.profit >= 0 ? '#34D399' : '#EF4444' }}>{gbp(projections.dom.profit)}</span></span>
                         </div>
@@ -850,7 +850,7 @@ export default function RateCardEditor() {
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
                         {[
-                          { label: 'Avg sell/parcel', val: projections.intl.avg_sell > 0 ? gbp(projections.intl.avg_sell) : '—', mono: true, color: '#00C853' },
+                          { label: 'Avg sell/parcel', val: projections.intl.avg_sell > 0 ? gbp(projections.intl.avg_sell) : '—', mono: true, color: 'var(--mv-green)' },
                           { label: 'Avg cost/parcel', val: projections.intl.avg_cost > 0 ? gbp(projections.intl.avg_cost) : '—', mono: true, color: '#B39DDB' },
                           { label: 'Intl profit',     val: projections.intl.rev > 0 ? gbp(projections.intl.profit) : '—', mono: true,
                             color: projections.intl.profit >= 0 ? '#34D399' : '#EF4444' },

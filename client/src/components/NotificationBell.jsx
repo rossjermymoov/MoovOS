@@ -17,9 +17,9 @@ const MUTED = 'rgba(32,30,29,0.55)';
 
 // RAG-aligned severities: red = overdue/bad, amber = due soon / in progress, green = good, slate = info
 const SEV = {
-  red:   { colour: '#E91E8C', soft: '#FDECEC' },
+  red:   { colour: 'var(--mv-magenta)', soft: '#FDECEC' },
   amber: { colour: '#F59E0B', soft: '#FEF3E2' },
-  green: { colour: '#00C853', soft: '#E7F8EE' },
+  green: { colour: 'var(--mv-green)', soft: '#E7F8EE' },
   info:  { colour: '#2563EB', soft: '#E7EEFD' },
 };
 function relTime(d) {
@@ -175,7 +175,7 @@ export default function NotificationBell() {
         {count > 0 && (
           <span style={{
             position: 'absolute', top: 2, right: 2, minWidth: 15, height: 15, padding: '0 4px',
-            borderRadius: 99, background: '#E91E8C', color: '#fff', fontSize: 9.5, fontWeight: 700,
+            borderRadius: 99, background: 'var(--mv-magenta)', color: '#fff', fontSize: 9.5, fontWeight: 700,
             display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 0 2px #f3f2f2',
           }}>{count > 99 ? '99+' : count}</span>
         )}

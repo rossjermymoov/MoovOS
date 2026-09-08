@@ -156,20 +156,20 @@ function fmtDate(ts) {
 // ─── Tracking timeline — carbon copy of TrackingPage STATUS + EventTimeline ───
 
 const TRACK_STATUS = {
-  booked:              { label: 'Booked',                       color: '#00BCD4', bg: 'rgba(0,188,212,0.12)',    icon: Package },
+  booked:              { label: 'Booked',                       color: 'var(--mv-teal)', bg: 'rgba(39,110,147,0.12)',    icon: Package },
   collected:           { label: 'Collected',                    color: '#2196F3', bg: 'rgba(33,150,243,0.12)',   icon: Package },
   at_depot:            { label: 'At Hub',                       color: '#5C6BC0', bg: 'rgba(92,107,192,0.12)',   icon: Package },
-  in_transit:          { label: 'In Transit',                   color: '#7B2FBE', bg: 'rgba(123,47,190,0.12)',   icon: Truck },
+  in_transit:          { label: 'In Transit',                   color: 'var(--mv-purple)', bg: 'rgba(15,122,70,0.12)',   icon: Truck },
   out_for_delivery:    { label: 'Out for Delivery',             color: '#D97706', bg: 'rgba(255,193,7,0.12)',    icon: Truck },
   failed_delivery:     { label: 'Failed Attempt',               color: '#F44336', bg: 'rgba(244,67,54,0.12)',    icon: AlertTriangle },
-  delivered:           { label: 'Delivered',                    color: '#00C853', bg: 'rgba(0,200,83,0.12)',     icon: PackageCheck },
+  delivered:           { label: 'Delivered',                    color: 'var(--mv-green)', bg: 'rgba(15,122,70,0.12)',     icon: PackageCheck },
   on_hold:             { label: 'On Hold',                      color: '#FF9800', bg: 'rgba(255,152,0,0.12)',    icon: Clock },
   exception:           { label: 'Address Issue',                color: '#F44336', bg: 'rgba(244,67,54,0.12)',    icon: AlertTriangle },
   returned:            { label: 'Return to Sender',             color: '#607D8B', bg: 'rgba(96,125,139,0.12)',   icon: RotateCcw },
   tracking_expired:    { label: 'Tracking Expired',             color: '#757575', bg: 'rgba(117,117,117,0.12)',  icon: Clock },
   cancelled:           { label: 'Cancelled',                    color: '#757575', bg: 'rgba(117,117,117,0.12)',  icon: AlertTriangle },
   awaiting_collection: { label: 'Awaiting Customer Collection', color: '#FF6F00', bg: 'rgba(255,111,0,0.12)',    icon: Store },
-  damaged:             { label: 'Damaged',                      color: '#E91E8C', bg: 'rgba(233,30,140,0.12)',   icon: PackageX },
+  damaged:             { label: 'Damaged',                      color: 'var(--mv-magenta)', bg: 'rgba(205,29,105,0.12)',   icon: PackageX },
   customs_hold:        { label: 'Customs Hold',                 color: '#9C27B0', bg: 'rgba(156,39,176,0.12)',   icon: ShieldAlert },
   unknown:             { label: 'Unknown',                      color: '#64748B', bg: 'rgba(0,0,0,0.05)',       icon: Package },
 };
@@ -290,7 +290,7 @@ function SlaChip({ mins, policyName }) {
 
   // Colour bands: green > 25% time unused, amber < 25% or < 4h, red breached
   const color = info.breached ? C.red : mins < 240 ? C.amber : C.green;
-  const bg    = info.breached ? C.redDim : mins < 240 ? C.amberDim : 'rgba(0,200,83,0.1)';
+  const bg    = info.breached ? C.redDim : mins < 240 ? C.amberDim : 'rgba(15,122,70,0.1)';
 
   return (
     <span title={policyName || 'SLA'} style={{
@@ -453,7 +453,7 @@ function rowAccentColor(q) {
   if (q.requires_attention) return '#EF4444';
   if (['claim_raised','awaiting_claim_docs','escalated','resolved_claim_rejected'].includes(q.status)) return '#EF4444';
   if (['awaiting_courier','courier_investigating','claim_submitted'].includes(q.status)) return '#F59E0B';
-  if (['resolved','resolved_claim_approved'].includes(q.status)) return '#00C853';
+  if (['resolved','resolved_claim_approved'].includes(q.status)) return 'var(--mv-green)';
   const d = (q.description || '').toLowerCase();
   if (/very angry|furious|outrageous|unacceptable/.test(d)) return '#EF4444';
   if (/frustrated|angry/.test(d)) return '#F59E0B';

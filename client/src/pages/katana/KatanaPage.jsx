@@ -22,11 +22,11 @@ const C = {
   border:   'rgba(0,0,0,0.07)',
   amber:    '#F59E0B',
   amberDim: 'rgba(245,158,11,0.10)',
-  green:    '#00C853',
+  green:    'var(--mv-green)',
   red:      '#EF4444',
   text:     '#F0F0FF',
   muted:    '#8888AA',
-  cyan:     '#00BCD4',
+  cyan:     'var(--mv-teal)',
 };
 
 // ─── API helpers ──────────────────────────────────────────────────────────────
@@ -96,7 +96,7 @@ function SourceCard({ source, onToggle, onDelete, onSync }) {
         {/* Type icon */}
         <div style={{
           width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-          background: isUrl ? 'rgba(0,188,212,0.1)' : C.amberDim,
+          background: isUrl ? 'rgba(39,110,147,0.1)' : C.amberDim,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
           {isUrl

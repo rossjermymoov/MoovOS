@@ -31,7 +31,7 @@ export function TierBadge({ tier }) {
 }
 
 export function CreditUtilisationBar({ pct = 0 }) {
-  const color = pct >= 100 ? '#EF4444' : pct >= 80 ? '#F59E0B' : '#00C853';
+  const color = pct >= 100 ? '#EF4444' : pct >= 80 ? '#F59E0B' : 'var(--mv-green)';
   // Bar fills up to 110% scale so values over 100% visually overflow the track
   const barPct = Math.min((pct / 110) * 100, 100);
   return (

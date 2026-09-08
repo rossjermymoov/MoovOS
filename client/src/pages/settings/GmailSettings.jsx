@@ -11,7 +11,7 @@ const S = {
   title:   { fontSize: 16, fontWeight: 600, color: '#0F172A', marginBottom: 4 },
   sub:     { fontSize: 13, color: '#64748B', lineHeight: 1.6 },
   btn:     { display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 18px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, fontFamily: "'Inter', sans-serif" },
-  btnGreen:{ background: '#00C853', color: '#000' },
+  btnGreen:{ background: 'var(--mv-green)', color: '#000' },
   btnGray: { background: 'rgba(0,0,0,0.06)', color: '#334155' },
   btnRed:  { background: 'rgba(239,68,68,0.1)', color: '#DC2626', border: '1px solid rgba(239,68,68,0.2)' },
   row:     { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid rgba(0,0,0,0.06)' },
@@ -75,8 +75,8 @@ export default function GmailSettings() {
       <div style={S.card}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ width: 40, height: 40, borderRadius: 10, background: connected ? 'rgba(0,200,83,0.1)' : 'rgba(100,116,139,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Mail size={20} color={connected ? '#00C853' : '#94A3B8'} />
+            <div style={{ width: 40, height: 40, borderRadius: 10, background: connected ? 'rgba(15,122,70,0.1)' : 'rgba(100,116,139,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Mail size={20} color={connected ? 'var(--mv-green)' : '#94A3B8'} />
             </div>
             <div>
               <p style={{ fontSize: 14, fontWeight: 600, color: '#0F172A', margin: 0 }}>
@@ -93,7 +93,7 @@ export default function GmailSettings() {
           </div>
           {connected
             ? <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <CheckCircle size={16} color="#00C853" />
+                <CheckCircle size={16} color="var(--mv-green)" />
                 <span style={{ fontSize: 12, fontWeight: 600, color: '#059669' }}>Connected</span>
               </div>
             : <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#94A3B8' }} />

@@ -38,8 +38,8 @@ export function SettingsNav() {
             key={t.to} to={t.to}
             style={{
               padding: '8px 22px', fontSize: 13, fontWeight: 600,
-              color: active ? '#00C853' : '#64748B',
-              borderBottom: active ? '2px solid #00C853' : '2px solid transparent',
+              color: active ? 'var(--mv-green)' : '#64748B',
+              borderBottom: active ? '2px solid var(--mv-green)' : '2px solid transparent',
               textDecoration: 'none', transition: 'color 0.12s', marginBottom: -1,
             }}
           >
@@ -91,7 +91,7 @@ const labelSt = {
   textTransform: 'uppercase', letterSpacing: '0.07em', fontWeight: 700,
 };
 const btnGreen = {
-  background: '#00C853', border: 'none', borderRadius: 8, color: '#fff',
+  background: 'var(--mv-green)', border: 'none', borderRadius: 8, color: '#fff',
   padding: '8px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center',
   gap: 6, fontSize: 13, fontWeight: 600,
 };

@@ -19,11 +19,11 @@ const ROLES = [
 ];
 
 const ROLE_COLORS = {
-  sales:              { bg: 'rgba(0,200,83,0.12)',    text: '#00C853' },
-  account_management: { bg: 'rgba(123,47,190,0.15)',  text: '#7B2FBE' },
-  onboarding:         { bg: 'rgba(0,188,212,0.12)',   text: '#00BCD4' },
+  sales:              { bg: 'rgba(15,122,70,0.12)',    text: 'var(--mv-green)' },
+  account_management: { bg: 'rgba(15,122,70,0.15)',  text: 'var(--mv-purple)' },
+  onboarding:         { bg: 'rgba(39,110,147,0.12)',   text: 'var(--mv-teal)' },
   finance:            { bg: 'rgba(255,193,7,0.12)',   text: '#D97706' },
-  customer_service:   { bg: 'rgba(233,30,140,0.12)', text: '#E91E8C' },
+  customer_service:   { bg: 'rgba(205,29,105,0.12)', text: 'var(--mv-magenta)' },
   manager:            { bg: 'rgba(0,0,0,0.08)', text: '#64748B' },
   director:           { bg: 'rgba(0,0,0,0.08)', text: '#ffffff' },
 };
@@ -119,7 +119,7 @@ function PermissionsPanel({ staffMember, onClose }) {
     <div
       style={{
         background: '#F1F5F9',
-        border: '1px solid rgba(123,47,190,0.3)',
+        border: '1px solid rgba(15,122,70,0.3)',
         borderRadius: 10,
         padding: 20,
         marginTop: 8,
@@ -130,7 +130,7 @@ function PermissionsPanel({ staffMember, onClose }) {
         {/* Left: Permissions */}
         <div style={{ flex: '1 1 320px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-            <Shield size={14} style={{ color: '#7B2FBE' }} />
+            <Shield size={14} style={{ color: 'var(--mv-purple)' }} />
             <span style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>Page Access</span>
           </div>
 
@@ -140,7 +140,7 @@ function PermissionsPanel({ staffMember, onClose }) {
               onClick={() => { setIsAdmin(v => !v); setPermsSaved(false); }}
               style={{
                 width: 40, height: 22, borderRadius: 11, position: 'relative', cursor: 'pointer',
-                background: isAdmin ? '#7B2FBE' : 'rgba(0,0,0,0.08)',
+                background: isAdmin ? 'var(--mv-purple)' : 'rgba(0,0,0,0.08)',
                 transition: 'background 0.2s',
                 flexShrink: 0,
               }}
@@ -151,7 +151,7 @@ function PermissionsPanel({ staffMember, onClose }) {
                 left: isAdmin ? 21 : 3,
               }} />
             </div>
-            <span style={{ fontSize: 12, fontWeight: 600, color: isAdmin ? '#7B2FBE' : '#64748B' }}>
+            <span style={{ fontSize: 12, fontWeight: 600, color: isAdmin ? 'var(--mv-purple)' : '#64748B' }}>
               Administrator — access to all pages
             </span>
           </label>
@@ -162,13 +162,13 @@ function PermissionsPanel({ staffMember, onClose }) {
               <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
                 <button
                   onClick={grantAll}
-                  style={{ fontSize: 11, color: '#00C853', border: 'none', cursor: 'pointer', padding: '2px 6px', borderRadius: 4, background: 'rgba(0,200,83,0.1)' }}
+                  style={{ fontSize: 11, color: 'var(--mv-green)', border: 'none', cursor: 'pointer', padding: '2px 6px', borderRadius: 4, background: 'rgba(15,122,70,0.1)' }}
                 >
                   Grant all
                 </button>
                 <button
                   onClick={revokeAll}
-                  style={{ fontSize: 11, color: '#E91E8C', border: 'none', cursor: 'pointer', padding: '2px 6px', borderRadius: 4, background: 'rgba(233,30,140,0.1)' }}
+                  style={{ fontSize: 11, color: 'var(--mv-magenta)', border: 'none', cursor: 'pointer', padding: '2px 6px', borderRadius: 4, background: 'rgba(205,29,105,0.1)' }}
                 >
                   Revoke all
                 </button>
@@ -179,13 +179,13 @@ function PermissionsPanel({ staffMember, onClose }) {
                   return (
                     <label
                       key={key}
-                      style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '6px 8px', borderRadius: 6, background: enabled ? 'rgba(0,200,83,0.06)' : 'transparent' }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', padding: '6px 8px', borderRadius: 6, background: enabled ? 'rgba(15,122,70,0.06)' : 'transparent' }}
                     >
                       <div
                         onClick={() => togglePerm(key)}
                         style={{
                           width: 34, height: 18, borderRadius: 9, position: 'relative', cursor: 'pointer',
-                          background: enabled ? '#00C853' : 'rgba(0,0,0,0.08)',
+                          background: enabled ? 'var(--mv-green)' : 'rgba(0,0,0,0.08)',
                           transition: 'background 0.15s',
                           flexShrink: 0,
                         }}
@@ -211,14 +211,14 @@ function PermissionsPanel({ staffMember, onClose }) {
               onClick={savePermissions}
               disabled={savingPerms}
               style={{
-                background: 'linear-gradient(135deg, #7B2FBE 0%, #E91E8C 100%)',
+                background: 'linear-gradient(135deg, var(--mv-purple) 0%, var(--mv-magenta) 100%)',
                 color: '#0F172A', border: 'none', borderRadius: 8,
                 padding: '8px 16px', fontSize: 12, fontWeight: 700, cursor: 'pointer',
               }}
             >
               {savingPerms ? 'Saving…' : 'Save permissions'}
             </button>
-            {permsSaved && <span style={{ fontSize: 12, color: '#00C853' }}>✓ Saved</span>}
+            {permsSaved && <span style={{ fontSize: 12, color: 'var(--mv-green)' }}>✓ Saved</span>}
           </div>
         </div>
 
@@ -229,8 +229,8 @@ function PermissionsPanel({ staffMember, onClose }) {
             <span style={{ fontSize: 13, fontWeight: 700, color: '#0F172A' }}>Login Password</span>
             <span style={{
               fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 4,
-              background: staffMember.has_password ? 'rgba(0,200,83,0.15)' : 'rgba(220,38,38,0.15)',
-              color: staffMember.has_password ? '#00C853' : '#f87171',
+              background: staffMember.has_password ? 'rgba(15,122,70,0.15)' : 'rgba(220,38,38,0.15)',
+              color: staffMember.has_password ? 'var(--mv-green)' : '#f87171',
             }}>
               {staffMember.has_password ? 'Set' : 'Not set'}
             </span>
@@ -265,7 +265,7 @@ function PermissionsPanel({ staffMember, onClose }) {
           </div>
 
           {pwError   && <p style={{ fontSize: 12, color: '#f87171', marginBottom: 6 }}>{pwError}</p>}
-          {pwSuccess && <p style={{ fontSize: 12, color: '#00C853', marginBottom: 6 }}>{pwSuccess}</p>}
+          {pwSuccess && <p style={{ fontSize: 12, color: 'var(--mv-green)', marginBottom: 6 }}>{pwSuccess}</p>}
 
           {staffMember.has_password && (
             <button
@@ -312,7 +312,7 @@ function TeamsCard({ teams = [] }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {teams.map(t => (
           <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#7B2FBE', width: 110 }}>{t.name}</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--mv-purple)', width: 110 }}>{t.name}</span>
             <span style={{ fontSize: 11, color: '#64748B', width: 60 }}>{(t.members || []).length} member{(t.members || []).length === 1 ? '' : 's'}</span>
             <input
               defaultValue={t.inbox_email || ''}
@@ -337,7 +337,7 @@ function StaffRow({ s, teams = [], onToggleActive, onChangeTeam }) {
     <>
       <tr key={s.id}>
         <td style={{ fontWeight: 600 }}>{s.full_name}</td>
-        <td style={{ color: '#00BCD4' }}>{s.email}</td>
+        <td style={{ color: 'var(--mv-teal)' }}>{s.email}</td>
         <td>
           <span style={{
             display: 'inline-block', padding: '3px 10px', borderRadius: 6,
@@ -360,11 +360,11 @@ function StaffRow({ s, teams = [], onToggleActive, onChangeTeam }) {
           <span style={{
             fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 4,
             background: s.is_admin
-              ? 'rgba(123,47,190,0.15)'
+              ? 'rgba(15,122,70,0.15)'
               : s.has_password
-                ? 'rgba(0,200,83,0.12)'
+                ? 'rgba(15,122,70,0.12)'
                 : 'rgba(220,38,38,0.1)',
-            color: s.is_admin ? '#7B2FBE' : s.has_password ? '#00C853' : '#f87171',
+            color: s.is_admin ? 'var(--mv-purple)' : s.has_password ? 'var(--mv-green)' : '#f87171',
           }}>
             {s.is_admin ? 'Admin' : s.has_password ? `${(s.page_permissions || []).length} pages` : 'No login'}
           </span>
@@ -373,7 +373,7 @@ function StaffRow({ s, teams = [], onToggleActive, onChangeTeam }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
             <button
               onClick={() => setExpanded(v => !v)}
-              style={{ background: 'none', border: 'none', color: '#7B2FBE', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}
+              style={{ background: 'none', border: 'none', color: 'var(--mv-purple)', cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 4 }}
             >
               {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
               Access
@@ -457,7 +457,7 @@ export default function StaffSettings() {
       <SettingsNav />
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 700, color: '#00C853' }}>Staff</h1>
+          <h1 style={{ fontSize: 24, fontWeight: 700, color: 'var(--mv-green)' }}>Staff</h1>
           <p style={{ fontSize: 13, color: '#64748B', marginTop: 4 }}>
             Manage team members, set login passwords, and control which pages each person can access.
           </p>
@@ -469,27 +469,27 @@ export default function StaffSettings() {
 
       {/* Add staff form */}
       {showForm && (
-        <div className="moov-card" style={{ padding: 24, marginBottom: 24, border: '1px solid rgba(0,200,83,0.3)' }}>
-          <h3 style={{ fontSize: 16, fontWeight: 600, color: '#7B2FBE', marginBottom: 20 }}>New Staff Member</h3>
+        <div className="moov-card" style={{ padding: 24, marginBottom: 24, border: '1px solid rgba(15,122,70,0.3)' }}>
+          <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--mv-purple)', marginBottom: 20 }}>New Staff Member</h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 16 }}>
             <div>
               <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#0F172A', marginBottom: 6 }}>
-                Full Name <span style={{ color: '#E91E8C' }}>*</span>
+                Full Name <span style={{ color: 'var(--mv-magenta)' }}>*</span>
               </label>
-              <div className="pill-input-wrap" style={errors.full_name ? { borderColor: '#E91E8C' } : {}}>
+              <div className="pill-input-wrap" style={errors.full_name ? { borderColor: 'var(--mv-magenta)' } : {}}>
                 <input value={form.full_name} onChange={e => set('full_name', e.target.value)} placeholder="Jane Smith" />
               </div>
-              {errors.full_name && <p style={{ fontSize: 12, color: '#E91E8C', marginTop: 4 }}>{errors.full_name}</p>}
+              {errors.full_name && <p style={{ fontSize: 12, color: 'var(--mv-magenta)', marginTop: 4 }}>{errors.full_name}</p>}
             </div>
 
             <div>
               <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#0F172A', marginBottom: 6 }}>
-                Email <span style={{ color: '#E91E8C' }}>*</span>
+                Email <span style={{ color: 'var(--mv-magenta)' }}>*</span>
               </label>
-              <div className="pill-input-wrap" style={errors.email ? { borderColor: '#E91E8C' } : {}}>
+              <div className="pill-input-wrap" style={errors.email ? { borderColor: 'var(--mv-magenta)' } : {}}>
                 <input type="email" value={form.email} onChange={e => set('email', e.target.value)} placeholder="jane@moov.co.uk" />
               </div>
-              {errors.email && <p style={{ fontSize: 12, color: '#E91E8C', marginTop: 4 }}>{errors.email}</p>}
+              {errors.email && <p style={{ fontSize: 12, color: 'var(--mv-magenta)', marginTop: 4 }}>{errors.email}</p>}
             </div>
 
             <div>
@@ -515,7 +515,7 @@ export default function StaffSettings() {
           </div>
 
           {errors.api && (
-            <div style={{ padding: 10, background: 'rgba(233,30,140,0.1)', border: '1px solid #E91E8C', borderRadius: 8, fontSize: 13, color: '#E91E8C', marginBottom: 12 }}>
+            <div style={{ padding: 10, background: 'rgba(205,29,105,0.1)', border: '1px solid var(--mv-magenta)', borderRadius: 8, fontSize: 13, color: 'var(--mv-magenta)', marginBottom: 12 }}>
               {errors.api}
             </div>
           )}
@@ -594,7 +594,7 @@ export default function StaffSettings() {
                   <td style={{ textAlign: 'right' }}>
                     <button
                       onClick={() => toggleActive.mutate({ id: s.id, is_active: true })}
-                      style={{ background: 'none', border: 'none', color: '#00C853', cursor: 'pointer', fontSize: 12 }}
+                      style={{ background: 'none', border: 'none', color: 'var(--mv-green)', cursor: 'pointer', fontSize: 12 }}
                     >
                       Reactivate
                     </button>

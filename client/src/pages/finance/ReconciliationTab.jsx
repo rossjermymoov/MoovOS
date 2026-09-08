@@ -269,7 +269,7 @@ function getStatus(carrierTotal, charge, overrideCost = null) {
   }
   const diff = Math.abs(parseFloat(carrierTotal) - compareCost);
   if (diff <= TOLERANCE_ABS) {
-    return { code: 'green', label: 'Match', color: '#00C853', icon: 'check' };
+    return { code: 'green', label: 'Match', color: 'var(--mv-green)', icon: 'check' };
   }
   return { code: 'red', label: 'Discrepancy', color: '#F44336', icon: 'x' };
 }
@@ -335,8 +335,8 @@ function CarrierPicker({ onSelect }) {
               }}
               onMouseEnter={e => {
                 if (carrier.active) {
-                  e.currentTarget.style.borderColor = 'rgba(0,200,83,0.5)';
-                  e.currentTarget.style.background = 'rgba(0,200,83,0.06)';
+                  e.currentTarget.style.borderColor = 'rgba(15,122,70,0.5)';
+                  e.currentTarget.style.background = 'rgba(15,122,70,0.06)';
                   e.currentTarget.style.transform = 'translateY(-2px)';
                 }
               }}
@@ -394,8 +394,8 @@ function CarrierPicker({ onSelect }) {
                 <div style={{
                   position: 'absolute', top: 10, right: 10,
                   width: 7, height: 7, borderRadius: '50%',
-                  background: '#00C853',
-                  boxShadow: '0 0 6px #00C853',
+                  background: 'var(--mv-green)',
+                  boxShadow: '0 0 6px var(--mv-green)',
                 }} />
               )}
             </button>
@@ -493,9 +493,9 @@ function FileDropZone({ carrier, onParsed, onBack }) {
         onDragLeave={onDragLeave}
         onClick={() => inputRef.current?.click()}
         style={{
-          border: `2px dashed ${dragging ? 'rgba(0,200,83,0.6)' : 'rgba(0,0,0,0.12)'}`,
+          border: `2px dashed ${dragging ? 'rgba(15,122,70,0.6)' : 'rgba(0,0,0,0.12)'}`,
           borderRadius: 16,
-          background: dragging ? 'rgba(0,200,83,0.04)' : 'rgba(0,0,0,0.02)',
+          background: dragging ? 'rgba(15,122,70,0.04)' : 'rgba(0,0,0,0.02)',
           padding: '60px 40px',
           display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16,
           cursor: 'pointer',
@@ -504,15 +504,15 @@ function FileDropZone({ carrier, onParsed, onBack }) {
       >
         <div style={{
           width: 56, height: 56, borderRadius: '50%',
-          background: dragging ? 'rgba(0,200,83,0.12)' : 'rgba(0,0,0,0.04)',
-          border: `1px solid ${dragging ? 'rgba(0,200,83,0.4)' : 'rgba(0,0,0,0.08)'}`,
+          background: dragging ? 'rgba(15,122,70,0.12)' : 'rgba(0,0,0,0.04)',
+          border: `1px solid ${dragging ? 'rgba(15,122,70,0.4)' : 'rgba(0,0,0,0.08)'}`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           transition: 'all 0.15s',
         }}>
           {parsing ? (
-            <RefreshCw size={22} style={{ color: '#00C853', animation: 'spin 1s linear infinite' }} />
+            <RefreshCw size={22} style={{ color: 'var(--mv-green)', animation: 'spin 1s linear infinite' }} />
           ) : (
-            <Upload size={22} style={{ color: dragging ? '#00C853' : '#666' }} />
+            <Upload size={22} style={{ color: dragging ? 'var(--mv-green)' : '#666' }} />
           )}
         </div>
 
@@ -521,8 +521,8 @@ function FileDropZone({ carrier, onParsed, onBack }) {
         ) : fileName ? (
           <div style={{ textAlign: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center', marginBottom: 4 }}>
-              <FileText size={16} style={{ color: '#00C853' }} />
-              <span style={{ fontSize: 14, fontWeight: 700, color: '#00C853' }}>{fileName}</span>
+              <FileText size={16} style={{ color: 'var(--mv-green)' }} />
+              <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--mv-green)' }}>{fileName}</span>
             </div>
             <div style={{ fontSize: 12, color: '#64748B' }}>Click or drop to replace</div>
           </div>
@@ -635,7 +635,7 @@ function ServiceMappingManager({ courier, carrierLabel, unmappedNames, onClose }
 
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-          <Settings size={16} style={{ color: '#00BCD4' }} />
+          <Settings size={16} style={{ color: 'var(--mv-teal)' }} />
           <span style={{ fontWeight: 700, fontSize: 15, color: '#334155' }}>Service Name Mappings</span>
           <span style={{ fontSize: 12, color: '#64748B', marginLeft: 4 }}>— {carrierLabel}</span>
           <button onClick={onClose} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', fontSize: 18, lineHeight: 1 }}>✕</button>
@@ -655,10 +655,10 @@ function ServiceMappingManager({ courier, carrierLabel, unmappedNames, onClose }
               {stillUnmapped.map(n => (
                 <button key={n} onClick={() => { setAddInvoice(n); setAddInternal(''); }}
                   style={{
-                    background: addInvoice === n ? 'rgba(0,188,212,0.15)' : 'rgba(0,0,0,0.03)',
-                    border: `1px solid ${addInvoice === n ? 'rgba(0,188,212,0.5)' : 'rgba(0,0,0,0.10)'}`,
+                    background: addInvoice === n ? 'rgba(39,110,147,0.15)' : 'rgba(0,0,0,0.03)',
+                    border: `1px solid ${addInvoice === n ? 'rgba(39,110,147,0.5)' : 'rgba(0,0,0,0.10)'}`,
                     borderRadius: 20, padding: '4px 12px', cursor: 'pointer',
-                    fontSize: 12, color: addInvoice === n ? '#00BCD4' : '#64748B',
+                    fontSize: 12, color: addInvoice === n ? 'var(--mv-teal)' : '#64748B',
                     fontFamily: 'monospace',
                   }}>
                   {n}
@@ -718,7 +718,7 @@ function ServiceMappingManager({ courier, carrierLabel, unmappedNames, onClose }
             <button
               onClick={save} disabled={saving || !addInvoice.trim() || !addInternal.trim()}
               style={{
-                background: '#00C853', border: 'none', borderRadius: 8, color: '#000',
+                background: 'var(--mv-green)', border: 'none', borderRadius: 8, color: '#000',
                 fontWeight: 700, fontSize: 12, padding: '0 16px', height: 34, cursor: 'pointer',
                 opacity: !addInvoice.trim() || !addInternal.trim() ? 0.4 : 1, marginTop: 20,
               }}
@@ -752,7 +752,7 @@ function ServiceMappingManager({ courier, carrierLabel, unmappedNames, onClose }
                 <tr key={m.id} style={{ borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
                   <td style={{ padding: '9px 0', color: '#64748B', fontFamily: 'monospace' }}>{m.invoice_name}</td>
                   <td style={{ textAlign: 'center' }}><ArrowRight size={11} style={{ color: '#475569' }} /></td>
-                  <td style={{ padding: '9px 0', color: '#00BCD4', fontWeight: 600 }}>{m.internal_name}</td>
+                  <td style={{ padding: '9px 0', color: 'var(--mv-teal)', fontWeight: 600 }}>{m.internal_name}</td>
                   <td style={{ textAlign: 'right' }}>
                     <button onClick={() => del(m.id)} style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', padding: 0 }}
                       title="Remove mapping">
@@ -1117,7 +1117,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
               // (our expected total incl. fuel+HGV) — apples to apples.
               const diff = row.carrier_total - row.carrier_rate_cost;
               row.status = Math.abs(diff) <= 0.01
-                ? { code: 'green', label: 'Matched',     color: '#00C853', icon: 'check'    }
+                ? { code: 'green', label: 'Matched',     color: 'var(--mv-green)', icon: 'check'    }
                 : diff > 0
                 ? { code: 'red',   label: 'Overcharged', color: '#F44336', icon: 'x'        }
                 : { code: 'amber', label: 'Credit',       color: '#FF9800', icon: 'triangle' };
@@ -1453,9 +1453,9 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
           <button
             onClick={() => setShowMappings(true)}
             style={{
-              background: 'rgba(0,188,212,0.08)',
-              border: '1px solid rgba(0,188,212,0.25)',
-              borderRadius: 8, color: '#00BCD4', padding: '6px 12px',
+              background: 'rgba(39,110,147,0.08)',
+              border: '1px solid rgba(39,110,147,0.25)',
+              borderRadius: 8, color: 'var(--mv-teal)', padding: '6px 12px',
               cursor: 'pointer', fontSize: 12,
               display: 'flex', alignItems: 'center', gap: 6,
             }}
@@ -1485,7 +1485,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
           display: 'flex', flexDirection: 'column', alignItems: 'center',
           justifyContent: 'center', gap: 16, padding: '60px 0',
         }}>
-          <RefreshCw size={28} style={{ color: '#00C853', animation: 'spin 1s linear infinite' }} />
+          <RefreshCw size={28} style={{ color: 'var(--mv-green)', animation: 'spin 1s linear infinite' }} />
           <div style={{ fontSize: 14, color: '#64748B' }}>Looking up {shipments.length} charges…</div>
         </div>
       )}
@@ -1546,19 +1546,19 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
           {/* Unmapped service names warning — exclude names already auto-resolved via serviceCodeMap */}
           {invoiceServiceNames.some(n => !mappings[n] && !serviceCodeMap[n?.trim()]) && (
             <div style={{
-              background: 'rgba(0,188,212,0.05)', border: '1px solid rgba(0,188,212,0.2)',
+              background: 'rgba(39,110,147,0.05)', border: '1px solid rgba(39,110,147,0.2)',
               borderRadius: 10, padding: '10px 16px', marginBottom: 12,
               display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
             }}>
-              <ArrowRight size={14} style={{ color: '#00BCD4', flexShrink: 0 }} />
+              <ArrowRight size={14} style={{ color: 'var(--mv-teal)', flexShrink: 0 }} />
               <span style={{ fontSize: 12, color: '#64748B' }}>
                 Unmapped service names: {invoiceServiceNames.filter(n => !mappings[n] && !serviceCodeMap[n?.trim()]).map(n => (
-                  <span key={n} style={{ background: 'rgba(0,188,212,0.1)', border: '1px solid rgba(0,188,212,0.25)', color: '#00BCD4', borderRadius: 4, padding: '1px 6px', marginLeft: 6, fontFamily: 'monospace', fontSize: 11 }}>{n}</span>
+                  <span key={n} style={{ background: 'rgba(39,110,147,0.1)', border: '1px solid rgba(39,110,147,0.25)', color: 'var(--mv-teal)', borderRadius: 4, padding: '1px 6px', marginLeft: 6, fontFamily: 'monospace', fontSize: 11 }}>{n}</span>
                 ))}
               </span>
               <button
                 onClick={() => setShowMappings(true)}
-                style={{ marginLeft: 'auto', background: 'rgba(0,188,212,0.1)', border: '1px solid rgba(0,188,212,0.3)', borderRadius: 6, color: '#00BCD4', fontSize: 11, fontWeight: 700, padding: '3px 10px', cursor: 'pointer' }}
+                style={{ marginLeft: 'auto', background: 'rgba(39,110,147,0.1)', border: '1px solid rgba(39,110,147,0.3)', borderRadius: 6, color: 'var(--mv-teal)', fontSize: 11, fontWeight: 700, padding: '3px 10px', cursor: 'pointer' }}
               >
                 Map now
               </button>
@@ -1569,7 +1569,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
           <div style={{ display: 'flex', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
             {[
               { code: 'all',   label: 'Total',       count: results.length,  color: '#64748B',    bg: 'rgba(0,0,0,0.03)' },
-              { code: 'green', label: 'Matched',      count: counts.green,    color: '#00C853', bg: 'rgba(0,200,83,0.04)'   },
+              { code: 'green', label: 'Matched',      count: counts.green,    color: 'var(--mv-green)', bg: 'rgba(15,122,70,0.04)'   },
               { code: 'amber', label: 'No Cost',      count: counts.amber,    color: '#D97706', bg: 'rgba(255,193,7,0.04)'  },
               { code: 'red',   label: 'Problem',      count: counts.red,      color: '#F44336', bg: 'rgba(244,67,54,0.04)'  },
             ].map(stat => (
@@ -1616,14 +1616,14 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
             {/* Our cost total (matched only — base freight, excl. surcharges) */}
             <div style={{
               flex: 1, minWidth: 140,
-              background: 'rgba(0,200,83,0.04)',
-              border: '1px solid rgba(0,200,83,0.15)',
+              background: 'rgba(15,122,70,0.04)',
+              border: '1px solid rgba(15,122,70,0.15)',
               borderRadius: 10, padding: '14px 18px',
             }}>
               <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
                 Our Cost Total
               </div>
-              <div style={{ fontSize: 22, fontWeight: 800, color: '#00C853' }}>
+              <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--mv-green)' }}>
                 {gbp(results.reduce((s, r) => {
                   const bc = r.bestCharge;
                   // Return with no DB charge — use carrier rate cost (base+fuel+HGV from rate card)
@@ -1663,20 +1663,20 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
             {/* Gross margin */}
             <div style={{
               flex: 1, minWidth: 140,
-              background: 'rgba(0,188,212,0.04)',
-              border: '1px solid rgba(0,188,212,0.15)',
+              background: 'rgba(39,110,147,0.04)',
+              border: '1px solid rgba(39,110,147,0.15)',
               borderRadius: 10, padding: '14px 18px',
             }}>
               <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
                 Gross Margin
               </div>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                <span style={{ fontSize: 22, fontWeight: 800, color: totalMarginValue >= 0 ? '#00BCD4' : '#F44336' }}>
+                <span style={{ fontSize: 22, fontWeight: 800, color: totalMarginValue >= 0 ? 'var(--mv-teal)' : '#F44336' }}>
                   {gbp(totalMarginValue)}
                 </span>
                 <span style={{
                   fontSize: 12, fontWeight: 700,
-                  color: totalMarginValue >= 0 ? '#00BCD4' : '#F44336',
+                  color: totalMarginValue >= 0 ? 'var(--mv-teal)' : '#F44336',
                   opacity: 0.8,
                 }}>
                   {marginPct.toFixed(1)}%
@@ -1689,11 +1689,11 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
           {/* Bulk action bar */}
           {selected.size > 0 && (
             <div style={{
-              background: 'rgba(0,200,83,0.07)', border: '1px solid rgba(0,200,83,0.25)',
+              background: 'rgba(15,122,70,0.07)', border: '1px solid rgba(15,122,70,0.25)',
               borderRadius: 10, padding: '10px 16px', marginBottom: 14,
               display: 'flex', alignItems: 'center', gap: 12,
             }}>
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#00C853' }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--mv-green)' }}>
                 {selected.size} selected
               </span>
               <span style={{ color: '#475569', fontSize: 13 }}>—</span>
@@ -1727,7 +1727,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                         type="checkbox"
                         checked={displayed.length > 0 && selected.size === displayed.length}
                         onChange={toggleAll}
-                        style={{ cursor: 'pointer', accentColor: '#00C853' }}
+                        style={{ cursor: 'pointer', accentColor: 'var(--mv-green)' }}
                       />
                     </th>
                     <th style={{ ...th, textAlign: 'left' }}>Reference</th>
@@ -1767,9 +1767,9 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                             style={{
                               marginLeft: 'auto',
                               fontSize: 11, fontWeight: 700,
-                              background: 'rgba(0,200,83,0.1)',
-                              border: '1px solid rgba(0,200,83,0.3)',
-                              color: '#00C853',
+                              background: 'rgba(15,122,70,0.1)',
+                              border: '1px solid rgba(15,122,70,0.3)',
+                              color: 'var(--mv-green)',
                               borderRadius: 6, padding: '4px 12px',
                               cursor: 'pointer',
                             }}
@@ -1794,7 +1794,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                           : bc?.total_cost_price != null ? row.carrier_total - bc.total_cost_price : null);
                     const diffColor = diff == null ? '#475569'
                       : diff > 0.01 ? '#F44336'
-                      : diff < -0.01 ? '#00C853'
+                      : diff < -0.01 ? 'var(--mv-green)'
                       : '#64748B';
                     const invoiceHasSurcharge = (row.carrier_surcharges || 0) > 0.005 || (row.carrier_csv_surcharges || 0) > 0.005;
                     const ourHasSurcharge = (bc?.total_cost_price != null && bc?.base_cost_price != null
@@ -1846,7 +1846,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                               <div>
                                 <span style={{ fontSize: 11, color: '#64748B', fontFamily: 'monospace' }}>{row.invoice_service_name}</span>
                                 {resolvedName ? (
-                                  <div style={{ fontSize: 11, color: autoResolved ? '#81C784' : '#00BCD4', marginTop: 1, display: 'flex', alignItems: 'center', gap: 3 }}>
+                                  <div style={{ fontSize: 11, color: autoResolved ? '#81C784' : 'var(--mv-teal)', marginTop: 1, display: 'flex', alignItems: 'center', gap: 3 }}>
                                     <ArrowRight size={9} /> {resolvedName}
                                     {autoResolved && <span style={{ fontSize: 9, color: '#64748B', marginLeft: 3 }}>auto</span>}
                                   </div>
@@ -1956,8 +1956,8 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                                 onChange={e => setCostOverrides(prev => ({ ...prev, [row.lineKey]: e.target.value }))}
                                 style={{
                                   width: 80, fontSize: 12, fontFamily: 'monospace',
-                                  background: overrideVal ? 'rgba(0,200,83,0.08)' : 'rgba(0,0,0,0.04)',
-                                  border: `1px solid ${overrideVal ? 'rgba(0,200,83,0.4)' : 'rgba(0,0,0,0.08)'}`,
+                                  background: overrideVal ? 'rgba(15,122,70,0.08)' : 'rgba(0,0,0,0.04)',
+                                  border: `1px solid ${overrideVal ? 'rgba(15,122,70,0.4)' : 'rgba(0,0,0,0.08)'}`,
                                   borderRadius: 5, padding: '3px 6px', color: '#334155',
                                   outline: 'none',
                                 }}
@@ -1993,21 +1993,21 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                   {matchedRows.length > 0 && (
                     <tr
                       onClick={() => setMatchedCollapsed(c => !c)}
-                      style={{ cursor: 'pointer', userSelect: 'none', background: 'rgba(0,200,83,0.03)' }}
+                      style={{ cursor: 'pointer', userSelect: 'none', background: 'rgba(15,122,70,0.03)' }}
                     >
                       <td colSpan={10} style={{
                         padding: '10px 14px',
                         borderTop: unmatchedRows.length > 0 ? '2px solid rgba(0,0,0,0.08)' : undefined,
-                        borderBottom: matchedCollapsed ? 'none' : '1px solid rgba(0,200,83,0.12)',
+                        borderBottom: matchedCollapsed ? 'none' : '1px solid rgba(15,122,70,0.12)',
                       }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <span style={{
                             display: 'inline-block',
                             transform: matchedCollapsed ? 'rotate(0deg)' : 'rotate(90deg)',
                             transition: 'transform 0.15s',
-                            color: '#00C853', fontSize: 12,
+                            color: 'var(--mv-green)', fontSize: 12,
                           }}>▶</span>
-                          <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#00C853' }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: 'var(--mv-green)' }}>
                             ✓ Matched — {matchedRows.length} line{matchedRows.length !== 1 ? 's' : ''}
                           </span>
                         </div>
@@ -2029,7 +2029,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                           : bc?.total_cost_price != null ? row.carrier_total - bc.total_cost_price : null);
                     const diffColor = diff == null ? '#475569'
                       : diff > 0.01 ? '#F44336'
-                      : diff < -0.01 ? '#00C853'
+                      : diff < -0.01 ? 'var(--mv-green)'
                       : '#64748B';
                     // Show breakdown sub-line if there are fuel/HGV allocs OR W-AE informational surcharges
                     const invoiceHasSurcharge = (row.carrier_surcharges || 0) > 0.005 || (row.carrier_csv_surcharges || 0) > 0.005;
@@ -2042,7 +2042,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                       <tr
                         key={row.lineKey}
                         style={{
-                          background: isSelected ? 'rgba(0,200,83,0.04)' : undefined,
+                          background: isSelected ? 'rgba(15,122,70,0.04)' : undefined,
                           cursor: 'pointer',
                         }}
                         onClick={() => toggleRow(row.lineKey)}
@@ -2053,14 +2053,14 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                             checked={isSelected}
                             onChange={() => toggleRow(row.lineKey)}
                             onClick={e => e.stopPropagation()}
-                            style={{ cursor: 'pointer', accentColor: '#00C853' }}
+                            style={{ cursor: 'pointer', accentColor: 'var(--mv-green)' }}
                           />
                         </td>
                         <td style={td}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                             <span style={{
                               fontFamily: 'monospace', fontSize: 12,
-                              color: '#00C853', fontWeight: 700,
+                              color: 'var(--mv-green)', fontWeight: 700,
                             }}>
                               {row.reference}
                             </span>
@@ -2079,9 +2079,9 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                               <span style={{
                                 fontSize: 9, fontWeight: 700, letterSpacing: '0.05em',
                                 textTransform: 'uppercase',
-                                background: 'rgba(0,188,212,0.12)',
-                                border: '1px solid rgba(0,188,212,0.3)',
-                                color: '#00BCD4', borderRadius: 20, padding: '1px 6px',
+                                background: 'rgba(39,110,147,0.12)',
+                                border: '1px solid rgba(39,110,147,0.3)',
+                                color: 'var(--mv-teal)', borderRadius: 20, padding: '1px 6px',
                               }}>
                                 dup
                               </span>
@@ -2127,7 +2127,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                                   {row.invoice_service_name}
                                 </span>
                                 {resolvedName ? (
-                                  <div style={{ fontSize: 11, color: autoResolved ? '#81C784' : '#00BCD4', marginTop: 1, display: 'flex', alignItems: 'center', gap: 3 }}>
+                                  <div style={{ fontSize: 11, color: autoResolved ? '#81C784' : 'var(--mv-teal)', marginTop: 1, display: 'flex', alignItems: 'center', gap: 3 }}>
                                     <ArrowRight size={9} /> {resolvedName}
                                     {autoResolved && (
                                       <span style={{ fontSize: 9, color: '#64748B', marginLeft: 3 }}>auto</span>
@@ -2288,7 +2288,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                                 {pct != null && (
                                   <span style={{
                                     marginLeft: 6, fontSize: 10, fontWeight: 700,
-                                    color: pct >= 0 ? '#00BCD4' : '#F44336',
+                                    color: pct >= 0 ? 'var(--mv-teal)' : '#F44336',
                                   }}>
                                     {pct.toFixed(0)}%
                                   </span>
@@ -2348,13 +2348,13 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                           const diffColor = diff == null ? '#475569'
                             : Math.abs(diff) <= TOLERANCE_ABS ? '#64748B'
                             : diff > 0 ? '#F44336'
-                            : '#00C853';
+                            : 'var(--mv-green)';
                           const surchargeStatus = isAccepted
                             ? { code: 'amber', label: 'Accepted',     color: '#D97706', icon: 'warn' }
                             : ourValue == null
                               ? { code: 'amber', label: 'No Comparison', color: '#D97706', icon: 'warn' }
                               : Math.abs(diff) <= TOLERANCE_ABS
-                                ? { code: 'green', label: 'Match',       color: '#00C853', icon: 'check' }
+                                ? { code: 'green', label: 'Match',       color: 'var(--mv-green)', icon: 'check' }
                                 : { code: 'red',   label: 'Discrepancy', color: '#F44336', icon: 'x'     };
 
                           return (
@@ -2492,7 +2492,7 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                   {displayed.length} of {results.length} row{results.length !== 1 ? 's' : ''}
                 </span>
                 {selected.size > 0 && (
-                  <span style={{ fontSize: 12, color: '#00C853' }}>
+                  <span style={{ fontSize: 12, color: 'var(--mv-green)' }}>
                     {selected.size} selected
                   </span>
                 )}
@@ -2542,18 +2542,18 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                       <tr key={i} style={{ borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
                         <td style={{ ...td, fontWeight: 600 }}>{c.name}</td>
                         <td style={{ ...td, textAlign: 'right', color: '#64748B' }}>{c.count}</td>
-                        <td style={{ ...td, textAlign: 'right', color: '#00C853' }}>{gbp(c.cost)}</td>
+                        <td style={{ ...td, textAlign: 'right', color: 'var(--mv-green)' }}>{gbp(c.cost)}</td>
                         <td style={{ ...td, textAlign: 'right', color: '#D97706', fontWeight: 700 }}>{gbp(c.sell)}</td>
-                        <td style={{ ...td, textAlign: 'right', color: isNeg ? '#F44336' : '#00BCD4', fontWeight: 700 }}>
+                        <td style={{ ...td, textAlign: 'right', color: isNeg ? '#F44336' : 'var(--mv-teal)', fontWeight: 700 }}>
                           {gbp(margin)}
                         </td>
                         <td style={{ ...td, textAlign: 'right' }}>
                           <span style={{
                             display: 'inline-block',
                             fontSize: 11, fontWeight: 700,
-                            background: isNeg ? 'rgba(244,67,54,0.1)' : 'rgba(0,188,212,0.1)',
-                            border: `1px solid ${isNeg ? 'rgba(244,67,54,0.3)' : 'rgba(0,188,212,0.3)'}`,
-                            color: isNeg ? '#F44336' : '#00BCD4',
+                            background: isNeg ? 'rgba(244,67,54,0.1)' : 'rgba(39,110,147,0.1)',
+                            border: `1px solid ${isNeg ? 'rgba(244,67,54,0.3)' : 'rgba(39,110,147,0.3)'}`,
+                            color: isNeg ? '#F44336' : 'var(--mv-teal)',
                             borderRadius: 20, padding: '2px 8px',
                           }}>
                             {custPct.toFixed(1)}%
@@ -2568,22 +2568,22 @@ function ResultsTable({ carrier, parseResult, fileName, onBack }) {
                     <td style={{ ...td, textAlign: 'right', color: '#64748B', fontWeight: 700 }}>
                       {customerBreakdown.reduce((s, c) => s + c.count, 0)}
                     </td>
-                    <td style={{ ...td, textAlign: 'right', color: '#00C853', fontWeight: 700 }}>
+                    <td style={{ ...td, textAlign: 'right', color: 'var(--mv-green)', fontWeight: 700 }}>
                       {gbp(customerBreakdown.reduce((s, c) => s + c.cost, 0))}
                     </td>
                     <td style={{ ...td, textAlign: 'right', color: '#D97706', fontWeight: 700 }}>
                       {gbp(totalSellValue)}
                     </td>
-                    <td style={{ ...td, textAlign: 'right', color: totalMarginValue >= 0 ? '#00BCD4' : '#F44336', fontWeight: 700 }}>
+                    <td style={{ ...td, textAlign: 'right', color: totalMarginValue >= 0 ? 'var(--mv-teal)' : '#F44336', fontWeight: 700 }}>
                       {gbp(totalMarginValue)}
                     </td>
                     <td style={{ ...td, textAlign: 'right' }}>
                       <span style={{
                         display: 'inline-block',
                         fontSize: 11, fontWeight: 700,
-                        background: marginPct >= 0 ? 'rgba(0,188,212,0.12)' : 'rgba(244,67,54,0.1)',
-                        border: `1px solid ${marginPct >= 0 ? 'rgba(0,188,212,0.35)' : 'rgba(244,67,54,0.3)'}`,
-                        color: marginPct >= 0 ? '#00BCD4' : '#F44336',
+                        background: marginPct >= 0 ? 'rgba(39,110,147,0.12)' : 'rgba(244,67,54,0.1)',
+                        border: `1px solid ${marginPct >= 0 ? 'rgba(39,110,147,0.35)' : 'rgba(244,67,54,0.3)'}`,
+                        color: marginPct >= 0 ? 'var(--mv-teal)' : '#F44336',
                         borderRadius: 20, padding: '2px 8px',
                       }}>
                         {marginPct.toFixed(1)}%
@@ -2642,12 +2642,12 @@ export default function ReconciliationTab() {
       }}>
         <span
           onClick={step !== 'pick' ? backToCarrier : undefined}
-          style={{ cursor: step !== 'pick' ? 'pointer' : 'default', color: step === 'pick' ? '#334155' : '#00C853' }}
+          style={{ cursor: step !== 'pick' ? 'pointer' : 'default', color: step === 'pick' ? '#334155' : 'var(--mv-green)' }}
         >
           Select carrier
         </span>
         <ChevronRight size={13} />
-        <span style={{ color: step === 'upload' ? '#334155' : step === 'results' ? '#00C853' : '#444' }}>
+        <span style={{ color: step === 'upload' ? '#334155' : step === 'results' ? 'var(--mv-green)' : '#444' }}>
           Upload CSV
         </span>
         <ChevronRight size={13} />

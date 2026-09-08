@@ -24,7 +24,7 @@ const S = {
   label:       { fontSize: 12, color: '#64748B', fontWeight: 600, marginBottom: 5, display: 'block', textTransform: 'uppercase', letterSpacing: '0.04em' },
   input:       { background: '#F8FAFC', border: '1px solid rgba(0,0,0,0.10)', borderRadius: 6, padding: '8px 12px', color: '#0F172A', fontSize: 13, width: '100%', outline: 'none' },
   btn:         { padding: '8px 18px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600 },
-  btnPrimary:  { background: '#00C853', color: '#000' },
+  btnPrimary:  { background: 'var(--mv-green)', color: '#000' },
   btnSecondary:{ background: '#F1F5F9', color: '#334155', border: '1px solid rgba(0,0,0,0.08)' },
   btnDanger:   { background: 'rgba(220,38,38,0.08)', color: '#991B1B', border: '1px solid rgba(220,38,38,0.2)' },
   toggle:      { width: 38, height: 20, borderRadius: 10, border: 'none', cursor: 'pointer', position: 'relative', transition: 'background 0.2s', flexShrink: 0 },
@@ -37,7 +37,7 @@ const S = {
 const ALERT_META = {
   webhook_gap:         { icon: '📡', colour: '#ff9800' },
   backfill_triggered:  { icon: 'ℹ️',  colour: '#2196f3' },
-  billing_run_complete:{ icon: '✅',  colour: '#00C853' },
+  billing_run_complete:{ icon: '✅',  colour: 'var(--mv-green)' },
 };
 
 // ─── SendGrid Connection Card ─────────────────────────────────────────────────
@@ -128,7 +128,7 @@ function ConnectionCard({ config, onSaved }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ fontSize: 12, color: '#64748B' }}>{form.enabled ? 'Enabled' : 'Disabled'}</span>
           <button
-            style={{ ...S.toggle, background: form.enabled ? '#00C853' : 'rgba(0,0,0,0.08)' }}
+            style={{ ...S.toggle, background: form.enabled ? 'var(--mv-green)' : 'rgba(0,0,0,0.08)' }}
             onClick={() => setForm(f => ({ ...f, enabled: !f.enabled }))}
           >
             <span style={{
@@ -170,9 +170,9 @@ function ConnectionCard({ config, onSaved }) {
           {status === 'saving' ? 'Saving…' : 'Save Connection'}
         </button>
 
-        {status === 'saved'    && <span style={{ color: '#00C853', fontSize: 13, display: 'flex', alignItems: 'center', gap: 4 }}><CheckCircle size={14} /> Saved</span>}
+        {status === 'saved'    && <span style={{ color: 'var(--mv-green)', fontSize: 13, display: 'flex', alignItems: 'center', gap: 4 }}><CheckCircle size={14} /> Saved</span>}
         {status === 'error'    && <span style={{ color: '#ff6b6b', fontSize: 13, display: 'flex', alignItems: 'center', gap: 4 }}><AlertCircle size={14} /> {errMsg}</span>}
-        {status === 'test_ok'  && <span style={{ color: '#00C853', fontSize: 13, display: 'flex', alignItems: 'center', gap: 4 }}><CheckCircle size={14} /> Test email sent</span>}
+        {status === 'test_ok'  && <span style={{ color: 'var(--mv-green)', fontSize: 13, display: 'flex', alignItems: 'center', gap: 4 }}><CheckCircle size={14} /> Test email sent</span>}
         {status === 'test_err' && <span style={{ color: '#ff6b6b', fontSize: 13, display: 'flex', alignItems: 'center', gap: 4 }}><AlertCircle size={14} /> {errMsg}</span>}
 
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -241,8 +241,8 @@ function AlertCard({ alert }) {
             <span style={{ ...S.cardTitle, marginBottom: 0 }}>{alert.name}</span>
             <span style={{
               ...S.pill,
-              background: alert.enabled ? 'rgba(0,200,83,0.12)' : 'rgba(0,0,0,0.04)',
-              color: alert.enabled ? '#00C853' : '#666'
+              background: alert.enabled ? 'rgba(15,122,70,0.12)' : 'rgba(0,0,0,0.04)',
+              color: alert.enabled ? 'var(--mv-green)' : '#666'
             }}>
               {alert.enabled ? 'Active' : 'Off'}
             </span>
@@ -250,7 +250,7 @@ function AlertCard({ alert }) {
           <div style={{ fontSize: 13, color: '#475569', maxWidth: 560 }}>{alert.description}</div>
         </div>
         <button
-          style={{ ...S.toggle, background: alert.enabled ? '#00C853' : 'rgba(0,0,0,0.08)', marginTop: 4 }}
+          style={{ ...S.toggle, background: alert.enabled ? 'var(--mv-green)' : 'rgba(0,0,0,0.08)', marginTop: 4 }}
           onClick={toggleEnabled}
         >
           <span style={{
@@ -407,11 +407,11 @@ function BackfillCard() {
       )}
 
       {result && (
-        <div style={{ background: 'rgba(0,200,83,0.06)', border: '1px solid rgba(0,200,83,0.2)', borderRadius: 8, padding: '14px 18px', fontSize: 13 }}>
+        <div style={{ background: 'rgba(15,122,70,0.06)', border: '1px solid rgba(15,122,70,0.2)', borderRadius: 8, padding: '14px 18px', fontSize: 13 }}>
           <div style={{ display: 'flex', gap: 28, flexWrap: 'wrap', marginBottom: result.errors?.length ? 10 : 0 }}>
             {[
               ['Fetched from Voila',  result.fetched],
-              ['Charges created',    result.charges_created, '#00C853'],
+              ['Charges created',    result.charges_created, 'var(--mv-green)'],
               ['Already existed',    result.shipments_skipped],
               ['Failed',             result.shipments_failed, result.shipments_failed > 0 ? '#ff9800' : null],
             ].map(([label, val, col]) => (
@@ -453,7 +453,7 @@ export default function EmailSettings() {
       <SettingsNav />
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24 }}>
-        <Mail size={22} style={{ color: '#00C853' }} />
+        <Mail size={22} style={{ color: 'var(--mv-green)' }} />
         <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, color: '#0F172A' }}>Email Settings</h2>
       </div>
 

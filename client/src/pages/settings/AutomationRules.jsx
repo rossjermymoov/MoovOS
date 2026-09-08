@@ -119,7 +119,7 @@ function RuleCard({ rule, trustCap, onSave, onDelete }) {
           <Trash2 size={14} /> Delete
         </button>
         <button onClick={() => onSave(d)}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', border: 'none', background: '#00C853', color: '#fff', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', border: 'none', background: 'var(--mv-green)', color: '#fff', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
           <Save size={14} /> Save
         </button>
       </div>

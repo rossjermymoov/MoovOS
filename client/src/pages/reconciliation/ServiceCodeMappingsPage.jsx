@@ -28,7 +28,7 @@ const PAGE_BG   = { minHeight: '100vh', background: '#F8FAFC', padding: '28px 32
 const CARD       = { background: 'rgba(0,0,0,0.03)', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 10, padding: '20px 24px' };
 const INPUT      = { background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.10)', borderRadius: 7, color: '#0F172A', fontSize: 13, padding: '8px 12px', outline: 'none', width: '100%', boxSizing: 'border-box' };
 const SELECT_ST  = { ...INPUT, cursor: 'pointer' };
-const BTN_GREEN  = { background: 'rgba(0,200,83,0.15)', border: '1px solid rgba(0,200,83,0.4)', borderRadius: 7, color: '#00C853', padding: '9px 18px', cursor: 'pointer', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' };
+const BTN_GREEN  = { background: 'rgba(15,122,70,0.15)', border: '1px solid rgba(15,122,70,0.4)', borderRadius: 7, color: 'var(--mv-green)', padding: '9px 18px', cursor: 'pointer', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' };
 const BTN_GHOST  = { background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 7, color: '#64748B', padding: '9px 16px', cursor: 'pointer', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 };
 const BTN_RED    = { background: 'rgba(213,0,0,0.08)', border: '1px solid rgba(213,0,0,0.25)', borderRadius: 7, color: '#FF5252', padding: '6px 10px', cursor: 'pointer', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 };
 const TH         = { padding: '10px 14px', fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em', borderBottom: '1px solid rgba(0,0,0,0.07)', textAlign: 'left', whiteSpace: 'nowrap' };
@@ -48,9 +48,9 @@ function CarrierTile({ courier, selected, onSelect }) {
       title={ready ? courier.name : `${courier.name} — not yet configured for reconciliation`}
       style={{
         padding: '10px 18px', borderRadius: 8, cursor: ready ? 'pointer' : 'not-allowed',
-        background: selected ? 'rgba(0,200,83,0.1)' : 'rgba(0,0,0,0.03)',
-        border: `2px solid ${selected ? '#00C853' : 'rgba(0,0,0,0.08)'}`,
-        color: selected ? '#00C853' : ready ? '#0F172A' : '#475569',
+        background: selected ? 'rgba(15,122,70,0.1)' : 'rgba(0,0,0,0.03)',
+        border: `2px solid ${selected ? 'var(--mv-green)' : 'rgba(0,0,0,0.08)'}`,
+        color: selected ? 'var(--mv-green)' : ready ? '#0F172A' : '#475569',
         fontSize: 13, fontWeight: 700, transition: 'all 0.15s',
         opacity: ready ? 1 : 0.4,
       }}
@@ -64,7 +64,7 @@ function CarrierTile({ courier, selected, onSelect }) {
 
 function StatusBadge({ active }) {
   return active
-    ? <span style={{ background: 'rgba(0,200,83,0.15)', border: '1px solid rgba(0,200,83,0.3)', borderRadius: 20, color: '#00C853', fontSize: 11, fontWeight: 700, padding: '2px 8px' }}>Active</span>
+    ? <span style={{ background: 'rgba(15,122,70,0.15)', border: '1px solid rgba(15,122,70,0.3)', borderRadius: 20, color: 'var(--mv-green)', fontSize: 11, fontWeight: 700, padding: '2px 8px' }}>Active</span>
     : <span style={{ background: 'rgba(213,0,0,0.1)', border: '1px solid rgba(213,0,0,0.3)', borderRadius: 20, color: '#FF5252', fontSize: 11, fontWeight: 700, padding: '2px 8px' }}>Inactive</span>;
 }
 
@@ -184,9 +184,9 @@ export default function ServiceCodeMappingsPage() {
             onClick={() => setSelectedCarrierId(null)}
             style={{
               padding: '10px 18px', borderRadius: 8, cursor: 'pointer',
-              background: selectedCarrierId === null ? 'rgba(0,200,83,0.1)' : 'rgba(0,0,0,0.03)',
-              border: `2px solid ${selectedCarrierId === null ? '#00C853' : 'rgba(0,0,0,0.08)'}`,
-              color: selectedCarrierId === null ? '#00C853' : '#0F172A',
+              background: selectedCarrierId === null ? 'rgba(15,122,70,0.1)' : 'rgba(0,0,0,0.03)',
+              border: `2px solid ${selectedCarrierId === null ? 'var(--mv-green)' : 'rgba(0,0,0,0.08)'}`,
+              color: selectedCarrierId === null ? 'var(--mv-green)' : '#0F172A',
               fontSize: 13, fontWeight: 700, transition: 'all 0.15s',
             }}
           >
@@ -257,8 +257,8 @@ export default function ServiceCodeMappingsPage() {
                     </td>
                     <td style={TD}>
                       <span style={{
-                        background: 'rgba(0,200,83,0.1)', border: '1px solid rgba(0,200,83,0.25)',
-                        borderRadius: 6, color: '#00C853', fontSize: 12, fontWeight: 700,
+                        background: 'rgba(15,122,70,0.1)', border: '1px solid rgba(15,122,70,0.25)',
+                        borderRadius: 6, color: 'var(--mv-green)', fontSize: 12, fontWeight: 700,
                         padding: '3px 8px', fontFamily: 'monospace',
                       }}>
                         {m.courier_code}
@@ -267,8 +267,8 @@ export default function ServiceCodeMappingsPage() {
                     <td style={TD}>
                       {m.product_code ? (
                         <span style={{
-                          background: 'rgba(0,188,212,0.1)', border: '1px solid rgba(0,188,212,0.25)',
-                          borderRadius: 6, color: '#00BCD4', fontSize: 12, fontWeight: 700,
+                          background: 'rgba(39,110,147,0.1)', border: '1px solid rgba(39,110,147,0.25)',
+                          borderRadius: 6, color: 'var(--mv-teal)', fontSize: 12, fontWeight: 700,
                           padding: '3px 8px', fontFamily: 'monospace',
                         }}>
                           {m.product_code}
@@ -351,7 +351,7 @@ export default function ServiceCodeMappingsPage() {
               placeholder="e.g. 1"
               maxLength={60}
               disabled={!selectedCarrierId}
-              style={{ ...INPUT, opacity: selectedCarrierId ? 1 : 0.45, fontFamily: 'monospace', fontWeight: 700, color: '#00BCD4' }}
+              style={{ ...INPUT, opacity: selectedCarrierId ? 1 : 0.45, fontFamily: 'monospace', fontWeight: 700, color: 'var(--mv-teal)' }}
               onKeyDown={e => e.key === 'Enter' && handleSave()}
             />
           </div>
@@ -401,7 +401,7 @@ export default function ServiceCodeMappingsPage() {
           </div>
         )}
         {saveOk && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, fontSize: 13, color: '#00C853' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12, fontSize: 13, color: 'var(--mv-green)' }}>
             <CheckCircle2 size={14} /> Mapping saved.
           </div>
         )}

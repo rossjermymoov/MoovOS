@@ -28,8 +28,8 @@ const inputSt = {
   padding: '7px 10px', outline: 'none',
 };
 const btnGreen = {
-  background: 'rgba(0,200,83,0.15)', border: '1px solid rgba(0,200,83,0.4)',
-  borderRadius: 6, color: '#00C853', padding: '7px 10px', cursor: 'pointer',
+  background: 'rgba(15,122,70,0.15)', border: '1px solid rgba(15,122,70,0.4)',
+  borderRadius: 6, color: 'var(--mv-green)', padding: '7px 10px', cursor: 'pointer',
   fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5,
 };
 const btnRed = {
@@ -55,14 +55,14 @@ function FormulaBox({ divisor }) {
   const dimKg = divisor > 0 ? (vol / divisor).toFixed(2) : '—';
   return (
     <div style={{
-      background: 'rgba(0,200,83,0.06)', border: '1px solid rgba(0,200,83,0.2)',
+      background: 'rgba(15,122,70,0.06)', border: '1px solid rgba(15,122,70,0.2)',
       borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#64748B',
     }}>
-      <span style={{ color: '#00C853', fontWeight: 700 }}>Formula: </span>
+      <span style={{ color: 'var(--mv-green)', fontWeight: 700 }}>Formula: </span>
       (L × W × H) ÷ {divisor > 0 ? divisor : '?'} = volumetric kg
       {divisor > 0 && (
         <span style={{ marginLeft: 16, color: '#0F172A' }}>
-          Example: {eg_l} × {eg_w} × {eg_h} = {vol.toLocaleString()} cm³ ÷ {divisor} = <strong style={{ color: '#00C853' }}>{dimKg} kg</strong>
+          Example: {eg_l} × {eg_w} × {eg_h} = {vol.toLocaleString()} cm³ ÷ {divisor} = <strong style={{ color: 'var(--mv-green)' }}>{dimKg} kg</strong>
         </span>
       )}
     </div>
@@ -130,7 +130,7 @@ function ServiceBadge({ service, onRemove }) {
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 5,
-      background: 'rgba(0,200,83,0.1)', border: '1px solid rgba(0,200,83,0.25)',
+      background: 'rgba(15,122,70,0.1)', border: '1px solid rgba(15,122,70,0.25)',
       borderRadius: 9999, padding: '3px 10px', fontSize: 11, color: '#0F172A',
     }}>
       <span style={{ color: '#475569', fontSize: 10 }}>{service.carrier_name} /</span>
@@ -174,11 +174,11 @@ function RuleCard({ rule, allServices, onUpdate, onDelete, onAssign, onUnassign 
       {/* Header row */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Divide size={16} color='#00C853' />
+          <Divide size={16} color='var(--mv-green)' />
           <span style={{ fontSize: 15, fontWeight: 700, color: '#0F172A' }}>{rule.name}</span>
           <span style={{
-            background: 'rgba(0,200,83,0.12)', border: '1px solid rgba(0,200,83,0.3)',
-            borderRadius: 6, padding: '2px 9px', fontSize: 12, color: '#00C853', fontWeight: 700,
+            background: 'rgba(15,122,70,0.12)', border: '1px solid rgba(15,122,70,0.3)',
+            borderRadius: 6, padding: '2px 9px', fontSize: 12, color: 'var(--mv-green)', fontWeight: 700,
           }}>
             ÷ {rule.divisor.toLocaleString()}
           </span>
@@ -338,10 +338,10 @@ export default function VolumetricSettings() {
         borderRadius: 8, padding: '12px 16px', marginBottom: 24,
         fontSize: 12, color: '#64748B', lineHeight: 1.7,
       }}>
-        <Package size={13} style={{ display: 'inline', marginRight: 6, color: '#00C853' }} />
+        <Package size={13} style={{ display: 'inline', marginRight: 6, color: 'var(--mv-green)' }} />
         <strong style={{ color: '#0F172A' }}>How it works: </strong>
         When a shipment arrives, the engine calculates volumetric weight as
-        <span style={{ color: '#00C853', fontFamily: 'monospace', margin: '0 4px' }}>(L × W × H) ÷ divisor</span>
+        <span style={{ color: 'var(--mv-green)', fontFamily: 'monospace', margin: '0 4px' }}>(L × W × H) ÷ divisor</span>
         for each parcel. If the volumetric weight is greater than the declared weight, the volumetric
         weight is used for weight band selection and billing. Services with no rule assigned use
         actual weight only.
@@ -359,8 +359,8 @@ export default function VolumetricSettings() {
 
       {/* Create form */}
       {showCreate && (
-        <div style={{ ...card, border: '1px solid rgba(0,200,83,0.25)', marginBottom: 24 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#00C853', marginBottom: 12 }}>
+        <div style={{ ...card, border: '1px solid rgba(15,122,70,0.25)', marginBottom: 24 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--mv-green)', marginBottom: 12 }}>
             Create New Volumetric Rule
           </div>
           <RuleForm

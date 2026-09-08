@@ -123,10 +123,10 @@ export default function BillingSettings() {
           <button
             onClick={() => field('enabled', !form.enabled)}
             style={{
-              background: form.enabled ? 'rgba(0,200,83,0.15)' : 'rgba(0,0,0,0.06)',
-              border: `1px solid ${form.enabled ? 'rgba(0,200,83,0.4)' : 'rgba(0,0,0,0.08)'}`,
+              background: form.enabled ? 'rgba(15,122,70,0.15)' : 'rgba(0,0,0,0.06)',
+              border: `1px solid ${form.enabled ? 'rgba(15,122,70,0.4)' : 'rgba(0,0,0,0.08)'}`,
               borderRadius: 20, padding: '6px 18px', fontSize: 13, fontWeight: 700,
-              color: form.enabled ? '#00C853' : '#64748B', cursor: 'pointer',
+              color: form.enabled ? 'var(--mv-green)' : '#64748B', cursor: 'pointer',
             }}
           >
             {form.enabled ? 'Enabled' : 'Disabled'}
@@ -157,9 +157,9 @@ export default function BillingSettings() {
             {[0, 1].map(p => (
               <button key={p} onClick={() => field('fortnightly_parity', p)} style={{
                 flex: 1, padding: '8px 0', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                background: form.fortnightly_parity === p ? 'rgba(0,200,83,0.15)' : 'rgba(0,0,0,0.03)',
-                border: `1px solid ${form.fortnightly_parity === p ? 'rgba(0,200,83,0.4)' : 'rgba(0,0,0,0.08)'}`,
-                color: form.fortnightly_parity === p ? '#00C853' : '#64748B',
+                background: form.fortnightly_parity === p ? 'rgba(15,122,70,0.15)' : 'rgba(0,0,0,0.03)',
+                border: `1px solid ${form.fortnightly_parity === p ? 'rgba(15,122,70,0.4)' : 'rgba(0,0,0,0.08)'}`,
+                color: form.fortnightly_parity === p ? 'var(--mv-green)' : '#64748B',
               }}>
                 Week {p === 0 ? 'A' : 'B'}
               </button>
@@ -232,10 +232,10 @@ export default function BillingSettings() {
           disabled={saveMutation.isPending}
           style={{
             display: 'flex', alignItems: 'center', gap: 8,
-            background: saved ? 'rgba(0,200,83,0.15)' : 'rgba(0,200,83,0.12)',
-            border: `1px solid ${saved ? 'rgba(0,200,83,0.5)' : 'rgba(0,200,83,0.3)'}`,
+            background: saved ? 'rgba(15,122,70,0.15)' : 'rgba(15,122,70,0.12)',
+            border: `1px solid ${saved ? 'rgba(15,122,70,0.5)' : 'rgba(15,122,70,0.3)'}`,
             borderRadius: 8, padding: '9px 20px', fontSize: 13, fontWeight: 700,
-            color: '#00C853', cursor: 'pointer',
+            color: 'var(--mv-green)', cursor: 'pointer',
           }}
         >
           {saved ? <CheckCircle size={14} /> : <Save size={14} />}
@@ -259,8 +259,8 @@ export default function BillingSettings() {
 
       {/* Run result */}
       {runResult && (
-        <div style={{ marginTop: 16, background: 'rgba(0,200,83,0.07)', border: '1px solid rgba(0,200,83,0.2)', borderRadius: 10, padding: '14px 18px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#00C853', fontWeight: 700, marginBottom: 8 }}>
+        <div style={{ marginTop: 16, background: 'rgba(15,122,70,0.07)', border: '1px solid rgba(15,122,70,0.2)', borderRadius: 10, padding: '14px 18px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--mv-green)', fontWeight: 700, marginBottom: 8 }}>
             <CheckCircle size={15} /> Billing run complete
           </div>
           <div style={{ color: '#334155', fontSize: 13 }}>
@@ -274,7 +274,7 @@ export default function BillingSettings() {
               {runResult.details.map((d, i) => (
                 <div key={i} style={{ fontSize: 12, color: '#64748B', display: 'flex', justifyContent: 'space-between' }}>
                   <span>{d.name} ({d.account})</span>
-                  <span style={{ color: '#00C853' }}>{d.charges_queued} charges</span>
+                  <span style={{ color: 'var(--mv-green)' }}>{d.charges_queued} charges</span>
                 </div>
               ))}
             </div>

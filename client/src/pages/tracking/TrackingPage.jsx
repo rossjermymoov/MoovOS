@@ -41,20 +41,20 @@ function CourierBadge({ name, code }) {
 
 // ─── Status config ────────────────────────────────────────────
 const STATUS = {
-  booked:              { label: 'Booked',                      color: '#00BCD4', bg: 'rgba(0,188,212,0.12)',    icon: Package },
+  booked:              { label: 'Booked',                      color: 'var(--mv-teal)', bg: 'rgba(39,110,147,0.12)',    icon: Package },
   collected:           { label: 'Collected',                   color: '#2196F3', bg: 'rgba(33,150,243,0.12)',   icon: Package },
   at_depot:            { label: 'At Hub',                      color: '#5C6BC0', bg: 'rgba(92,107,192,0.12)',   icon: Package },
-  in_transit:          { label: 'In Transit',                  color: '#7B2FBE', bg: 'rgba(123,47,190,0.12)',   icon: Truck },
+  in_transit:          { label: 'In Transit',                  color: 'var(--mv-purple)', bg: 'rgba(15,122,70,0.12)',   icon: Truck },
   out_for_delivery:    { label: 'Out for Delivery',            color: '#D97706', bg: 'rgba(255,193,7,0.12)',    icon: Truck },
   failed_delivery:     { label: 'Failed Attempt',              color: '#F44336', bg: 'rgba(244,67,54,0.12)',    icon: AlertTriangle },
-  delivered:           { label: 'Delivered',                   color: '#00C853', bg: 'rgba(0,200,83,0.12)',     icon: PackageCheck },
+  delivered:           { label: 'Delivered',                   color: 'var(--mv-green)', bg: 'rgba(15,122,70,0.12)',     icon: PackageCheck },
   on_hold:             { label: 'On Hold',                     color: '#FF9800', bg: 'rgba(255,152,0,0.12)',    icon: Clock },
   exception:           { label: 'Address Issue',               color: '#F44336', bg: 'rgba(244,67,54,0.12)',    icon: AlertTriangle },
   returned:            { label: 'Return to Sender',            color: '#607D8B', bg: 'rgba(96,125,139,0.12)',   icon: RotateCcw },
   tracking_expired:    { label: 'Tracking Expired',            color: '#757575', bg: 'rgba(117,117,117,0.12)',  icon: Clock },
   cancelled:           { label: 'Cancelled',                   color: '#757575', bg: 'rgba(117,117,117,0.12)',  icon: AlertTriangle },
   awaiting_collection: { label: 'Awaiting Customer Collection',color: '#FF6F00', bg: 'rgba(255,111,0,0.12)',    icon: Store },
-  damaged:             { label: 'Damaged',                     color: '#E91E8C', bg: 'rgba(233,30,140,0.12)',   icon: PackageX },
+  damaged:             { label: 'Damaged',                     color: 'var(--mv-magenta)', bg: 'rgba(205,29,105,0.12)',   icon: PackageX },
   customs_hold:        { label: 'Customs Hold',                color: '#9C27B0', bg: 'rgba(156,39,176,0.12)',   icon: ShieldAlert },
   unknown:             { label: 'Unknown',                     color: '#555555', bg: 'rgba(0,0,0,0.04)',  icon: Package },
 };
@@ -278,11 +278,11 @@ function ClaimsTab({ data, consignment }) {
   const statusColor = info.expired  ? '#EF4444'
                     : info.urgent   ? '#F97316'
                     : info.warning  ? '#D97706'
-                    : '#00C853';
+                    : 'var(--mv-green)';
   const statusBg    = info.expired  ? 'rgba(239,68,68,0.12)'
                     : info.urgent   ? 'rgba(249,115,22,0.12)'
                     : info.warning  ? 'rgba(217,119,6,0.12)'
-                    : 'rgba(0,200,83,0.10)';
+                    : 'rgba(15,122,70,0.10)';
   const statusLabel = info.expired
     ? `Window closed ${Math.abs(info.daysRemaining)} day${Math.abs(info.daysRemaining) !== 1 ? 's' : ''} ago`
     : info.urgent
@@ -436,7 +436,7 @@ function ParcelDrawer({ consignment, onClose }) {
   const claimBadgeColor = claimInfo?.expired  ? '#EF4444'
                         : claimInfo?.urgent   ? '#F97316'
                         : claimInfo?.warning  ? '#D97706'
-                        : claimInfo           ? '#00C853'
+                        : claimInfo           ? 'var(--mv-green)'
                         : null;
 
   return (
@@ -532,7 +532,7 @@ function ParcelDrawer({ consignment, onClose }) {
               <div style={{ padding: '20px 24px' }}>
                 {/* Delivery address */}
                 {(data.recipient_name || data.recipient_address || data.recipient_postcode) && (
-                  <div style={{ marginBottom: 20, padding: 14, background: 'rgba(0,188,212,0.05)', borderRadius: 10, border: '1px solid rgba(0,188,212,0.2)' }}>
+                  <div style={{ marginBottom: 20, padding: 14, background: 'rgba(39,110,147,0.05)', borderRadius: 10, border: '1px solid rgba(39,110,147,0.2)' }}>
                     <div style={{ fontSize: 11, color: '#0891B2', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
                       <MapPin size={11} /> Delivery Address
                     </div>
@@ -548,7 +548,7 @@ function ParcelDrawer({ consignment, onClose }) {
                     {data.delivered_at && (
                       <div style={{ marginTop: 6, display: 'flex', justifyContent: 'space-between' }}>
                         <span style={{ fontSize: 11, color: '#64748B' }}>Delivered</span>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: '#00C853' }}>{new Date(data.delivered_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--mv-green)' }}>{new Date(data.delivered_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                       </div>
                     )}
                   </div>
@@ -783,9 +783,9 @@ export default function TrackingPage() {
           title="Re-fetch tracking for parcels with no update in 7+ days"
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 6,
-            background: staleRunning ? 'rgba(123,47,190,0.08)' : 'rgba(123,47,190,0.06)',
-            border: '1px solid rgba(123,47,190,0.25)',
-            borderRadius: 7, color: '#7B2FBE', fontSize: 12, fontWeight: 600,
+            background: staleRunning ? 'rgba(15,122,70,0.08)' : 'rgba(15,122,70,0.06)',
+            border: '1px solid rgba(15,122,70,0.25)',
+            borderRadius: 7, color: 'var(--mv-purple)', fontSize: 12, fontWeight: 600,
             padding: '7px 14px', cursor: staleRunning ? 'not-allowed' : 'pointer',
             opacity: staleRunning ? 0.7 : 1,
           }}
@@ -796,9 +796,9 @@ export default function TrackingPage() {
         {staleResult && (
           <span style={{
             fontSize: 12, padding: '5px 11px', borderRadius: 7,
-            background: staleResult.ok ? 'rgba(0,200,83,0.08)' : 'rgba(244,67,54,0.08)',
-            border: `1px solid ${staleResult.ok ? 'rgba(0,200,83,0.3)' : 'rgba(244,67,54,0.3)'}`,
-            color: staleResult.ok ? '#00C853' : '#F44336',
+            background: staleResult.ok ? 'rgba(15,122,70,0.08)' : 'rgba(244,67,54,0.08)',
+            border: `1px solid ${staleResult.ok ? 'rgba(15,122,70,0.3)' : 'rgba(244,67,54,0.3)'}`,
+            color: staleResult.ok ? 'var(--mv-green)' : '#F44336',
           }}>
             {staleResult.msg}
           </span>
@@ -812,7 +812,7 @@ export default function TrackingPage() {
         <KpiCard label="Out for Delivery"            value={bs.out_for_delivery}     color="#D97706" icon={Navigation}    active={statusFilter==='out_for_delivery'}    onClick={() => toggleStatus('out_for_delivery')} />
         <KpiCard label="On Hold"                     value={bs.on_hold}              color="#F44336" icon={OctagonX}      active={statusFilter==='on_hold'}             onClick={() => toggleStatus('on_hold')} />
         <KpiCard label="Awaiting Collection"         value={bs.awaiting_collection}  color="#FF9800" icon={Store}         active={statusFilter==='awaiting_collection'} onClick={() => toggleStatus('awaiting_collection')} />
-        <KpiCard label="Delivered Today"             value={stats?.delivered_today}  color="#00C853" icon={PackageCheck}  active={statusFilter==='delivered'}           onClick={toggleDeliveredToday} />
+        <KpiCard label="Delivered Today"             value={stats?.delivered_today}  color="var(--mv-green)" icon={PackageCheck}  active={statusFilter==='delivered'}           onClick={toggleDeliveredToday} />
         <KpiCard label="Address Issue"               value={(bs.exception||0)}       color="#F44336" icon={AlertTriangle} active={statusFilter==='exception'}           onClick={() => toggleStatus('exception')} />
         <KpiCard label="Failed Attempt"              value={(bs.failed_delivery||0)} color="#F44336" icon={AlertTriangle} active={statusFilter==='failed_delivery'}     onClick={() => toggleStatus('failed_delivery')} />
         <KpiCard label="Customs Hold"                value={bs.customs_hold}         color="#9C27B0" icon={Plane}         active={statusFilter==='customs_hold'}        onClick={() => toggleStatus('customs_hold')} />
@@ -827,9 +827,9 @@ export default function TrackingPage() {
           <button key={p.label} onClick={() => applyPreset(p)} style={{
             padding: '6px 13px', borderRadius: 20, fontSize: 12, fontWeight: 600,
             border: '1px solid',
-            borderColor: datePreset === p.label ? '#00C853' : 'rgba(0,0,0,0.08)',
-            background: datePreset === p.label ? 'rgba(0,200,83,0.12)' : 'transparent',
-            color: datePreset === p.label ? '#00C853' : '#64748B',
+            borderColor: datePreset === p.label ? 'var(--mv-green)' : 'rgba(0,0,0,0.08)',
+            background: datePreset === p.label ? 'rgba(15,122,70,0.12)' : 'transparent',
+            color: datePreset === p.label ? 'var(--mv-green)' : '#64748B',
             cursor: 'pointer',
           }}>
             {p.label}
@@ -912,7 +912,7 @@ export default function TrackingPage() {
 
         {/* Clear all */}
         {hasFilters && (
-          <button onClick={clearAll} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'rgba(233,30,140,0.1)', border: '1px solid rgba(233,30,140,0.3)', borderRadius: 7, color: '#E91E8C', fontSize: 12, fontWeight: 700, padding: '7px 14px', cursor: 'pointer' }}>
+          <button onClick={clearAll} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'rgba(205,29,105,0.1)', border: '1px solid rgba(205,29,105,0.3)', borderRadius: 7, color: 'var(--mv-magenta)', fontSize: 12, fontWeight: 700, padding: '7px 14px', cursor: 'pointer' }}>
             <X size={12} /> Clear
           </button>
         )}
@@ -962,7 +962,7 @@ export default function TrackingPage() {
                   onMouseLeave={e => e.currentTarget.style.background = 'none'}
                 >
                   <td>
-                    <span style={{ fontFamily: 'monospace', fontWeight: 700, color: '#00BCD4', fontSize: 12 }}>
+                    <span style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--mv-teal)', fontSize: 12 }}>
                       {p.consignment_number}
                     </span>
                   </td>
@@ -991,7 +991,7 @@ export default function TrackingPage() {
                   </td>
                   <td style={{ textAlign: 'center', fontSize: 12, color: '#64748B' }}>
                     {p.status === 'delivered'
-                      ? <span style={{ color: '#00C853', fontWeight: 700 }}>✓ Done</span>
+                      ? <span style={{ color: 'var(--mv-green)', fontWeight: 700 }}>✓ Done</span>
                       : fmtDate(p.estimated_delivery)}
                   </td>
                   <td><ChevronRight size={14} color="#333" /></td>

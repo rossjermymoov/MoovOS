@@ -29,8 +29,8 @@ const card = {
   borderRadius: 10, padding: '18px 20px',
 };
 const btnGreen = {
-  background: 'rgba(0,200,83,0.15)', border: '1px solid rgba(0,200,83,0.4)',
-  borderRadius: 7, color: '#00C853', padding: '9px 16px', cursor: 'pointer',
+  background: 'rgba(15,122,70,0.15)', border: '1px solid rgba(15,122,70,0.4)',
+  borderRadius: 7, color: 'var(--mv-green)', padding: '9px 16px', cursor: 'pointer',
   fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6,
 };
 const btnGhost = {
@@ -84,8 +84,8 @@ function CarrierTile({ courier, selected, onSelect }) {
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
         padding: '12px 8px', borderRadius: 10,
         cursor: ready ? 'pointer' : 'not-allowed',
-        background: selected ? 'rgba(0,200,83,0.08)' : 'rgba(0,0,0,0.03)',
-        border: `2px solid ${selected ? '#00C853' : 'rgba(0,0,0,0.08)'}`,
+        background: selected ? 'rgba(15,122,70,0.08)' : 'rgba(0,0,0,0.03)',
+        border: `2px solid ${selected ? 'var(--mv-green)' : 'rgba(0,0,0,0.08)'}`,
         transition: 'border-color 0.15s, background 0.15s',
         minWidth: 0, position: 'relative',
         opacity: ready ? 1 : 0.35,
@@ -97,7 +97,7 @@ function CarrierTile({ courier, selected, onSelect }) {
         width: 56, height: 40, borderRadius: 8, flexShrink: 0, overflow: 'hidden',
         background: logoUrl ? '#FFFFFF' : 'rgba(0,0,0,0.08)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        boxShadow: selected ? '0 0 0 2px #00C853' : 'none',
+        boxShadow: selected ? '0 0 0 2px var(--mv-green)' : 'none',
         transition: 'box-shadow 0.15s',
       }}>
         {logoUrl ? (
@@ -120,7 +120,7 @@ function CarrierTile({ courier, selected, onSelect }) {
       {/* Name */}
       <span style={{
         fontSize: 11, fontWeight: 600, textAlign: 'center', lineHeight: 1.2,
-        color: selected ? '#00C853' : '#CCCCCC',
+        color: selected ? 'var(--mv-green)' : '#CCCCCC',
         wordBreak: 'break-word', maxWidth: 72,
       }}>
         {courier.name}
@@ -140,7 +140,7 @@ function CarrierTile({ courier, selected, onSelect }) {
       {selected && (
         <div style={{
           position: 'absolute', top: 5, right: 5,
-          width: 15, height: 15, borderRadius: '50%', background: '#00C853',
+          width: 15, height: 15, borderRadius: '50%', background: 'var(--mv-green)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
           <svg width="9" height="7" viewBox="0 0 9 7" fill="none">
@@ -155,7 +155,7 @@ function CarrierTile({ courier, selected, onSelect }) {
 // ─── Status badge ─────────────────────────────────────────────────────────────
 function StatusBadge({ status }) {
   const cfg = {
-    complete:     { color: '#00C853', bg: 'rgba(0,200,83,0.12)',  border: 'rgba(0,200,83,0.3)',  label: 'Complete' },
+    complete:     { color: 'var(--mv-green)', bg: 'rgba(15,122,70,0.12)',  border: 'rgba(15,122,70,0.3)',  label: 'Complete' },
     needs_review: { color: '#FFB300', bg: 'rgba(255,160,0,0.12)', border: 'rgba(255,160,0,0.3)', label: 'Needs Review' },
     processing:   { color: '#79AAFF', bg: 'rgba(30,100,200,0.15)',border: 'rgba(30,100,200,0.4)', label: 'Processing' },
     failed:       { color: '#FF5252', bg: 'rgba(213,0,0,0.12)',   border: 'rgba(213,0,0,0.3)',   label: 'Failed' },
@@ -175,7 +175,7 @@ function StatusBadge({ status }) {
 // ─── Automation rate bar ──────────────────────────────────────────────────────
 function AutoBar({ rate }) {
   const pct = parseFloat(rate) || 0;
-  const color = pct >= 80 ? '#00C853' : pct >= 50 ? '#FFB300' : '#FF5252';
+  const color = pct >= 80 ? 'var(--mv-green)' : pct >= 50 ? '#FFB300' : '#FF5252';
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
       <div style={{ flex: 1, height: 4, background: 'rgba(0,0,0,0.08)', borderRadius: 99 }}>
@@ -534,7 +534,7 @@ function ProfileManagerModal({ couriers, onClose }) {
             {profiles.map(p => (
               <div key={p.id} style={{
                 ...card,
-                border: p.is_default ? '1px solid rgba(0,200,83,0.3)' : '1px solid rgba(0,0,0,0.08)',
+                border: p.is_default ? '1px solid rgba(15,122,70,0.3)' : '1px solid rgba(0,0,0,0.08)',
                 padding: '14px 16px',
               }}>
                 {/* Header row */}
@@ -551,7 +551,7 @@ function ProfileManagerModal({ couriers, onClose }) {
                     <div style={{ flex: 1, fontSize: 14, fontWeight: 700, color: '#0F172A' }}>
                       {p.profile_name}
                       {p.is_default && (
-                        <span style={{ marginLeft: 8, fontSize: 10, color: '#00C853', background: 'rgba(0,200,83,0.12)', border: '1px solid rgba(0,200,83,0.3)', borderRadius: 9999, padding: '1px 7px', fontWeight: 700 }}>
+                        <span style={{ marginLeft: 8, fontSize: 10, color: 'var(--mv-green)', background: 'rgba(15,122,70,0.12)', border: '1px solid rgba(15,122,70,0.3)', borderRadius: 9999, padding: '1px 7px', fontWeight: 700 }}>
                           Default
                         </span>
                       )}
@@ -971,13 +971,13 @@ function UploadModal({ couriers, onClose, onSuccess }) {
                       onClick={() => applyProfile(p)}
                       style={{
                         padding: '10px 14px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
-                        background: loadedProfileId === p.id ? 'rgba(0,200,83,0.1)' : 'rgba(0,0,0,0.03)',
-                        border: `1px solid ${loadedProfileId === p.id ? 'rgba(0,200,83,0.35)' : 'rgba(0,0,0,0.08)'}`,
+                        background: loadedProfileId === p.id ? 'rgba(15,122,70,0.1)' : 'rgba(0,0,0,0.03)',
+                        border: `1px solid ${loadedProfileId === p.id ? 'rgba(15,122,70,0.35)' : 'rgba(0,0,0,0.08)'}`,
                         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                       }}
                     >
                       <div>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: loadedProfileId === p.id ? '#00C853' : '#0F172A' }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: loadedProfileId === p.id ? 'var(--mv-green)' : '#0F172A' }}>
                           {p.profile_name}
                           {p.is_default && (
                             <span style={{ marginLeft: 8, fontSize: 10, color: '#64748B' }}>Default</span>
@@ -996,7 +996,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
                           )}
                         </div>
                       </div>
-                      {loadedProfileId === p.id && <Check size={14} color='#00C853' />}
+                      {loadedProfileId === p.id && <Check size={14} color='var(--mv-green)' />}
                     </button>
                   ))}
                 </div>
@@ -1006,7 +1006,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
             <div>
               <label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 5 }}>
                 Upload Carrier Invoice CSV <span style={{ color: '#FF5252' }}>*</span>
-                {loadedProfileId && <span style={{ color: '#00C853', marginLeft: 8 }}>· Profile loaded — columns will be auto-applied</span>}
+                {loadedProfileId && <span style={{ color: 'var(--mv-green)', marginLeft: 8 }}>· Profile loaded — columns will be auto-applied</span>}
               </label>
               <input ref={fileRef} type='file' accept='.csv,.txt' style={{ display: 'none' }} onChange={handleFile} />
               <button
@@ -1028,7 +1028,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
           <div>
             <p style={{ fontSize: 12, color: '#64748B', marginBottom: 16 }}>
               We found <strong style={{ color: '#0F172A' }}>{csvRows.length} rows</strong> and <strong style={{ color: '#0F172A' }}>{headers.length} columns</strong>. Map the columns below.
-              {loadedProfileId && <span style={{ color: '#00C853', marginLeft: 8 }}>Profile applied — check mappings are correct for this file.</span>}
+              {loadedProfileId && <span style={{ color: 'var(--mv-green)', marginLeft: 8 }}>Profile applied — check mappings are correct for this file.</span>}
             </p>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -1123,7 +1123,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
                           {sc.col}
                         </span>
                         <span style={{ fontSize: 11, color: '#64748B' }}>→</span>
-                        <span style={{ fontSize: 12, color: '#00C853', flex: 1, fontWeight: 500 }}>
+                        <span style={{ fontSize: 12, color: 'var(--mv-green)', flex: 1, fontWeight: 500 }}>
                           {sur?.name || sc.surcharge_id}
                         </span>
                         <button onClick={() => removeSurchargeCol(idx)} style={{ ...btnRed, padding: '3px 8px', fontSize: 11 }}>
@@ -1192,7 +1192,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
             {/* Preview */}
             {csvRows[0] && colMap.tracking_number && (
               <div style={{ marginTop: 14, ...card, fontSize: 11, color: '#64748B' }}>
-                <div style={{ color: '#00C853', fontWeight: 700, marginBottom: 8 }}>Preview — first row</div>
+                <div style={{ color: 'var(--mv-green)', fontWeight: 700, marginBottom: 8 }}>Preview — first row</div>
                 <div>Tracking: <span style={{ color: '#0F172A' }}>{csvRows[0][colMap.tracking_number]}</span></div>
                 {colMap.service_code   && <div>Service code: <span style={{ color: '#0F172A' }}>{csvRows[0][colMap.service_code]}</span></div>}
                 {colMap.carrier_amount && <div>Amount: <span style={{ color: '#0F172A' }}>£{parseFloat(csvRows[0][colMap.carrier_amount] || 0).toFixed(2)}</span></div>}
@@ -1204,13 +1204,13 @@ function UploadModal({ couriers, onClose, onSuccess }) {
             {/* Save profile section */}
             <div style={{
               marginTop: 20, padding: '14px 16px', borderRadius: 8,
-              background: showSaveSection ? 'rgba(0,200,83,0.06)' : 'rgba(0,0,0,0.02)',
-              border: `1px solid ${showSaveSection ? 'rgba(0,200,83,0.25)' : 'rgba(0,0,0,0.06)'}`,
+              background: showSaveSection ? 'rgba(15,122,70,0.06)' : 'rgba(0,0,0,0.02)',
+              border: `1px solid ${showSaveSection ? 'rgba(15,122,70,0.25)' : 'rgba(0,0,0,0.06)'}`,
             }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <BookOpen size={14} color={showSaveSection ? '#00C853' : '#666'} />
-                  <span style={{ fontSize: 13, fontWeight: 600, color: showSaveSection ? '#00C853' : '#64748B' }}>
+                  <BookOpen size={14} color={showSaveSection ? 'var(--mv-green)' : '#666'} />
+                  <span style={{ fontSize: 13, fontWeight: 600, color: showSaveSection ? 'var(--mv-green)' : '#64748B' }}>
                     {loadedProfileId ? 'Update saved profile' : 'Save as column profile'}
                   </span>
                   <span style={{ fontSize: 11, color: '#64748B' }}>
@@ -1248,7 +1248,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
                       type='checkbox'
                       checked={saveAsDefault}
                       onChange={e => setSaveAsDefault(e.target.checked)}
-                      style={{ accentColor: '#00C853' }}
+                      style={{ accentColor: 'var(--mv-green)' }}
                     />
                     Set as default profile for {couriers.find(c => String(c.id) === String(carrierId))?.name || 'this carrier'}
                     <span style={{ fontSize: 11, color: '#64748B' }}>(auto-applies on future uploads)</span>
@@ -1288,7 +1288,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
                   <div><span style={{ color: '#64748B' }}>Carrier:</span> <span style={{ color: '#0F172A' }}>{couriers.find(c => String(c.id) === String(carrierId))?.name}</span></div>
                   <div><span style={{ color: '#64748B' }}>Invoice Ref:</span> <span style={{ color: '#0F172A' }}>{effectiveRef || <em style={{ color: '#64748B' }}>None</em>}</span></div>
                   <div><span style={{ color: '#64748B' }}>Invoice Date:</span> <span style={{ color: '#0F172A' }}>{effectiveDate || '—'}</span></div>
-                  <div><span style={{ color: '#64748B' }}>Total lines:</span> <span style={{ color: '#00C853', fontWeight: 700 }}>{lines.length}</span></div>
+                  <div><span style={{ color: '#64748B' }}>Total lines:</span> <span style={{ color: 'var(--mv-green)', fontWeight: 700 }}>{lines.length}</span></div>
                 </div>
               </div>
 
@@ -1298,7 +1298,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
                   ...card,
                   marginBottom: 16,
                   borderColor: unmatchedSurchargeCols.length > 0
-                    ? 'rgba(255,170,0,0.4)' : 'rgba(0,200,83,0.25)',
+                    ? 'rgba(255,170,0,0.4)' : 'rgba(15,122,70,0.25)',
                 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: '#64748B', marginBottom: 8, letterSpacing: '0.05em' }}>
                     SURCHARGE COLUMN CHECK
@@ -1308,18 +1308,18 @@ function UploadModal({ couriers, onClose, onSuccess }) {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
                         <span style={{
                           width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
-                          background: d.matched ? '#00C853' : '#FF5252',
+                          background: d.matched ? 'var(--mv-green)' : '#FF5252',
                         }} />
                         <span style={{ color: d.matched ? '#334155' : '#FF5252', fontFamily: 'monospace' }}>
                           {d.col || <em style={{ color: '#64748B' }}>no column</em>}
                         </span>
                         {d.matched && d.actualHeader && d.actualHeader !== d.col.toLowerCase().trim() && (
                           <span style={{ color: '#64748B', fontSize: 11 }}>
-                            → matched as <span style={{ fontFamily: 'monospace', color: '#00C853' }}>{d.actualHeader}</span>
+                            → matched as <span style={{ fontFamily: 'monospace', color: 'var(--mv-green)' }}>{d.actualHeader}</span>
                           </span>
                         )}
                         {d.matched && !d.actualHeader && (
-                          <span style={{ color: '#00C853', fontSize: 11 }}>✓</span>
+                          <span style={{ color: 'var(--mv-green)', fontSize: 11 }}>✓</span>
                         )}
                         {!d.matched && d.col && (
                           <span style={{ color: '#64748B', fontSize: 11 }}>— not found in this CSV</span>
@@ -1339,7 +1339,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
                     </div>
                   )}
                   {unmatchedSurchargeCols.length === 0 && surchargeColDiag.length > 0 && (
-                    <div style={{ marginTop: 8, fontSize: 11, color: '#00C853' }}>
+                    <div style={{ marginTop: 8, fontSize: 11, color: 'var(--mv-green)' }}>
                       All {surchargeColDiag.length} surcharge column{surchargeColDiag.length > 1 ? 's' : ''} matched — these will be automatically deducted from any price difference.
                     </div>
                   )}
@@ -1424,7 +1424,7 @@ function StartRunButton({ carrierId, invoiceRef, invoiceDate, lines, onSuccess, 
           <span style={{ color: '#0F172A', fontWeight: 600 }}>Run #{ex.id}</span>
           {exDate && <> ({exDate})</>}
           {' '}— {ex.total_lines?.toLocaleString()} lines, status:{' '}
-          <span style={{ color: ex.status === 'completed' ? '#00C853' : '#FF8F00', fontWeight: 600 }}>{ex.status}</span>.
+          <span style={{ color: ex.status === 'completed' ? 'var(--mv-green)' : '#FF8F00', fontWeight: 600 }}>{ex.status}</span>.
         </div>
         <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
           <button
@@ -1668,9 +1668,9 @@ export default function ReconciliationPage() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 28 }}>
         {[
           { label: 'Total Runs',     value: totalRuns,     color: '#79AAFF', icon: FileText },
-          { label: 'Avg. Automation', value: `${avgAutomation}%`, color: '#00C853', icon: TrendingUp },
-          { label: 'Open Unmatched', value: openItems,     color: openItems > 0 ? '#FFB300' : '#00C853', icon: AlertTriangle },
-          { label: 'Needs Review',   value: needsReview,   color: needsReview > 0 ? '#FF5252' : '#00C853', icon: CheckCircle2 },
+          { label: 'Avg. Automation', value: `${avgAutomation}%`, color: 'var(--mv-green)', icon: TrendingUp },
+          { label: 'Open Unmatched', value: openItems,     color: openItems > 0 ? '#FFB300' : 'var(--mv-green)', icon: AlertTriangle },
+          { label: 'Needs Review',   value: needsReview,   color: needsReview > 0 ? '#FF5252' : 'var(--mv-green)', icon: CheckCircle2 },
         ].map(({ label, value, color, icon: Icon }) => (
           <div key={label} style={{ ...card }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -1702,7 +1702,7 @@ export default function ReconciliationPage() {
           {
             label: 'Total Margin',
             value: fmtGBP(totalsData?.total_margin),
-            color: (totalsData?.total_margin ?? 0) >= 0 ? '#00C853' : '#FF5252',
+            color: (totalsData?.total_margin ?? 0) >= 0 ? 'var(--mv-green)' : '#FF5252',
             sub: totalsData?.total_revenue
               ? `${Math.round(((totalsData.total_margin ?? 0) / totalsData.total_revenue) * 100)}% margin`
               : 'revenue – carrier cost',
@@ -1746,14 +1746,14 @@ export default function ReconciliationPage() {
                 const rowBg = run.archived
                   ? 'rgba(0,0,0,0.015)'
                   : isFinalized
-                    ? 'rgba(0,200,83,0.04)'
+                    ? 'rgba(15,122,70,0.04)'
                     : 'transparent';
                 return (
                   <tr
                     key={run.id}
                     onClick={() => navigate(`/reconciliation/${run.id}`)}
                     style={{ borderBottom: '1px solid rgba(0,0,0,0.03)', cursor: 'pointer', background: rowBg }}
-                    onMouseEnter={e => e.currentTarget.style.background = isFinalized ? 'rgba(0,200,83,0.08)' : 'rgba(0,0,0,0.02)'}
+                    onMouseEnter={e => e.currentTarget.style.background = isFinalized ? 'rgba(15,122,70,0.08)' : 'rgba(0,0,0,0.02)'}
                     onMouseLeave={e => e.currentTarget.style.background = rowBg}
                   >
                     <td style={{ padding: '10px 10px', color: run.archived ? '#94A3B8' : '#0F172A', fontWeight: 600 }}>{run.carrier_name || '—'}</td>
@@ -1761,13 +1761,13 @@ export default function ReconciliationPage() {
                     <td style={{ padding: '10px 10px', color: run.archived ? '#94A3B8' : '#64748B' }}>{run.invoice_ref || '—'}</td>
                     <td style={{ padding: '10px 10px' }}>
                       {isFinalized ? (
-                        <span style={{ color: '#00C853', fontWeight: 600, fontSize: 11 }}>{displayDate}</span>
+                        <span style={{ color: 'var(--mv-green)', fontWeight: 600, fontSize: 11 }}>{displayDate}</span>
                       ) : (
                         <span style={{ color: '#94A3B8', fontSize: 11 }}>—</span>
                       )}
                     </td>
                     <td style={{ padding: '10px 10px', color: run.archived ? '#94A3B8' : '#0F172A' }}>{(run.total_lines || 0).toLocaleString()}</td>
-                    <td style={{ padding: '10px 10px', color: run.archived ? '#94A3B8' : '#00C853' }}>{run.matched_count || 0}</td>
+                    <td style={{ padding: '10px 10px', color: run.archived ? '#94A3B8' : 'var(--mv-green)' }}>{run.matched_count || 0}</td>
                     <td style={{ padding: '10px 10px', color: run.archived ? '#94A3B8' : '#79AAFF' }}>{run.corrected_count || 0}</td>
                     <td style={{ padding: '10px 10px', color: (run.unmatched_count || 0) > 0 ? '#FFB300' : (run.archived ? '#94A3B8' : '#475569') }}>
                       {run.unmatched_count || 0}

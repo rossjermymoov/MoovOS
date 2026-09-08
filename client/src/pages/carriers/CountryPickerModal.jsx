@@ -66,9 +66,9 @@ export default function CountryPickerModal({ zone, onClose, onRefresh }) {
           }}
         >
           <div>
-            <div className="mv-kicker" style={{ color: '#7B2FBE' }}>ZONE DESTINATIONS</div>
+            <div className="mv-kicker" style={{ color: 'var(--mv-purple)' }}>ZONE DESTINATIONS</div>
             <h3 style={{ margin: '2px 0 0', fontSize: 16, fontWeight: 700, color: '#0F172A' }}>
-              Assign Countries — <span style={{ color: '#7B2FBE' }}>{zone.name}</span>
+              Assign Countries — <span style={{ color: 'var(--mv-purple)' }}>{zone.name}</span>
             </h3>
           </div>
           <button
@@ -116,7 +116,7 @@ export default function CountryPickerModal({ zone, onClose, onRefresh }) {
                       }}
                     >
                       <span>{c.name}</span>
-                      <span className="mv-num" style={{ color: '#00C853', fontWeight: 700 }}>
+                      <span className="mv-num" style={{ color: 'var(--mv-green)', fontWeight: 700 }}>
                         {c.iso}
                       </span>
                       <button
@@ -125,7 +125,7 @@ export default function CountryPickerModal({ zone, onClose, onRefresh }) {
                         style={{
                           background: 'none',
                           border: 'none',
-                          color: '#E91E8C',
+                          color: 'var(--mv-magenta)',
                           cursor: 'pointer',
                           padding: 0,
                           display: 'flex',
@@ -198,7 +198,7 @@ export default function CountryPickerModal({ zone, onClose, onRefresh }) {
                   <tr key={c.iso}>
                     <td style={{ padding: '7px 12px', fontWeight: 600 }}>{c.name}</td>
                     <td style={{ padding: '7px 12px' }}>
-                      <span className="mv-num" style={{ fontWeight: 700, color: '#7B2FBE' }}>
+                      <span className="mv-num" style={{ fontWeight: 700, color: 'var(--mv-purple)' }}>
                         {c.iso}
                       </span>
                     </td>
