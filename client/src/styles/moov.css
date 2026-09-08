@@ -130,10 +130,10 @@
   font-size: 13.5px; color: var(--mv-ink-78); cursor: pointer;
   transition: background .12s;
 }
-.mv-rail-item:hover { background: rgba(32,30,29,.06); }
+.mv-rail-item:hover { background: color-mix(in srgb, var(--mv-ink) 6%, transparent); }
 .mv-rail-item.is-active {
   border-left-color: var(--mv-purple); font-weight: 800; color: var(--mv-ink);
-  background: rgba(32,30,29,.05);
+  background: color-mix(in srgb, var(--mv-ink) 5%, transparent);
 }
 .mv-rail-count {
   font-size: 10.5px; padding: 1px 6px; font-variant-numeric: tabular-nums;
@@ -159,14 +159,15 @@
   border-bottom: 1px solid var(--mv-divider); padding-bottom: 5px;
 }
 .mv-search input {
-  flex: 1; min-width: 0; background: transparent; border: none; outline: none;
+  flex: 1; min-width: 0; background: transparent !important; border: none !important; outline: none;
+  border-radius: 0 !important;
   font-family: inherit; font-size: 12.5px; color: var(--mv-ink); padding: 2px 0;
 }
 .mv-icon-btn {
   width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
   cursor: pointer; color: var(--mv-ink-62); background: none; border: none;
 }
-.mv-icon-btn:hover { background: rgba(32,30,29,.08); }
+.mv-icon-btn:hover { background: color-mix(in srgb, var(--mv-ink) 8%, transparent); }
 
 /* ── page ─────────────────────────────────────────────────────────────── */
 .mv-page { flex: 1; min-height: 0; overflow-y: auto; }
@@ -194,7 +195,7 @@
 .mv-kpi:first-child { padding-left: 0; }
 .mv-kpi + .mv-kpi { border-left: 1px solid var(--mv-hairline); }
 .mv-kpi.is-clickable { cursor: pointer; }
-.mv-kpi.is-clickable:hover { background: rgba(32,30,29,.04); }
+.mv-kpi.is-clickable:hover { background: color-mix(in srgb, var(--mv-ink) 4%, transparent); }
 .mv-kpi-label { font-size: 9px; letter-spacing: .14em; text-transform: uppercase; color: var(--mv-ink-52); }
 .mv-kpi-value {
   font-weight: 800; font-size: 31px; line-height: 1.05; letter-spacing: -.03em;
@@ -253,19 +254,19 @@
 .mv-state--settled   .mv-state-label { color: var(--mv-green-deep); }
 .mv-state--flight    .mv-state-label { color: var(--mv-purple); }
 .mv-state--attention .mv-state-label { color: var(--mv-magenta-deep); }
-.mv-state--waiting   .mv-state-label { color: rgba(32,30,29,.65); }
+.mv-state--waiting   .mv-state-label { color: color-mix(in srgb, var(--mv-ink) 65%, transparent); }
 
 /* ── tables — no card wrapper, no zebra, rules only ───────────────────── */
 .mv-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
 .mv-table thead th {
   text-align: left; font-size: 9px; letter-spacing: .14em; text-transform: uppercase;
-  font-weight: 400; color: rgba(32,30,29,.50);
+  font-weight: 400; color: color-mix(in srgb, var(--mv-ink) 50%, transparent);
   padding: 0 12px 11px; border-bottom: 2px solid var(--mv-divider); white-space: nowrap;
 }
 .mv-table thead th:first-child { padding-left: 0; }
 .mv-table th.is-right, .mv-table td.is-right { text-align: right; }
 .mv-table tbody tr { border-bottom: 1px solid var(--mv-hairline); cursor: pointer; }
-.mv-table tbody tr:hover { background: rgba(32,30,29,.04); }
+.mv-table tbody tr:hover { background: color-mix(in srgb, var(--mv-ink) 4%, transparent); }
 .mv-table tbody td { padding: 13px 12px; vertical-align: top; }
 .mv-table tbody td:first-child { padding-left: 0; }
 .mv-cell-strong { font-weight: 800; letter-spacing: -.005em; }
@@ -275,7 +276,7 @@
 .mv-row-tick { width: 3px; height: 15px; background: var(--mv-purple); opacity: 0; transition: opacity .12s; flex-shrink: 0; }
 .mv-table tbody tr:hover .mv-row-tick { opacity: 1; }
 /* a proportion bar under a number (credit used, progress) */
-.mv-bar { height: 3px; background: rgba(32,30,29,.13); margin-top: 6px; width: 88px; }
+.mv-bar { height: 3px; background: color-mix(in srgb, var(--mv-ink) 13%, transparent); margin-top: 6px; width: 88px; }
 .mv-bar > span { display: block; height: 100%; background: var(--mv-green); }
 .mv-bar > span.is-warn { background: var(--mv-purple); }
 .mv-bar > span.is-over { background: var(--mv-magenta); }
@@ -287,7 +288,7 @@
   border: 1px solid var(--mv-divider); background: transparent; color: var(--mv-ink);
   transition: background .12s, border-color .12s;
 }
-.mv-btn:hover { background: rgba(32,30,29,.06); }
+.mv-btn:hover { background: color-mix(in srgb, var(--mv-ink) 6%, transparent); }
 .mv-btn--primary { background: var(--mv-purple); border-color: var(--mv-purple); color: var(--mv-on-brand); }
 .mv-btn--primary:hover { background: var(--mv-purple-600); border-color: var(--mv-purple-600); }
 .mv-btn--danger { border-color: var(--mv-magenta); color: var(--mv-magenta-deep); }
@@ -302,15 +303,21 @@
   color: var(--mv-ink-52); margin-bottom: 5px;
 }
 .mv-label .req { color: var(--mv-magenta); margin-left: 3px; }
+/* !important on the box-model properties: a legacy rule in index.css
+   (input:not([type="checkbox"]):not([type="radio"])) has higher selector
+   specificity than a single class and was silently boxing every .mv-input
+   with a border/radius/background, fighting the "underline, never a box"
+   rule. Belt-and-braces until that legacy rule is retired. */
 .mv-input {
-  width: 100%; background: transparent; border: none; outline: none;
-  border-bottom: 1px solid var(--mv-hairline-2);
+  width: 100%; background: transparent !important; border: none !important; outline: none;
+  border-radius: 0 !important;
+  border-bottom: 1px solid var(--mv-hairline-2) !important;
   font-family: inherit; font-size: 14px; color: var(--mv-ink); padding: 5px 0;
   transition: border-color .12s;
 }
-.mv-input:hover { border-bottom-color: var(--mv-ink-45); }
-.mv-input:focus { border-bottom-color: var(--mv-purple); }
-.mv-input::placeholder { color: rgba(32,30,29,.42); }
+.mv-input:hover { border-bottom-color: var(--mv-ink-45) !important; }
+.mv-input:focus { border-bottom-color: var(--mv-purple) !important; }
+.mv-input::placeholder { color: var(--mv-ink-45); }
 textarea.mv-input { resize: vertical; line-height: 1.6; }
 .mv-field.is-error .mv-input { border-bottom-color: var(--mv-magenta); }
 .mv-err { font-size: 11px; color: var(--mv-magenta-deep); margin-top: 5px; }
@@ -329,7 +336,7 @@ textarea.mv-input { resize: vertical; line-height: 1.6; }
 /* ── switch ───────────────────────────────────────────────────────────── */
 .mv-switch {
   display: inline-flex; align-items: center; width: 38px; height: 20px; padding: 2px;
-  cursor: pointer; background: rgba(32,30,29,.18); justify-content: flex-start;
+  cursor: pointer; background: color-mix(in srgb, var(--mv-ink) 18%, transparent); justify-content: flex-start;
   transition: background .15s;
 }
 .mv-switch > span { width: 16px; height: 16px; background: var(--mv-bg); }

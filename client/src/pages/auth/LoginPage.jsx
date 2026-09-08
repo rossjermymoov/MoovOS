@@ -30,130 +30,81 @@ export default function LoginPage() {
 
   return (
     <div
-      style={{ background: '#F8FAFC', minHeight: '100vh' }}
-      className="flex items-center justify-center p-4"
+      style={{
+        background: 'var(--mv-bg)',
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 16,
+        fontFamily: 'var(--mv-font)',
+      }}
     >
       <div
         style={{
-          background: '#FFFFFF',
-          border: '1px solid rgba(0,0,0,0.08)',
-          borderRadius: '14px',
-          boxShadow: '0 4px 24px rgba(0,0,0,0.10)',
+          background: 'var(--mv-surface)',
+          borderTop: '3px solid var(--mv-purple)',
+          boxShadow: '0 12px 32px color-mix(in srgb, var(--mv-ink) 22%, transparent)',
           width: '100%',
-          maxWidth: '400px',
+          maxWidth: 400,
           padding: '40px 36px',
+          boxSizing: 'border-box',
         }}
       >
         {/* Logo / brand */}
-        <div className="flex items-center gap-3 mb-8">
-          <div
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: '10px',
-              background: 'linear-gradient(135deg, #7B2FBE 0%, #E91E8C 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontWeight: 800,
-              fontSize: 16,
-              color: '#0F172A',
-            }}
-          >
-            M
-          </div>
-          <span style={{ color: '#0F172A', fontWeight: 700, fontSize: 20 }}>Moov OS</span>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, marginBottom: 32 }}>
+          <span style={{ fontWeight: 800, fontSize: 26, letterSpacing: '-.03em', color: 'var(--mv-ink)' }}>MOOV</span>
+          <span style={{ width: 8, height: 8, background: 'var(--mv-green)', marginBottom: 3 }} />
         </div>
 
-        <h1 style={{ color: '#0F172A', fontWeight: 700, fontSize: 22, marginBottom: 6 }}>
+        <h1 style={{ color: 'var(--mv-ink)', fontWeight: 800, fontSize: 22, letterSpacing: '-.01em', margin: '0 0 6px' }}>
           Sign in
         </h1>
-        <p style={{ color: '#64748B', fontSize: 14, marginBottom: 28 }}>
+        <p style={{ color: 'var(--mv-ink-62)', fontSize: 13, margin: '0 0 28px' }}>
           Enter your email and password to continue.
         </p>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1">
-            <label style={{ color: '#64748B', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              Email
-            </label>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          <div className="mv-field" style={{ marginBottom: 0 }}>
+            <label className="mv-label">Email</label>
             <input
+              className="mv-input"
               type="email"
               autoComplete="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
               required
               placeholder="you@example.com"
-              style={{
-                background: '#F1F5F9',
-                border: '1px solid rgba(0,0,0,0.10)',
-                borderRadius: 8,
-                color: '#0F172A',
-                padding: '10px 14px',
-                fontSize: 14,
-                outline: 'none',
-                width: '100%',
-              }}
             />
           </div>
 
-          <div className="flex flex-col gap-1">
-            <label style={{ color: '#64748B', fontSize: 12, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              Password
-            </label>
+          <div className="mv-field" style={{ marginBottom: 0 }}>
+            <label className="mv-label">Password</label>
             <input
+              className="mv-input"
               type="password"
               autoComplete="current-password"
               value={password}
               onChange={e => setPassword(e.target.value)}
               required
               placeholder="••••••••"
-              style={{
-                background: '#F1F5F9',
-                border: '1px solid rgba(0,0,0,0.10)',
-                borderRadius: 8,
-                color: '#0F172A',
-                padding: '10px 14px',
-                fontSize: 14,
-                outline: 'none',
-                width: '100%',
-              }}
             />
           </div>
 
           {error && (
             <div
               style={{
-                background: 'rgba(220, 38, 38, 0.15)',
-                border: '1px solid rgba(220, 38, 38, 0.4)',
-                borderRadius: 8,
-                color: '#f87171',
+                background: 'var(--mv-magenta-deep)',
+                color: 'var(--mv-bg)',
                 padding: '10px 14px',
-                fontSize: 14,
+                fontSize: 13,
               }}
             >
               {error}
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              background: loading
-                ? 'rgba(123, 47, 190, 0.5)'
-                : 'linear-gradient(135deg, #7B2FBE 0%, #E91E8C 100%)',
-              color: '#0F172A',
-              border: 'none',
-              borderRadius: 8,
-              padding: '12px 0',
-              fontWeight: 700,
-              fontSize: 15,
-              cursor: loading ? 'not-allowed' : 'pointer',
-              marginTop: 4,
-              transition: 'opacity 0.15s',
-            }}
-          >
+          <button type="submit" disabled={loading} className="mv-btn mv-btn--primary" style={{ justifyContent: 'center', marginTop: 4 }}>
             {loading ? 'Signing in…' : 'Sign in'}
           </button>
         </form>
