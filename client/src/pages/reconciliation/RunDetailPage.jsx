@@ -3335,8 +3335,8 @@ export default function RunDetailPage() {
   });
 
   // When the run finishes processing, force-refresh all data views
-  const prevStatusRef = React.useRef(null);
-  React.useEffect(() => {
+  const prevStatusRef = useRef(null);
+  useEffect(() => {
     const prev = prevStatusRef.current;
     const curr = run?.status;
     if (prev === 'processing' && curr && curr !== 'processing') {
