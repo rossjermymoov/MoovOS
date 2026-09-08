@@ -35,6 +35,11 @@ Everything else is ink on grey. Never colour something for decoration.
 *(This reverses the project's original "never red" rule — as of the MOS-4 brand redesign,
 red is the alarm colour, matching the real Moov Webapp brand palette. Magenta is retired.)*
 
+*(Pragmatic fifth addition: brand amber `#FECA00` (text-safe variant `#8A6200` in light mode)
+is used as a genuine third state — pending / at-risk / flagged — on the finance and
+reconciliation screens, where it's load-bearing business meaning distinct from settled-green
+and alarm-red, not decoration. `--mv-amber`/`--mv-amber-deep` in moov.css.)*
+
 **4. Archivo, flush left, tabular numerals.**
 Headings 800 weight with negative tracking. Body 400. Section labels 9px uppercase at
 `.15em`, weight 600, in the brand-green accent colour. Every column of money or time uses

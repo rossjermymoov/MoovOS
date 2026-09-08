@@ -39,9 +39,25 @@
   --mv-green-deep:    #065F39;   /* the same meaning as text */
   --mv-magenta:       #CD1D69;   /* fills: needs a person (brand red) */
   --mv-magenta-deep:  #CD1D69;   /* the same meaning as text */
+  --mv-magenta-100:   #FAE8F0;   /* tinted fill */
+  --mv-magenta-200:   #F2C6DA;   /* tinted border */
   --mv-teal:          #276E93;   /* per-kg / secondary numeric only (brand blue) */
   --mv-teal-deep:     #276E93;
+  --mv-teal-100:      #E9F0F4;   /* tinted fill */
+  --mv-teal-200:      #C9DBE4;   /* tinted border */
   --mv-on-brand:      #FFFFFF;   /* text/icons placed directly on a solid --mv-purple fill */
+
+  /* Amber — a fifth, pragmatic addition. docs/design-rules.md's four-mark
+     language doesn't define a warning colour, but the finance/reconciliation
+     screens have a real, load-bearing third state (pending/at-risk/flagged)
+     distinct from settled-green and alarm-red; forcing it into one of those
+     would change its meaning, not just its colour. --mv-amber is the bright
+     dot/fill/border variant; --mv-amber-deep is the legible-as-text variant
+     (the bright value fails contrast as running text on a light background). */
+  --mv-amber:         #FECA00;
+  --mv-amber-deep:    #8A6200;
+  --mv-amber-100:     #FFFAE6;
+  --mv-amber-200:     #FFF2BF;
 
   /* muted ink — use these, do not invent new opacities */
   --mv-ink-45:  rgba(23,27,45,.45);
@@ -74,9 +90,18 @@
   --mv-green-deep:    #1DFB9D;
   --mv-magenta:       #DE6C9E;
   --mv-magenta-deep:  #DE6C9E;
+  --mv-magenta-100:   rgba(205,29,105,.16);
+  --mv-magenta-200:   rgba(205,29,105,.42);
   --mv-teal:          #73A1B9;
   --mv-teal-deep:     #73A1B9;
+  --mv-teal-100:      rgba(39,110,147,.20);
+  --mv-teal-200:      rgba(39,110,147,.5);
   --mv-on-brand:      #171B2D;
+
+  --mv-amber:         #FECA00;
+  --mv-amber-deep:    #FECA00;
+  --mv-amber-100:     rgba(254,202,0,.14);
+  --mv-amber-200:     rgba(254,202,0,.4);
 
   --mv-ink-45:  rgba(253,255,255,.45);
   --mv-ink-52:  rgba(253,255,255,.52);
