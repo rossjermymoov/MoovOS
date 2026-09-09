@@ -7,20 +7,12 @@ import { customersApi } from '../../api/customers';
 const api = axios.create({ baseURL: '/api' });
 
 // ─── Shared styles ─────────────────────────────────────────────
-const inputStyle = (error) => ({
-  width: '100%', boxSizing: 'border-box',
-  background: '#FFFFFF', border: `1px solid ${error ? 'var(--mv-magenta)' : 'rgba(0,0,0,0.08)'}`,
-  borderRadius: 9999, padding: '10px 18px', color: '#0F172A', fontSize: 14, outline: 'none',
-});
-const selectStyle = {
-  width: '100%', boxSizing: 'border-box',
-  background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.08)',
-  borderRadius: 9999, padding: '10px 18px', color: '#0F172A', fontSize: 14, outline: 'none',
-};
+// Underline-style field (.ds-field), red bottom border on error
+const fieldErrorStyle = (error) => (error ? { borderBottomColor: 'var(--mv-magenta)' } : undefined);
 const textareaStyle = {
   width: '100%', boxSizing: 'border-box',
-  background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.12)',
-  borderRadius: 12, padding: '14px 18px', color: '#0F172A', fontSize: 13, outline: 'none',
+  background: 'var(--color-surface)', border: '1px solid var(--color-divider)',
+  padding: '14px 18px', color: 'var(--color-text)', fontSize: 13, outline: 'none',
   resize: 'vertical', fontFamily: 'monospace', lineHeight: 1.6,
 };
 const grid2 = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 };
@@ -30,7 +22,7 @@ const sectionH = { fontSize: 11, color: 'var(--mv-purple)', fontWeight: 600, mar
 function Field({ label, error, required, children }) {
   return (
     <div>
-      <label style={{ display: 'block', fontSize: 12, color: '#64748B', marginBottom: 6 }}>
+      <label style={{ display: 'block', fontSize: 12, color: 'var(--ds-muted)', marginBottom: 6 }}>
         {label}{required && <span style={{ color: 'var(--mv-magenta)', marginLeft: 3 }}>*</span>}
       </label>
       {children}
@@ -83,16 +75,16 @@ function DocumentInput({ label, hint, onReady, loading, loadingMsg }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {/* Mode toggle */}
-      <div style={{ display: 'flex', gap: 0, border: '1px solid rgba(0,0,0,0.08)', borderRadius: 8, overflow: 'hidden', alignSelf: 'flex-start' }}>
+      <div style={{ display: 'flex', gap: 0, border: '1px solid var(--color-divider)', alignSelf: 'flex-start' }}>
         {[['upload', 'Upload PDF'], ['paste', 'Paste Text']].map(([m, lbl]) => (
           <button
             key={m}
             onClick={() => setMode(m)}
             style={{
               padding: '7px 16px', fontSize: 12, fontWeight: 600, border: 'none', cursor: 'pointer',
-              background: mode === m ? 'rgba(15,122,70,0.25)' : 'rgba(0,0,0,0.03)',
-              color: mode === m ? '#A78BFA' : '#666',
-              borderRight: m === 'upload' ? '1px solid rgba(0,0,0,0.08)' : 'none',
+              background: mode === m ? 'var(--color-accent-100)' : 'var(--color-bg)',
+              color: mode === m ? 'var(--color-accent)' : 'var(--ds-muted)',
+              borderRight: m === 'upload' ? '1px solid var(--color-divider)' : 'none',
             }}
           >
             {m === 'upload' ? <><Upload size={11} style={{ marginRight: 5 }} />{lbl}</> : lbl}
@@ -109,11 +101,11 @@ function DocumentInput({ label, hint, onReady, loading, loadingMsg }) {
             onDrop={handleDrop}
             onClick={() => fileRef.current?.click()}
             style={{
-              border: `2px dashed ${dragOver ? 'var(--mv-purple)' : fileName ? 'rgba(15,122,70,0.4)' : 'rgba(0,0,0,0.10)'}`,
-              borderRadius: 12, padding: '36px 24px',
+              border: `2px dashed ${dragOver ? 'var(--mv-purple)' : fileName ? 'var(--mv-green)' : 'var(--color-divider)'}`,
+              padding: '36px 24px',
               display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
               gap: 10, cursor: 'pointer',
-              background: dragOver ? 'rgba(15,122,70,0.06)' : fileName ? 'rgba(15,122,70,0.04)' : 'rgba(0,0,0,0.02)',
+              background: dragOver ? 'var(--color-accent-100)' : fileName ? 'color-mix(in srgb, var(--mv-green) 6%, transparent)' : 'var(--color-bg)',
               transition: 'all 0.15s',
             }}
           >
@@ -122,21 +114,21 @@ function DocumentInput({ label, hint, onReady, loading, loadingMsg }) {
                 <FileText size={28} color="var(--mv-green)" />
                 <div style={{ textAlign: 'center' }}>
                   <p style={{ fontSize: 13, color: 'var(--mv-green)', fontWeight: 600, margin: 0 }}>{fileName}</p>
-                  <p style={{ fontSize: 12, color: '#64748B', margin: '4px 0 0' }}>PDF uploaded — AI will extract the data</p>
+                  <p style={{ fontSize: 12, color: 'var(--ds-muted)', margin: '4px 0 0' }}>PDF uploaded — AI will extract the data</p>
                 </div>
                 <button
                   onClick={e => { e.stopPropagation(); setFileName(''); fileRef.current.value = ''; }}
-                  style={{ background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.08)', color: '#64748B', borderRadius: 6, padding: '4px 10px', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+                  style={{ background: 'var(--color-bg)', border: '1px solid var(--color-divider)', color: 'var(--ds-muted)', padding: '4px 10px', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
                 >
                   <X size={11} /> Remove
                 </button>
               </>
             ) : (
               <>
-                <Upload size={28} color="#475569" />
+                <Upload size={28} color="var(--ds-muted)" />
                 <div style={{ textAlign: 'center' }}>
-                  <p style={{ fontSize: 13, color: '#64748B', fontWeight: 600, margin: 0 }}>Drop PDF here or click to browse</p>
-                  <p style={{ fontSize: 12, color: '#64748B', margin: '4px 0 0' }}>{hint}</p>
+                  <p style={{ fontSize: 13, color: 'var(--ds-muted)', fontWeight: 600, margin: 0 }}>Drop PDF here or click to browse</p>
+                  <p style={{ fontSize: 12, color: 'var(--ds-muted)', margin: '4px 0 0' }}>{hint}</p>
                 </div>
               </>
             )}
@@ -160,7 +152,7 @@ function DocumentInput({ label, hint, onReady, loading, loadingMsg }) {
           <button
             onClick={() => pasteText.trim() && onReady(pasteText)}
             disabled={!pasteText.trim()}
-            className="btn-primary"
+            className="ds-btn ds-btn-primary"
             style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8 }}
           >
             <Sparkles size={13} /> Extract with AI
@@ -176,27 +168,28 @@ function StepDcId({ moovAccountNumber, setMoovAccountNumber, moovAccountError })
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div style={{
-        padding: '16px 20px', borderRadius: 10,
-        background: 'rgba(15,122,70,0.1)', border: '1px solid rgba(15,122,70,0.3)',
+        padding: '16px 20px',
+        background: 'var(--color-accent-100)', borderLeft: '3px solid var(--color-accent)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
           <Sparkles size={16} color="var(--mv-purple)" />
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--mv-purple)' }}>AI-Assisted Onboarding</span>
         </div>
-        <p style={{ fontSize: 13, color: '#64748B', lineHeight: 1.6, margin: 0 }}>
+        <p style={{ fontSize: 13, color: 'var(--ds-muted)', lineHeight: 1.6, margin: 0 }}>
           Provide the Moov account number, upload (or paste) the customer's application form PDF, then upload their rate card PDF.
           AI will extract all the details and pre-fill the forms — you just review and confirm.
         </p>
       </div>
       <Field label="Moov Account Number" required error={moovAccountError}>
         <input
-          style={inputStyle(moovAccountError)}
+          className="ds-field"
+          style={fieldErrorStyle(moovAccountError)}
           value={moovAccountNumber}
           onChange={e => setMoovAccountNumber(e.target.value.trim().toUpperCase())}
           placeholder="e.g. MOOV-0187"
         />
       </Field>
-      <p style={{ fontSize: 12, color: '#64748B', marginTop: -8 }}>
+      <p style={{ fontSize: 12, color: 'var(--ds-muted)', marginTop: -8 }}>
         The Moov account number (MOOV-xxxx) is used as the customer's identifier throughout the system, including for incoming webhook data from the delivery carrier.
       </p>
     </div>
@@ -210,7 +203,7 @@ function CustomerFields({ customer, setCustomer, contact, setContact }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <div style={{ padding: '10px 14px', background: 'rgba(15,122,70,0.08)', border: '1px solid rgba(15,122,70,0.3)', borderRadius: 8, fontSize: 13, color: 'var(--mv-green)', display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ padding: '10px 14px', background: 'var(--color-accent-100)', borderLeft: '3px solid var(--mv-green)', fontSize: 13, color: 'var(--mv-green)', display: 'flex', alignItems: 'center', gap: 8 }}>
         <Check size={14} /> AI extracted the details below — review and correct anything that needs changing.
       </div>
 
@@ -219,10 +212,10 @@ function CustomerFields({ customer, setCustomer, contact, setContact }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={grid2}>
             <Field label="Business Name" required>
-              <input style={inputStyle()} value={customer.business_name || ''} onChange={e => sc('business_name', e.target.value)} />
+              <input className="ds-field" value={customer.business_name || ''} onChange={e => sc('business_name', e.target.value)} />
             </Field>
             <Field label="Company Type">
-              <select style={selectStyle} value={customer.company_type || 'limited_company'} onChange={e => sc('company_type', e.target.value)}>
+              <select className="ds-field" value={customer.company_type || 'limited_company'} onChange={e => sc('company_type', e.target.value)}>
                 <option value="limited_company">Limited Company (Ltd)</option>
                 <option value="partnership">Partnership / LLP</option>
                 <option value="sole_trader">Sole Trader</option>
@@ -231,10 +224,10 @@ function CustomerFields({ customer, setCustomer, contact, setContact }) {
           </div>
           <div style={grid2}>
             <Field label="Company Reg Number">
-              <input style={inputStyle()} value={customer.company_reg_number || ''} onChange={e => sc('company_reg_number', e.target.value)} />
+              <input className="ds-field" value={customer.company_reg_number || ''} onChange={e => sc('company_reg_number', e.target.value)} />
             </Field>
             <Field label="VAT Number">
-              <input style={inputStyle()} value={customer.vat_number || ''} onChange={e => sc('vat_number', e.target.value)} />
+              <input className="ds-field" value={customer.vat_number || ''} onChange={e => sc('vat_number', e.target.value)} />
             </Field>
           </div>
         </div>
@@ -244,20 +237,20 @@ function CustomerFields({ customer, setCustomer, contact, setContact }) {
         <p style={sectionH}>Address</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <Field label="Address Line 1">
-            <input style={inputStyle()} value={customer.address_line_1 || ''} onChange={e => sc('address_line_1', e.target.value)} />
+            <input className="ds-field" value={customer.address_line_1 || ''} onChange={e => sc('address_line_1', e.target.value)} />
           </Field>
           <Field label="Address Line 2">
-            <input style={inputStyle()} value={customer.address_line_2 || ''} onChange={e => sc('address_line_2', e.target.value)} />
+            <input className="ds-field" value={customer.address_line_2 || ''} onChange={e => sc('address_line_2', e.target.value)} />
           </Field>
           <div style={grid3}>
             <Field label="City">
-              <input style={inputStyle()} value={customer.city || ''} onChange={e => sc('city', e.target.value)} />
+              <input className="ds-field" value={customer.city || ''} onChange={e => sc('city', e.target.value)} />
             </Field>
             <Field label="County">
-              <input style={inputStyle()} value={customer.county || ''} onChange={e => sc('county', e.target.value)} />
+              <input className="ds-field" value={customer.county || ''} onChange={e => sc('county', e.target.value)} />
             </Field>
             <Field label="Postcode">
-              <input style={inputStyle()} value={customer.postcode || ''} onChange={e => sc('postcode', e.target.value.toUpperCase())} />
+              <input className="ds-field" value={customer.postcode || ''} onChange={e => sc('postcode', e.target.value.toUpperCase())} />
             </Field>
           </div>
         </div>
@@ -268,14 +261,14 @@ function CustomerFields({ customer, setCustomer, contact, setContact }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={grid2}>
             <Field label="Main Phone">
-              <input style={inputStyle()} value={customer.phone_number || ''} onChange={e => sc('phone_number', e.target.value)} />
+              <input className="ds-field" value={customer.phone_number || ''} onChange={e => sc('phone_number', e.target.value)} />
             </Field>
             <Field label="Main Email">
-              <input style={inputStyle()} value={customer.primary_email || ''} onChange={e => sc('primary_email', e.target.value)} />
+              <input className="ds-field" value={customer.primary_email || ''} onChange={e => sc('primary_email', e.target.value)} />
             </Field>
           </div>
           <Field label="Accounts / Billing Email">
-            <input style={inputStyle()} value={customer.accounts_email || ''} onChange={e => sc('accounts_email', e.target.value)} />
+            <input className="ds-field" value={customer.accounts_email || ''} onChange={e => sc('accounts_email', e.target.value)} />
           </Field>
         </div>
       </div>
@@ -285,17 +278,17 @@ function CustomerFields({ customer, setCustomer, contact, setContact }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={grid3}>
             <Field label="Credit Limit (£)">
-              <input style={inputStyle()} type="number" value={customer.credit_limit ?? ''} onChange={e => sc('credit_limit', e.target.value)} />
+              <input className="ds-field" type="number" value={customer.credit_limit ?? ''} onChange={e => sc('credit_limit', e.target.value)} />
             </Field>
             <Field label="Billing Cycle">
-              <select style={selectStyle} value={customer.billing_cycle || 'monthly'} onChange={e => sc('billing_cycle', e.target.value)}>
+              <select className="ds-field" value={customer.billing_cycle || 'monthly'} onChange={e => sc('billing_cycle', e.target.value)}>
                 <option value="weekly">Weekly</option>
                 <option value="fortnightly">Fortnightly</option>
                 <option value="monthly">Monthly</option>
               </select>
             </Field>
             <Field label="Payment Terms">
-              <select style={selectStyle} value={customer.payment_terms_days || 30} onChange={e => sc('payment_terms_days', parseInt(e.target.value))}>
+              <select className="ds-field" value={customer.payment_terms_days || 30} onChange={e => sc('payment_terms_days', parseInt(e.target.value))}>
                 <option value={7}>7 days</option>
                 <option value={14}>14 days</option>
                 <option value={28}>28 days</option>
@@ -305,7 +298,7 @@ function CustomerFields({ customer, setCustomer, contact, setContact }) {
           </div>
           <div style={grid2}>
             <Field label="Account Tier">
-              <select style={selectStyle} value={customer.tier || 'bronze'} onChange={e => sc('tier', e.target.value)}>
+              <select className="ds-field" value={customer.tier || 'bronze'} onChange={e => sc('tier', e.target.value)}>
                 <option value="bronze">Bronze</option>
                 <option value="silver">Silver</option>
                 <option value="gold">Gold</option>
@@ -314,10 +307,10 @@ function CustomerFields({ customer, setCustomer, contact, setContact }) {
             </Field>
             <div style={grid2}>
               <Field label="EORI Number">
-                <input style={inputStyle()} value={customer.eori_number || ''} onChange={e => sc('eori_number', e.target.value)} />
+                <input className="ds-field" value={customer.eori_number || ''} onChange={e => sc('eori_number', e.target.value)} />
               </Field>
               <Field label="IOSS Number">
-                <input style={inputStyle()} value={customer.ioss_number || ''} onChange={e => sc('ioss_number', e.target.value)} />
+                <input className="ds-field" value={customer.ioss_number || ''} onChange={e => sc('ioss_number', e.target.value)} />
               </Field>
             </div>
           </div>
@@ -329,18 +322,18 @@ function CustomerFields({ customer, setCustomer, contact, setContact }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={grid2}>
             <Field label="Full Name">
-              <input style={inputStyle()} value={contact.full_name || ''} onChange={e => sco('full_name', e.target.value)} />
+              <input className="ds-field" value={contact.full_name || ''} onChange={e => sco('full_name', e.target.value)} />
             </Field>
             <Field label="Job Title">
-              <input style={inputStyle()} value={contact.job_title || ''} onChange={e => sco('job_title', e.target.value)} />
+              <input className="ds-field" value={contact.job_title || ''} onChange={e => sco('job_title', e.target.value)} />
             </Field>
           </div>
           <div style={grid2}>
             <Field label="Email">
-              <input style={inputStyle()} value={contact.email_address || ''} onChange={e => sco('email_address', e.target.value)} />
+              <input className="ds-field" value={contact.email_address || ''} onChange={e => sco('email_address', e.target.value)} />
             </Field>
             <Field label="Phone">
-              <input style={inputStyle()} value={contact.phone_number || ''} onChange={e => sco('phone_number', e.target.value)} />
+              <input className="ds-field" value={contact.phone_number || ''} onChange={e => sco('phone_number', e.target.value)} />
             </Field>
           </div>
         </div>
@@ -412,11 +405,8 @@ function StepRateCard({ rates, setRates, ratesExtracted, setRatesExtracted, extr
       value={val ?? ''}
       onChange={e => onChange(e.target.value)}
       placeholder={placeholder}
-      style={{
-        width: '100%', boxSizing: 'border-box', background: '#FFFFFF',
-        border: '1px solid rgba(0,0,0,0.08)', borderRadius: 6,
-        padding: '6px 10px', color: '#0F172A', fontSize: 12, outline: 'none',
-      }}
+      className="ds-field"
+      style={{ fontSize: 12, padding: '6px 4px' }}
     />
   );
 
@@ -431,7 +421,7 @@ function StepRateCard({ rates, setRates, ratesExtracted, setRatesExtracted, extr
           loadingMsg="Reading PDF and extracting pricing rows…"
         />
         <button
-          className="btn-ghost"
+          className="ds-btn ds-btn-secondary"
           onClick={() => { setRates([]); setRatesExtracted(true); }}
           style={{ alignSelf: 'flex-start', fontSize: 13 }}
         >
@@ -443,22 +433,22 @@ function StepRateCard({ rates, setRates, ratesExtracted, setRatesExtracted, extr
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ padding: '10px 14px', background: 'rgba(15,122,70,0.08)', border: '1px solid rgba(15,122,70,0.3)', borderRadius: 8, fontSize: 13, color: 'var(--mv-green)', display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ padding: '10px 14px', background: 'var(--color-accent-100)', borderLeft: '3px solid var(--mv-green)', fontSize: 13, color: 'var(--mv-green)', display: 'flex', alignItems: 'center', gap: 8 }}>
         <Check size={14} /> {rates.length} rate{rates.length !== 1 ? 's' : ''} extracted — review, correct service codes, and remove any incorrect rows.
       </div>
 
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
           <thead>
-            <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
+            <tr style={{ borderBottom: 'var(--ds-rule)' }}>
               {['Service Code', 'Service Name', 'Carrier', 'Zone', 'Weight Class', 'Min kg', 'Max kg', 'Price £', 'Sub £', ''].map(h => (
-                <th key={h} style={{ padding: '6px 8px', textAlign: 'left', color: '#64748B', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
+                <th key={h} style={{ padding: '6px 8px', textAlign: 'left', color: 'var(--ds-muted)', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
             {rates.map((r, i) => (
-              <tr key={i} style={{ borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
+              <tr key={i} style={{ borderBottom: 'var(--ds-hairline)' }}>
                 <td style={{ padding: '5px 4px', minWidth: 90 }}>{cellInput(r.service_code, v => updateRate(i, 'service_code', v), 'DPD-NX')}</td>
                 <td style={{ padding: '5px 4px', minWidth: 130 }}>{cellInput(r.service_name, v => updateRate(i, 'service_name', v), 'DPD Next Day')}</td>
                 <td style={{ padding: '5px 4px', minWidth: 70 }}>{cellInput(r.courier_name, v => updateRate(i, 'courier_name', v), 'DPD')}</td>
@@ -479,12 +469,12 @@ function StepRateCard({ rates, setRates, ratesExtracted, setRatesExtracted, extr
         </table>
       </div>
 
-      <button onClick={addRate} className="btn-ghost" style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+      <button onClick={addRate} className="ds-btn ds-btn-secondary" style={{ alignSelf: 'flex-start', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
         <Plus size={13} /> Add Row
       </button>
 
       {rates.length === 0 && (
-        <p style={{ fontSize: 13, color: '#64748B' }}>No rates — customer will be created without pricing. You can add rates later from the customer record.</p>
+        <p style={{ fontSize: 13, color: 'var(--ds-muted)' }}>No rates — customer will be created without pricing. You can add rates later from the customer record.</p>
       )}
     </div>
   );
@@ -496,7 +486,7 @@ function StepConfirm({ dcId, moovAccountNumber, customer, contact, rates }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-        <div style={{ background: 'rgba(0,0,0,0.03)', borderRadius: 10, padding: 16 }}>
+        <div style={{ borderTop: '2px solid var(--color-divider)', paddingTop: 12 }}>
           <p style={sectionH}>Customer</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <ReviewRow label="Business" value={customer.business_name} />
@@ -510,7 +500,7 @@ function StepConfirm({ dcId, moovAccountNumber, customer, contact, rates }) {
             <ReviewRow label="Billing" value={`${customer.billing_cycle} / ${customer.payment_terms_days} days`} />
           </div>
         </div>
-        <div style={{ background: 'rgba(0,0,0,0.03)', borderRadius: 10, padding: 16 }}>
+        <div style={{ borderTop: '2px solid var(--color-divider)', paddingTop: 12 }}>
           <p style={sectionH}>Primary Contact</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <ReviewRow label="Name" value={contact.full_name} />
@@ -520,14 +510,14 @@ function StepConfirm({ dcId, moovAccountNumber, customer, contact, rates }) {
           </div>
         </div>
       </div>
-      <div style={{ background: 'rgba(0,0,0,0.03)', borderRadius: 10, padding: 16 }}>
+      <div style={{ borderTop: '2px solid var(--color-divider)', paddingTop: 12 }}>
         <p style={sectionH}>Rates — {validRates.length} rows to import</p>
         {validRates.length === 0 ? (
-          <p style={{ fontSize: 13, color: '#64748B' }}>No rates — will be added later.</p>
+          <p style={{ fontSize: 13, color: 'var(--ds-muted)' }}>No rates — will be added later.</p>
         ) : (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
             {validRates.map((r, i) => (
-              <span key={i} style={{ fontSize: 11, padding: '3px 8px', background: 'rgba(15,122,70,0.1)', border: '1px solid rgba(15,122,70,0.2)', borderRadius: 999, color: 'var(--mv-green)' }}>
+              <span key={i} style={{ fontSize: 11, padding: '3px 8px', background: 'var(--color-accent-100)', border: '1px solid var(--mv-green)', color: 'var(--mv-green)' }}>
                 {r.service_code} · {r.zone_name} · {r.weight_class_name || 'flat'} · £{parseFloat(r.price).toFixed(2)}
               </span>
             ))}
@@ -541,8 +531,8 @@ function StepConfirm({ dcId, moovAccountNumber, customer, contact, rates }) {
 function ReviewRow({ label, value }) {
   return (
     <div style={{ display: 'flex', gap: 8 }}>
-      <span style={{ fontSize: 12, color: '#64748B', minWidth: 90 }}>{label}</span>
-      <span style={{ fontSize: 12, color: '#0F172A' }}>{value || '—'}</span>
+      <span style={{ fontSize: 12, color: 'var(--ds-muted)', minWidth: 90 }}>{label}</span>
+      <span style={{ fontSize: 12, color: 'var(--color-text)' }}>{value || '—'}</span>
     </div>
   );
 }
@@ -564,18 +554,18 @@ function StepIndicator({ current }) {
           <div key={i} style={{ display: 'flex', alignItems: 'center', flex: i < STEPS.length - 1 ? 1 : 'none' }}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
               <div style={{
-                width: 32, height: 32, borderRadius: '50%',
+                width: 32, height: 32,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: done ? 'var(--mv-green)' : active ? 'var(--mv-purple)' : 'rgba(0,0,0,0.04)',
-                border: `2px solid ${done ? 'var(--mv-green)' : active ? 'var(--mv-purple)' : 'rgba(0,0,0,0.08)'}`,
-                color: done || active ? '#fff' : '#666', fontSize: 13, fontWeight: 700,
+                background: done ? 'var(--mv-green)' : active ? 'var(--mv-purple)' : 'var(--color-bg)',
+                border: `2px solid ${done ? 'var(--mv-green)' : active ? 'var(--mv-purple)' : 'var(--color-divider)'}`,
+                color: done || active ? 'var(--color-on-accent)' : 'var(--ds-muted)', fontSize: 13, fontWeight: 700,
               }}>
                 {done ? <Check size={14} /> : i + 1}
               </div>
-              <span style={{ fontSize: 11, color: active ? '#fff' : '#666', whiteSpace: 'nowrap' }}>{s.label}</span>
+              <span style={{ fontSize: 11, color: active ? 'var(--color-text)' : 'var(--ds-muted)', whiteSpace: 'nowrap' }}>{s.label}</span>
             </div>
             {i < STEPS.length - 1 && (
-              <div style={{ flex: 1, height: 2, background: done ? 'var(--mv-green)' : 'rgba(0,0,0,0.08)', margin: '0 8px', marginBottom: 20 }} />
+              <div style={{ flex: 1, height: 2, background: done ? 'var(--mv-green)' : 'var(--color-divider)', margin: '0 8px', marginBottom: 20 }} />
             )}
           </div>
         );
@@ -588,31 +578,31 @@ function StepIndicator({ current }) {
 function SuccessScreen({ customer, rateResults, navigate }) {
   return (
     <div style={{ maxWidth: 480, margin: '60px auto', textAlign: 'center' }}>
-      <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(15,122,70,0.15)', border: '2px solid var(--mv-green)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+      <div style={{ width: 64, height: 64, background: 'var(--color-accent-100)', border: '2px solid var(--mv-green)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
         <Check size={28} color="var(--mv-green)" />
       </div>
-      <h2 style={{ fontSize: 22, fontWeight: 700, color: '#0F172A', marginBottom: 8 }}>Customer Created</h2>
-      <p style={{ color: '#64748B', marginBottom: 4 }}>{customer.business_name}</p>
+      <h2 style={{ fontSize: 22, fontWeight: 700, color: 'var(--color-text)', marginBottom: 8 }}>Customer Created</h2>
+      <p style={{ color: 'var(--ds-muted)', marginBottom: 4 }}>{customer.business_name}</p>
       <p style={{ color: 'var(--mv-green)', fontWeight: 600, marginBottom: 8 }}>{customer.account_number}</p>
       {rateResults && (
-        <p style={{ fontSize: 13, color: '#64748B', marginBottom: 20 }}>
+        <p style={{ fontSize: 13, color: 'var(--ds-muted)', marginBottom: 20 }}>
           {rateResults.inserted} rate{rateResults.inserted !== 1 ? 's' : ''} imported
           {rateResults.skipped?.length > 0 && `, ${rateResults.skipped.length} skipped (service codes not found)`}
         </p>
       )}
       {rateResults?.skipped?.length > 0 && (
-        <div style={{ padding: 12, background: 'rgba(255,160,0,0.1)', border: '1px solid rgba(255,160,0,0.3)', borderRadius: 8, marginBottom: 20, textAlign: 'left' }}>
-          <p style={{ fontSize: 12, color: '#FFA000', marginBottom: 6, fontWeight: 600 }}>Skipped rates — service codes not in DB:</p>
+        <div style={{ padding: 12, background: 'var(--mv-amber-100)', border: '1px solid var(--mv-amber)', marginBottom: 20, textAlign: 'left' }}>
+          <p style={{ fontSize: 12, color: 'var(--mv-amber-deep)', marginBottom: 6, fontWeight: 600 }}>Skipped rates — service codes not in DB:</p>
           {rateResults.skipped.map((s, i) => (
-            <p key={i} style={{ fontSize: 11, color: '#64748B', margin: '2px 0' }}>
+            <p key={i} style={{ fontSize: 11, color: 'var(--ds-muted)', margin: '2px 0' }}>
               {s.rate?.service_code} · {s.rate?.zone_name} — {s.reason}
             </p>
           ))}
         </div>
       )}
       <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
-        <button className="btn-primary" onClick={() => navigate(`/customers/${customer.id}`)}>View Customer</button>
-        <button className="btn-ghost" onClick={() => navigate('/customers/ai-new')}>Add Another</button>
+        <button className="ds-btn ds-btn-primary" onClick={() => navigate(`/customers/${customer.id}`)}>View Customer</button>
+        <button className="ds-btn ds-btn-secondary" onClick={() => navigate('/customers/ai-new')}>Add Another</button>
       </div>
     </div>
   );
@@ -700,11 +690,11 @@ export default function CustomerAI() {
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
         <button onClick={() => navigate('/customers')}
-          style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+          style={{ background: 'none', border: 'none', color: 'var(--ds-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
           <ArrowLeft size={14} /> Customers
         </button>
-        <span style={{ color: '#475569' }}>/</span>
-        <span style={{ fontSize: 13, color: '#0F172A' }}>AI-Assisted Onboarding</span>
+        <span style={{ color: 'var(--ds-muted)' }}>/</span>
+        <span style={{ fontSize: 13, color: 'var(--color-text)' }}>AI-Assisted Onboarding</span>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24 }}>
@@ -714,9 +704,9 @@ export default function CustomerAI() {
 
       <StepIndicator current={step} />
 
-      <div className="moov-card" style={{ padding: 32 }}>
+      <div style={{ paddingTop: 28, paddingBottom: 8, borderTop: '2px solid var(--color-divider)' }}>
         <h2 style={{ fontSize: 18, fontWeight: 600, color: 'var(--mv-purple)', marginBottom: 4 }}>{stepTitles[step]}</h2>
-        <p style={{ fontSize: 13, color: '#64748B', marginBottom: 28 }}>{stepSubtitles[step]}</p>
+        <p style={{ fontSize: 13, color: 'var(--ds-muted)', marginBottom: 28 }}>{stepSubtitles[step]}</p>
 
         {step === 0 && <StepDcId moovAccountNumber={moovAccountNumber} setMoovAccountNumber={setMoovAccountNumber} moovAccountError={moovAccountError} />}
 
@@ -742,18 +732,18 @@ export default function CustomerAI() {
         {step === 3 && <StepConfirm moovAccountNumber={moovAccountNumber} customer={customer} contact={contact} rates={rates} />}
 
         {(formError || rateError || saveError) && (
-          <div style={{ marginTop: 16, padding: 12, background: 'rgba(205,29,105,0.1)', border: '1px solid var(--mv-magenta)', borderRadius: 8, fontSize: 13, color: 'var(--mv-magenta)', display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+          <div style={{ marginTop: 16, padding: 12, background: 'color-mix(in srgb, var(--mv-magenta) 12%, transparent)', border: '1px solid var(--mv-magenta)', fontSize: 13, color: 'var(--mv-magenta)', display: 'flex', alignItems: 'flex-start', gap: 8 }}>
             <AlertCircle size={14} style={{ marginTop: 1, flexShrink: 0 }} />
             {formError || rateError || saveError}
           </div>
         )}
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 32, paddingTop: 24, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
-          <button className="btn-ghost" onClick={step === 0 ? () => navigate('/customers') : back}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 32, paddingTop: 24, borderTop: 'var(--ds-hairline)' }}>
+          <button className="ds-btn ds-btn-secondary" onClick={step === 0 ? () => navigate('/customers') : back}>
             <ArrowLeft size={14} /> {step === 0 ? 'Cancel' : 'Back'}
           </button>
           <button
-            className="btn-primary"
+            className="ds-btn ds-btn-primary"
             onClick={next}
             disabled={saving || extractingForm || extractingRates}
           >

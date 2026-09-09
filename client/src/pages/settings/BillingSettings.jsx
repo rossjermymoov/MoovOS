@@ -92,23 +92,23 @@ export default function BillingSettings() {
     setForm(f => ({ ...f, [key]: value }));
   }
 
-  if (isLoading) return <div style={{ color: '#64748B', padding: 24 }}>Loading…</div>;
+  if (isLoading) return <div style={{ color: 'var(--mv-ink-52)', padding: 24 }}>Loading…</div>;
 
   const inputStyle = {
-    background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.08)',
-    borderRadius: 8, color: '#0F172A', fontSize: 13, padding: '8px 12px',
+    background: 'color-mix(in srgb, var(--mv-ink) 6%, transparent)', border: '1px solid var(--mv-hairline)',
+    borderRadius: 8, color: 'var(--mv-ink)', fontSize: 13, padding: '8px 12px',
     outline: 'none', width: '100%',
   };
-  const labelStyle = { fontSize: 12, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6, display: 'block' };
-  const sectionStyle = { background: 'rgba(0,0,0,0.03)', border: '1px solid rgba(0,0,0,0.07)', borderRadius: 12, padding: '20px 24px', marginBottom: 16 };
+  const labelStyle = { fontSize: 12, fontWeight: 600, color: 'var(--mv-ink-52)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6, display: 'block' };
+  const sectionStyle = { background: 'color-mix(in srgb, var(--mv-ink) 3%, transparent)', border: '1px solid var(--mv-hairline)', borderRadius: 12, padding: '20px 24px', marginBottom: 16 };
 
   return (
     <div style={{ maxWidth: 700 }}>
       <SettingsNav />
 
       <div style={{ marginBottom: 24 }}>
-        <h2 style={{ color: '#0F172A', fontWeight: 700, fontSize: 18, margin: 0 }}>Billing Settings</h2>
-        <p style={{ color: '#64748B', fontSize: 13, margin: '6px 0 0' }}>
+        <h2 style={{ color: 'var(--mv-ink)', fontWeight: 700, fontSize: 18, margin: 0 }}>Billing Settings</h2>
+        <p style={{ color: 'var(--mv-ink-52)', fontSize: 13, margin: '6px 0 0' }}>
           Configure when verified charges are automatically moved to <em>Awaiting Reconciliation</em>.
         </p>
       </div>
@@ -117,16 +117,16 @@ export default function BillingSettings() {
       <div style={sectionStyle}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <div style={{ color: '#0F172A', fontWeight: 600, fontSize: 14 }}>Automatic billing run</div>
-            <div style={{ color: '#64748B', fontSize: 12, marginTop: 3 }}>When enabled, the server runs the billing cycle on the schedule below.</div>
+            <div style={{ color: 'var(--mv-ink)', fontWeight: 600, fontSize: 14 }}>Automatic billing run</div>
+            <div style={{ color: 'var(--mv-ink-52)', fontSize: 12, marginTop: 3 }}>When enabled, the server runs the billing cycle on the schedule below.</div>
           </div>
           <button
             onClick={() => field('enabled', !form.enabled)}
             style={{
-              background: form.enabled ? 'rgba(15,122,70,0.15)' : 'rgba(0,0,0,0.06)',
-              border: `1px solid ${form.enabled ? 'rgba(15,122,70,0.4)' : 'rgba(0,0,0,0.08)'}`,
+              background: form.enabled ? 'var(--mv-purple-100)' : 'color-mix(in srgb, var(--mv-ink) 6%, transparent)',
+              border: `1px solid ${form.enabled ? 'var(--mv-purple-200)' : 'var(--mv-hairline)'}`,
               borderRadius: 20, padding: '6px 18px', fontSize: 13, fontWeight: 700,
-              color: form.enabled ? 'var(--mv-green)' : '#64748B', cursor: 'pointer',
+              color: form.enabled ? 'var(--mv-green)' : 'var(--mv-ink-52)', cursor: 'pointer',
             }}
           >
             {form.enabled ? 'Enabled' : 'Disabled'}
@@ -136,7 +136,7 @@ export default function BillingSettings() {
 
       {/* Weekly / fortnightly schedule */}
       <div style={sectionStyle}>
-        <div style={{ color: '#0F172A', fontWeight: 600, fontSize: 14, marginBottom: 16 }}>Weekly &amp; fortnightly billing</div>
+        <div style={{ color: 'var(--mv-ink)', fontWeight: 600, fontSize: 14, marginBottom: 16 }}>Weekly &amp; fortnightly billing</div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           <div>
             <label style={labelStyle}>Billing day</label>
@@ -157,9 +157,9 @@ export default function BillingSettings() {
             {[0, 1].map(p => (
               <button key={p} onClick={() => field('fortnightly_parity', p)} style={{
                 flex: 1, padding: '8px 0', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                background: form.fortnightly_parity === p ? 'rgba(15,122,70,0.15)' : 'rgba(0,0,0,0.03)',
-                border: `1px solid ${form.fortnightly_parity === p ? 'rgba(15,122,70,0.4)' : 'rgba(0,0,0,0.08)'}`,
-                color: form.fortnightly_parity === p ? 'var(--mv-green)' : '#64748B',
+                background: form.fortnightly_parity === p ? 'var(--mv-purple-100)' : 'color-mix(in srgb, var(--mv-ink) 3%, transparent)',
+                border: `1px solid ${form.fortnightly_parity === p ? 'var(--mv-purple-200)' : 'var(--mv-hairline)'}`,
+                color: form.fortnightly_parity === p ? 'var(--mv-green)' : 'var(--mv-ink-52)',
               }}>
                 Week {p === 0 ? 'A' : 'B'}
               </button>
@@ -170,7 +170,7 @@ export default function BillingSettings() {
 
       {/* Monthly schedule */}
       <div style={sectionStyle}>
-        <div style={{ color: '#0F172A', fontWeight: 600, fontSize: 14, marginBottom: 16 }}>Monthly billing</div>
+        <div style={{ color: 'var(--mv-ink)', fontWeight: 600, fontSize: 14, marginBottom: 16 }}>Monthly billing</div>
         <div style={{ maxWidth: 200 }}>
           <label style={labelStyle}>Day of month</label>
           <select value={form.monthly_billing_date} onChange={e => field('monthly_billing_date', parseInt(e.target.value))} style={inputStyle}>
@@ -184,10 +184,10 @@ export default function BillingSettings() {
       {/* Volume mix refresh */}
       <div style={sectionStyle}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-          <BarChart2 size={14} color="#A5B4FC" />
-          <div style={{ color: '#0F172A', fontWeight: 600, fontSize: 14 }}>Volume mix refresh</div>
+          <BarChart2 size={14} color="var(--mv-purple)" />
+          <div style={{ color: 'var(--mv-ink)', fontWeight: 600, fontSize: 14 }}>Volume mix refresh</div>
         </div>
-        <div style={{ color: '#64748B', fontSize: 12, marginBottom: 16, lineHeight: 1.55 }}>
+        <div style={{ color: 'var(--mv-ink-52)', fontSize: 12, marginBottom: 16, lineHeight: 1.55 }}>
           Controls when rate card projection volume mixes are automatically updated from actual billing data.
           The DPD-ND2KG service is always counted as DPD-32 in the mix.
         </div>
@@ -205,21 +205,21 @@ export default function BillingSettings() {
             </select>
           </div>
         </div>
-        <div style={{ marginTop: 10, fontSize: 12, color: '#64748B' }}>
+        <div style={{ marginTop: 10, fontSize: 12, color: 'var(--mv-ink-52)' }}>
           Next refresh: {nextRunDate(form.volume_mix_refresh_day, form.volume_mix_refresh_hour, 0)}
         </div>
       </div>
 
       {/* Next run preview */}
-      <div style={{ ...sectionStyle, background: 'rgba(66,165,245,0.05)', border: '1px solid rgba(66,165,245,0.15)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: '#42A5F5' }}>
+      <div style={{ ...sectionStyle, background: 'color-mix(in srgb, var(--mv-teal) 5%, transparent)', border: '1px solid var(--mv-teal-200)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--mv-teal)' }}>
           <Clock size={15} />
           <span style={{ fontSize: 13, fontWeight: 600 }}>
             Next weekly run: {nextRunDate(form.billing_day_of_week, form.billing_hour, form.billing_minute)}
           </span>
         </div>
         {settings?.last_run_at && (
-          <div style={{ color: '#64748B', fontSize: 12, marginTop: 6 }}>
+          <div style={{ color: 'var(--mv-ink-52)', fontSize: 12, marginTop: 6 }}>
             Last run: {new Date(settings.last_run_at).toLocaleString('en-GB')}
           </div>
         )}
@@ -232,8 +232,8 @@ export default function BillingSettings() {
           disabled={saveMutation.isPending}
           style={{
             display: 'flex', alignItems: 'center', gap: 8,
-            background: saved ? 'rgba(15,122,70,0.15)' : 'rgba(15,122,70,0.12)',
-            border: `1px solid ${saved ? 'rgba(15,122,70,0.5)' : 'rgba(15,122,70,0.3)'}`,
+            background: 'var(--mv-purple-100)',
+            border: `1px solid ${saved ? 'color-mix(in srgb, var(--mv-green) 50%, transparent)' : 'var(--mv-purple-200)'}`,
             borderRadius: 8, padding: '9px 20px', fontSize: 13, fontWeight: 700,
             color: 'var(--mv-green)', cursor: 'pointer',
           }}
@@ -247,9 +247,9 @@ export default function BillingSettings() {
           disabled={runNowMutation.isPending}
           style={{
             display: 'flex', alignItems: 'center', gap: 8,
-            background: 'rgba(66,165,245,0.1)', border: '1px solid rgba(66,165,245,0.3)',
+            background: 'var(--mv-teal-100)', border: '1px solid var(--mv-teal-200)',
             borderRadius: 8, padding: '9px 20px', fontSize: 13, fontWeight: 700,
-            color: '#42A5F5', cursor: 'pointer',
+            color: 'var(--mv-teal)', cursor: 'pointer',
           }}
         >
           <Play size={14} />
@@ -259,20 +259,20 @@ export default function BillingSettings() {
 
       {/* Run result */}
       {runResult && (
-        <div style={{ marginTop: 16, background: 'rgba(15,122,70,0.07)', border: '1px solid rgba(15,122,70,0.2)', borderRadius: 10, padding: '14px 18px' }}>
+        <div style={{ marginTop: 16, background: 'color-mix(in srgb, var(--mv-green) 7%, transparent)', border: '1px solid var(--mv-purple-200)', borderRadius: 10, padding: '14px 18px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--mv-green)', fontWeight: 700, marginBottom: 8 }}>
             <CheckCircle size={15} /> Billing run complete
           </div>
-          <div style={{ color: '#334155', fontSize: 13 }}>
+          <div style={{ color: 'var(--mv-ink-78)', fontSize: 13 }}>
             <div>{runResult.charges_queued} charges moved to Awaiting Reconciliation</div>
-            <div style={{ color: '#64748B', fontSize: 12, marginTop: 4 }}>
+            <div style={{ color: 'var(--mv-ink-52)', fontSize: 12, marginTop: 4 }}>
               {runResult.customers_processed} customers processed · Cycles: {runResult.due_cycles?.join(', ') || 'none due'}
             </div>
           </div>
           {runResult.details?.length > 0 && (
-            <div style={{ marginTop: 10, borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: 10 }}>
+            <div style={{ marginTop: 10, borderTop: '1px solid var(--mv-hairline)', paddingTop: 10 }}>
               {runResult.details.map((d, i) => (
-                <div key={i} style={{ fontSize: 12, color: '#64748B', display: 'flex', justifyContent: 'space-between' }}>
+                <div key={i} style={{ fontSize: 12, color: 'var(--mv-ink-52)', display: 'flex', justifyContent: 'space-between' }}>
                   <span>{d.name} ({d.account})</span>
                   <span style={{ color: 'var(--mv-green)' }}>{d.charges_queued} charges</span>
                 </div>
@@ -283,7 +283,7 @@ export default function BillingSettings() {
       )}
 
       {runError && (
-        <div style={{ marginTop: 16, background: 'rgba(244,67,54,0.07)', border: '1px solid rgba(244,67,54,0.2)', borderRadius: 10, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 10, color: '#F44336', fontSize: 13 }}>
+        <div style={{ marginTop: 16, background: 'color-mix(in srgb, var(--mv-magenta) 7%, transparent)', border: '1px solid var(--mv-magenta-200)', borderRadius: 10, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 10, color: 'var(--mv-magenta)', fontSize: 13 }}>
           <AlertCircle size={15} /> {runError}
         </div>
       )}

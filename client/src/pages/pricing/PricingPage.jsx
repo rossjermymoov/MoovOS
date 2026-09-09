@@ -48,18 +48,18 @@ const fmtD = (dt) => { try { return format(parseISO(dt), 'd MMM yy'); } catch { 
 // ─── Status config ────────────────────────────────────────────────────────────
 
 const STATUS = {
-  quote:            { label: 'Quote',            color: '#F59E0B', bg: 'rgba(245,158,11,0.12)',  border: 'rgba(245,158,11,0.3)' },
-  pending_approval: { label: 'Pending Approval', color: '#FB923C', bg: 'rgba(251,146,60,0.12)',  border: 'rgba(251,146,60,0.3)' },
-  approved:         { label: 'Approved',          color: '#60A5FA', bg: 'rgba(96,165,250,0.12)',  border: 'rgba(96,165,250,0.3)' },
-  sent:             { label: 'Sent',              color: '#A78BFA', bg: 'rgba(167,139,250,0.12)', border: 'rgba(167,139,250,0.3)' },
-  form_returned:    { label: 'Form Returned',     color: '#F59E0B', bg: 'rgba(245,158,11,0.12)',  border: 'rgba(245,158,11,0.3)' },
-  onboarding:       { label: 'Onboarding',        color: '#34D399', bg: 'rgba(52,211,153,0.12)',  border: 'rgba(52,211,153,0.3)' },
-  converted:        { label: 'Converted',         color: 'var(--mv-green)', bg: 'rgba(15,122,70,0.12)',    border: 'rgba(15,122,70,0.3)' },
-  lost:             { label: 'Lost',              color: '#EF4444', bg: 'rgba(239,68,68,0.12)',   border: 'rgba(239,68,68,0.3)' },
+  quote:            { label: 'Quote',            color: 'var(--mv-amber-deep)', bg: 'var(--mv-amber-100)',  border: 'var(--mv-amber-200)' },
+  pending_approval: { label: 'Pending Approval', color: 'var(--mv-amber-deep)', bg: 'var(--mv-amber-100)',  border: 'var(--mv-amber-200)' },
+  approved:         { label: 'Approved',          color: 'var(--mv-teal)', bg: 'var(--mv-teal-100)',  border: 'var(--mv-teal-200)' },
+  sent:             { label: 'Sent',              color: 'var(--mv-purple)', bg: 'var(--mv-purple-100)', border: 'var(--mv-purple-200)' },
+  form_returned:    { label: 'Form Returned',     color: 'var(--mv-amber-deep)', bg: 'var(--mv-amber-100)',  border: 'var(--mv-amber-200)' },
+  onboarding:       { label: 'Onboarding',        color: 'var(--mv-green)', bg: 'var(--mv-purple-100)',  border: 'var(--mv-purple-200)' },
+  converted:        { label: 'Converted',         color: 'var(--mv-green)', bg: 'var(--mv-purple-100)',    border: 'var(--mv-purple-200)' },
+  lost:             { label: 'Lost',              color: 'var(--mv-magenta)', bg: 'var(--mv-magenta-100)',   border: 'var(--mv-magenta-200)' },
 };
 
 function StatusBadge({ status }) {
-  const c = STATUS[status] || { label: status, color: '#64748B', bg: 'rgba(0,0,0,0.06)', border: 'rgba(0,0,0,0.08)' };
+  const c = STATUS[status] || { label: status, color: 'var(--mv-ink-52)', bg: 'color-mix(in srgb, var(--mv-ink) 6%, transparent)', border: 'color-mix(in srgb, var(--mv-ink) 8%, transparent)' };
   return (
     <span style={{ display: 'inline-flex', alignItems: 'center', background: c.bg,
       border: `1px solid ${c.border}`, color: c.color, borderRadius: 20,
@@ -71,23 +71,23 @@ function StatusBadge({ status }) {
 
 // ─── Stat card ────────────────────────────────────────────────────────────────
 
-function StatCard({ label, value, color = '#64748B', tooltip, bg = 'rgba(0,0,0,0.03)' }) {
+function StatCard({ label, value, color = 'var(--mv-ink-52)', tooltip, bg = 'color-mix(in srgb, var(--mv-ink) 3%, transparent)' }) {
   const [open, setOpen] = useState(false);
   return (
     <div onMouseEnter={() => tooltip && setOpen(true)} onMouseLeave={() => setOpen(false)}
-      style={{ position: 'relative', background: bg, border: `1px solid ${color}33`,
+      style={{ position: 'relative', background: bg, border: `1px solid color-mix(in srgb, ${color} 20%, transparent)`,
         borderRadius: 10, padding: '14px 18px', minWidth: 130, flex: 1 }}>
-      <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{label}</div>
+      <div style={{ fontSize: 11, color: 'var(--mv-ink-52)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{label}</div>
       <div style={{ fontSize: 26, fontWeight: 800, color }}>{value}</div>
       {tooltip && open && tooltip.length > 0 && (
         <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, zIndex: 200,
-          background: '#1A1B3A', border: '1px solid rgba(0,0,0,0.10)',
+          background: 'var(--mv-surface)', border: '1px solid color-mix(in srgb, var(--mv-ink) 10%, transparent)',
           borderRadius: 8, padding: '10px 14px', minWidth: 220, boxShadow: '0 8px 24px rgba(0,0,0,0.6)' }}>
-          <div style={{ fontSize: 11, color: '#64748B', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>In Onboarding</div>
+          <div style={{ fontSize: 11, color: 'var(--mv-ink-52)', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>In Onboarding</div>
           {tooltip.map(t => (
-            <div key={t.id} style={{ fontSize: 12, color: '#334155', padding: '3px 0', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+            <div key={t.id} style={{ fontSize: 12, color: 'var(--mv-ink-78)', padding: '3px 0', borderBottom: '1px solid color-mix(in srgb, var(--mv-ink) 6%, transparent)' }}>
               <span style={{ fontWeight: 700 }}>{t.company_name}</span>
-              <span style={{ color: '#64748B', marginLeft: 6 }}>{t.contact_name}</span>
+              <span style={{ color: 'var(--mv-ink-52)', marginLeft: 6 }}>{t.contact_name}</span>
             </div>
           ))}
         </div>
@@ -105,19 +105,19 @@ const COURIER_LABELS = { DPD: 'DPD', DHL: 'DHL', EVRI: 'Evri', UPS: 'UPS', ROYAL
 
 const inputStyle = {
   width: '100%', boxSizing: 'border-box',
-  background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.10)',
-  borderRadius: 7, padding: '8px 11px', color: '#0F172A', fontSize: 13, outline: 'none',
+  background: 'color-mix(in srgb, var(--mv-ink) 6%, transparent)', border: '1px solid color-mix(in srgb, var(--mv-ink) 10%, transparent)',
+  borderRadius: 7, padding: '8px 11px', color: 'var(--mv-ink)', fontSize: 13, outline: 'none',
 };
 const selectStyle = { ...inputStyle };
 
 function Field({ label, error, children, required }) {
   return (
     <div style={{ marginBottom: 14 }}>
-      <label style={{ display: 'block', fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }}>
-        {label}{required && <span style={{ color: '#EF4444', marginLeft: 3 }}>*</span>}
+      <label style={{ display: 'block', fontSize: 11, color: 'var(--mv-ink-52)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }}>
+        {label}{required && <span style={{ color: 'var(--mv-magenta)', marginLeft: 3 }}>*</span>}
       </label>
       {children}
-      {error && <div style={{ fontSize: 11, color: '#EF4444', marginTop: 4 }}>{error}</div>}
+      {error && <div style={{ fontSize: 11, color: 'var(--mv-magenta-deep)', marginTop: 4 }}>{error}</div>}
     </div>
   );
 }
@@ -133,16 +133,16 @@ function StepIndicator({ current }) {
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
             <div style={{
               width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: i < current ? 'var(--mv-green)' : i === current ? '#6366F1' : 'rgba(0,0,0,0.08)',
-              border: `2px solid ${i < current ? 'var(--mv-green)' : i === current ? '#818CF8' : 'rgba(0,0,0,0.10)'}`,
-              fontSize: 12, fontWeight: 700, color: i <= current ? '#fff' : '#475569',
+              background: i < current ? 'var(--mv-green)' : i === current ? 'var(--mv-purple)' : 'color-mix(in srgb, var(--mv-ink) 8%, transparent)',
+              border: `2px solid ${i < current ? 'var(--mv-green)' : i === current ? 'var(--mv-purple)' : 'color-mix(in srgb, var(--mv-ink) 10%, transparent)'}`,
+              fontSize: 12, fontWeight: 700, color: i <= current ? 'var(--mv-on-brand)' : 'var(--mv-ink-62)',
             }}>
               {i < current ? <Check size={13} /> : i + 1}
             </div>
-            <div style={{ fontSize: 10, color: i === current ? '#A5B4FC' : '#475569', fontWeight: 600 }}>{s}</div>
+            <div style={{ fontSize: 10, color: i === current ? 'var(--mv-purple)' : 'var(--mv-ink-62)', fontWeight: 600 }}>{s}</div>
           </div>
           {i < steps.length - 1 && (
-            <div style={{ flex: 1, height: 2, background: i < current ? 'var(--mv-green)' : 'rgba(0,0,0,0.08)', margin: '0 8px', marginBottom: 18 }} />
+            <div style={{ flex: 1, height: 2, background: i < current ? 'var(--mv-green)' : 'color-mix(in srgb, var(--mv-ink) 8%, transparent)', margin: '0 8px', marginBottom: 18 }} />
           )}
         </div>
       ))}
@@ -221,15 +221,15 @@ function CreateWizard({ onClose, onCreated }) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 1000,
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div style={{ background: '#14152E', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 14,
+      <div style={{ background: 'var(--mv-surface)', border: '1px solid color-mix(in srgb, var(--mv-ink) 8%, transparent)', borderRadius: 14,
         width: '100%', maxWidth: step === 1 ? 680 : 520, maxHeight: '88vh',
         display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
         {/* Header */}
-        <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid rgba(0,0,0,0.07)' }}>
+        <div style={{ padding: '20px 24px 16px', borderBottom: '1px solid color-mix(in srgb, var(--mv-ink) 7%, transparent)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-            <div style={{ fontSize: 17, fontWeight: 700, color: '#0F172A' }}>New Rate Card</div>
-            <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', padding: 4 }}>
+            <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--mv-ink)' }}>New Rate Card</div>
+            <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--mv-ink-52)', cursor: 'pointer', padding: 4 }}>
               <X size={18} />
             </button>
           </div>
@@ -242,7 +242,7 @@ function CreateWizard({ onClose, onCreated }) {
           {/* ── Step 0: Prospect ─────────────────────────────────────────────── */}
           {step === 0 && (
             <div>
-              <div style={{ fontSize: 13, color: '#64748B', marginBottom: 18 }}>
+              <div style={{ fontSize: 13, color: 'var(--mv-ink-52)', marginBottom: 18 }}>
                 Who is this rate card for?
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0 16px' }}>
@@ -282,7 +282,7 @@ function CreateWizard({ onClose, onCreated }) {
           {/* ── Step 1: Carrier + Template ────────────────────────────────────── */}
           {step === 1 && (
             <div>
-              <div style={{ fontSize: 13, color: '#64748B', marginBottom: 18 }}>
+              <div style={{ fontSize: 13, color: 'var(--mv-ink-52)', marginBottom: 18 }}>
                 Select a carrier, then optionally pick a template to start from.
                 You can edit all rates on the next screen.
               </div>
@@ -293,9 +293,9 @@ function CreateWizard({ onClose, onCreated }) {
                     <button key={c} onClick={() => { setSelectedCourier(c); setSelectedTemplate(null); setErrors({}); }}
                       style={{
                         padding: '8px 18px', borderRadius: 8,
-                        border: `1px solid ${selectedCourier === c ? '#6366F1' : 'rgba(0,0,0,0.10)'}`,
-                        background: selectedCourier === c ? 'rgba(99,102,241,0.15)' : 'rgba(0,0,0,0.03)',
-                        color: selectedCourier === c ? '#A5B4FC' : '#64748B',
+                        border: `1px solid ${selectedCourier === c ? 'var(--mv-purple)' : 'color-mix(in srgb, var(--mv-ink) 10%, transparent)'}`,
+                        background: selectedCourier === c ? 'var(--mv-purple-100)' : 'color-mix(in srgb, var(--mv-ink) 3%, transparent)',
+                        color: selectedCourier === c ? 'var(--mv-purple)' : 'var(--mv-ink-52)',
                         fontWeight: 700, fontSize: 13, cursor: 'pointer',
                       }}>
                       {COURIER_LABELS[c]}
@@ -306,31 +306,31 @@ function CreateWizard({ onClose, onCreated }) {
 
               {selectedCourier && (
                 <div style={{ marginTop: 20 }}>
-                  <div style={{ fontSize: 11, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
-                    Template <span style={{ color: '#475569', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional — start from scratch or pick one)</span>
+                  <div style={{ fontSize: 11, color: 'var(--mv-ink-52)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
+                    Template <span style={{ color: 'var(--mv-ink-62)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional — start from scratch or pick one)</span>
                   </div>
 
                   {tplLoading ? (
-                    <div style={{ color: '#64748B', fontSize: 13, padding: '16px 0' }}>Loading templates…</div>
+                    <div style={{ color: 'var(--mv-ink-52)', fontSize: 13, padding: '16px 0' }}>Loading templates…</div>
                   ) : templates.length === 0 ? (
-                    <div style={{ background: 'rgba(0,0,0,0.03)', border: '1px solid rgba(0,0,0,0.07)',
+                    <div style={{ background: 'color-mix(in srgb, var(--mv-ink) 3%, transparent)', border: '1px solid color-mix(in srgb, var(--mv-ink) 7%, transparent)',
                       borderRadius: 9, padding: '20px', textAlign: 'center' }}>
-                      <div style={{ fontSize: 13, color: '#64748B', marginBottom: 6 }}>No templates yet for {COURIER_LABELS[selectedCourier]}</div>
-                      <div style={{ fontSize: 11, color: '#475569' }}>You can build them in Carriers → Customer Rate Card Templates. For now, continue and set rates manually.</div>
+                      <div style={{ fontSize: 13, color: 'var(--mv-ink-52)', marginBottom: 6 }}>No templates yet for {COURIER_LABELS[selectedCourier]}</div>
+                      <div style={{ fontSize: 11, color: 'var(--mv-ink-62)' }}>You can build them in Carriers → Customer Rate Card Templates. For now, continue and set rates manually.</div>
                     </div>
                   ) : (
                     <>
                       {/* "Start from scratch" option */}
                       <div onClick={() => setSelectedTemplate(null)}
                         style={{
-                          border: `1px solid ${selectedTemplate === null ? '#6366F1' : 'rgba(0,0,0,0.08)'}`,
-                          background: selectedTemplate === null ? 'rgba(99,102,241,0.08)' : 'rgba(0,0,0,0.02)',
+                          border: `1px solid ${selectedTemplate === null ? 'var(--mv-purple)' : 'color-mix(in srgb, var(--mv-ink) 8%, transparent)'}`,
+                          background: selectedTemplate === null ? 'var(--mv-purple-100)' : 'color-mix(in srgb, var(--mv-ink) 2%, transparent)',
                           borderRadius: 9, padding: '11px 14px', cursor: 'pointer', marginBottom: 8,
                         }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: selectedTemplate === null ? '#A5B4FC' : '#666' }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: selectedTemplate === null ? 'var(--mv-purple)' : 'var(--mv-ink-52)' }}>
                           Start from scratch
                         </div>
-                        <div style={{ fontSize: 11, color: '#475569', marginTop: 2 }}>Empty rate table — fill in all prices manually</div>
+                        <div style={{ fontSize: 11, color: 'var(--mv-ink-62)', marginTop: 2 }}>Empty rate table — fill in all prices manually</div>
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                         {templates.map(t => {
@@ -338,18 +338,18 @@ function CreateWizard({ onClose, onCreated }) {
                           return (
                             <div key={t.id} onClick={() => setSelectedTemplate(t)}
                               style={{
-                                border: `1px solid ${sel ? '#6366F1' : 'rgba(0,0,0,0.08)'}`,
-                                background: sel ? 'rgba(99,102,241,0.1)' : 'rgba(0,0,0,0.03)',
+                                border: `1px solid ${sel ? 'var(--mv-purple)' : 'color-mix(in srgb, var(--mv-ink) 8%, transparent)'}`,
+                                background: sel ? 'var(--mv-purple-100)' : 'color-mix(in srgb, var(--mv-ink) 3%, transparent)',
                                 borderRadius: 9, padding: '11px 14px', cursor: 'pointer',
                               }}>
-                              <div style={{ fontSize: 13, fontWeight: 700, color: sel ? '#A5B4FC' : '#334155', marginBottom: 3 }}>{t.name}</div>
-                              <div style={{ fontSize: 11, color: '#64748B' }}>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: sel ? 'var(--mv-purple)' : 'var(--mv-ink-78)', marginBottom: 3 }}>{t.name}</div>
+                              <div style={{ fontSize: 11, color: 'var(--mv-ink-52)' }}>
                                 {(t.rates || []).filter(r => !r.is_international).length} domestic ·&nbsp;
                                 {(t.rates || []).filter(r => r.is_international).length} intl rates
                               </div>
                               {t.category_name && (
-                                <span style={{ fontSize: 10, color: '#6366F1', background: 'rgba(99,102,241,0.1)',
-                                  border: '1px solid rgba(99,102,241,0.2)', borderRadius: 10, padding: '1px 7px',
+                                <span style={{ fontSize: 10, color: 'var(--mv-purple)', background: 'var(--mv-purple-100)',
+                                  border: '1px solid var(--mv-purple-200)', borderRadius: 10, padding: '1px 7px',
                                   fontWeight: 700, marginTop: 4, display: 'inline-block' }}>
                                   {t.category_name}
                                 </span>
@@ -364,7 +364,7 @@ function CreateWizard({ onClose, onCreated }) {
               )}
 
               {(createProspectMut.error || createRCMut.error) && (
-                <div style={{ fontSize: 12, color: '#EF4444', marginTop: 12, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 7, padding: '8px 12px' }}>
+                <div style={{ fontSize: 12, color: 'var(--mv-magenta-deep)', marginTop: 12, background: 'var(--mv-magenta-100)', border: '1px solid var(--mv-magenta-200)', borderRadius: 7, padding: '8px 12px' }}>
                   {createProspectMut.error?.message || createRCMut.error?.message}
                 </div>
               )}
@@ -373,19 +373,19 @@ function CreateWizard({ onClose, onCreated }) {
         </div>
 
         {/* Footer */}
-        <div style={{ padding: '14px 24px', borderTop: '1px solid rgba(0,0,0,0.07)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ padding: '14px 24px', borderTop: '1px solid color-mix(in srgb, var(--mv-ink) 7%, transparent)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <button onClick={step === 0 ? onClose : () => setStep(0)}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(0,0,0,0.06)',
-              border: '1px solid rgba(0,0,0,0.08)', borderRadius: 7, padding: '8px 16px',
-              color: '#64748B', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>
+            style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'color-mix(in srgb, var(--mv-ink) 6%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--mv-ink) 8%, transparent)', borderRadius: 7, padding: '8px 16px',
+              color: 'var(--mv-ink-52)', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>
             <ArrowLeft size={14} />{step === 0 ? 'Cancel' : 'Back'}
           </button>
           <button onClick={handleNext} disabled={busy}
             style={{ display: 'flex', alignItems: 'center', gap: 6,
-              background: step === 1 ? 'rgba(15,122,70,0.12)' : 'rgba(99,102,241,0.2)',
-              border: `1px solid ${step === 1 ? 'rgba(15,122,70,0.4)' : '#6366F1'}`,
+              background: step === 1 ? 'var(--mv-purple-100)' : 'var(--mv-purple-100)',
+              border: `1px solid ${step === 1 ? 'var(--mv-purple-200)' : 'var(--mv-purple)'}`,
               borderRadius: 7, padding: '8px 20px',
-              color: step === 1 ? 'var(--mv-green)' : '#A5B4FC',
+              color: step === 1 ? 'var(--mv-green)' : 'var(--mv-purple)',
               fontSize: 13, cursor: 'pointer', fontWeight: 700, opacity: busy ? 0.6 : 1 }}>
             {busy ? <RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> : null}
             {step === 0 ? <><span>Next</span><ArrowRight size={14} /></> : <><span>Open Rate Editor</span><ArrowRight size={14} /></>}
@@ -405,31 +405,31 @@ function ApprovalBanner({ approvals, onReview }) {
     <div style={{ marginBottom: 16 }}>
       <div onClick={() => setOpen(p => !p)}
         style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
-          background: 'rgba(251,146,60,0.08)', border: '1px solid rgba(251,146,60,0.3)',
+          background: 'var(--mv-amber-100)', border: '1px solid var(--mv-amber-200)',
           borderRadius: open ? '9px 9px 0 0' : 9, padding: '10px 16px' }}>
-        <AlertCircle size={15} color="#FB923C" />
-        <span style={{ fontSize: 13, color: '#FB923C', fontWeight: 700 }}>
+        <AlertCircle size={15} color="var(--mv-amber)" />
+        <span style={{ fontSize: 13, color: 'var(--mv-amber-deep)', fontWeight: 700 }}>
           {approvals.length} rate card{approvals.length > 1 ? 's' : ''} awaiting your approval
         </span>
-        <ChevronDown size={14} color="#FB923C" style={{ marginLeft: 'auto', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+        <ChevronDown size={14} color="var(--mv-amber)" style={{ marginLeft: 'auto', transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
       </div>
       {open && (
-        <div style={{ border: '1px solid rgba(251,146,60,0.2)', borderTop: 'none', borderRadius: '0 0 9px 9px', overflow: 'hidden' }}>
+        <div style={{ border: '1px solid var(--mv-amber-200)', borderTop: 'none', borderRadius: '0 0 9px 9px', overflow: 'hidden' }}>
           {approvals.map(a => (
             <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px',
-              borderBottom: '1px solid rgba(0,0,0,0.04)', background: 'rgba(251,146,60,0.04)' }}>
+              borderBottom: '1px solid color-mix(in srgb, var(--mv-ink) 4%, transparent)', background: 'color-mix(in srgb, var(--mv-amber) 4%, transparent)' }}>
               <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 13, color: '#334155', fontWeight: 700 }}>{a.company_name}</div>
-                <div style={{ fontSize: 11, color: '#64748B' }}>
+                <div style={{ fontSize: 13, color: 'var(--mv-ink-78)', fontWeight: 700 }}>{a.company_name}</div>
+                <div style={{ fontSize: 11, color: 'var(--mv-ink-52)' }}>
                   {a.courier_code} · submitted by {a.requested_by_name} · {fmtD(a.requested_at)}
                 </div>
               </div>
               {a.projected_weekly_revenue && (
-                <div style={{ fontSize: 12, color: '#A5B4FC', fontWeight: 700 }}>{gbp(a.projected_weekly_revenue)}/wk</div>
+                <div style={{ fontSize: 12, color: 'var(--mv-purple)', fontWeight: 700 }}>{gbp(a.projected_weekly_revenue)}/wk</div>
               )}
               <button onClick={() => onReview(a)}
-                style={{ background: 'rgba(99,102,241,0.15)', border: '1px solid #6366F1', borderRadius: 6,
-                  padding: '5px 14px', color: '#A5B4FC', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                style={{ background: 'var(--mv-purple-100)', border: '1px solid var(--mv-purple)', borderRadius: 6,
+                  padding: '5px 14px', color: 'var(--mv-purple)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
                 Review
               </button>
             </div>
@@ -459,14 +459,14 @@ function ReviewModal({ approval, onClose, onDone, staffList }) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.75)', zIndex: 1100,
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div style={{ background: '#14152E', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 14, width: '100%', maxWidth: 460, padding: 24 }}>
+      <div style={{ background: 'var(--mv-surface)', border: '1px solid color-mix(in srgb, var(--mv-ink) 8%, transparent)', borderRadius: 14, width: '100%', maxWidth: 460, padding: 24 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-          <div style={{ fontSize: 16, fontWeight: 700, color: '#0F172A' }}>Review Rate Card</div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer' }}><X size={18} /></button>
+          <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--mv-ink)' }}>Review Rate Card</div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--mv-ink-52)', cursor: 'pointer' }}><X size={18} /></button>
         </div>
-        <div style={{ marginBottom: 16, padding: '12px 14px', background: 'rgba(0,0,0,0.03)', borderRadius: 8 }}>
-          <div style={{ fontSize: 14, color: '#334155', fontWeight: 700 }}>{approval.company_name}</div>
-          <div style={{ fontSize: 12, color: '#64748B', marginTop: 3 }}>
+        <div style={{ marginBottom: 16, padding: '12px 14px', background: 'color-mix(in srgb, var(--mv-ink) 3%, transparent)', borderRadius: 8 }}>
+          <div style={{ fontSize: 14, color: 'var(--mv-ink-78)', fontWeight: 700 }}>{approval.company_name}</div>
+          <div style={{ fontSize: 12, color: 'var(--mv-ink-52)', marginTop: 3 }}>
             {approval.courier_code} · submitted by {approval.requested_by_name}
             {approval.projected_weekly_revenue ? ` · ${gbp(approval.projected_weekly_revenue)}/wk` : ''}
           </div>
@@ -486,17 +486,17 @@ function ReviewModal({ approval, onClose, onDone, staffList }) {
         </Field>
         <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
           <button onClick={() => reviewMut.mutate({ status: 'rejected' })} disabled={!reviewerId || reviewMut.isPending}
-            style={{ flex: 1, padding: '9px 0', background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.35)',
-              borderRadius: 7, color: '#EF4444', fontWeight: 700, fontSize: 13, cursor: 'pointer', opacity: !reviewerId ? 0.5 : 1 }}>
+            style={{ flex: 1, padding: '9px 0', background: 'var(--mv-magenta-100)', border: '1px solid var(--mv-magenta-200)',
+              borderRadius: 7, color: 'var(--mv-magenta)', fontWeight: 700, fontSize: 13, cursor: 'pointer', opacity: !reviewerId ? 0.5 : 1 }}>
             <X size={13} style={{ marginRight: 5, verticalAlign: 'middle' }} />Reject
           </button>
           <button onClick={() => reviewMut.mutate({ status: 'approved' })} disabled={!reviewerId || reviewMut.isPending}
-            style={{ flex: 1, padding: '9px 0', background: 'rgba(15,122,70,0.12)', border: '1px solid rgba(15,122,70,0.35)',
+            style={{ flex: 1, padding: '9px 0', background: 'var(--mv-purple-100)', border: '1px solid var(--mv-purple-200)',
               borderRadius: 7, color: 'var(--mv-green)', fontWeight: 700, fontSize: 13, cursor: 'pointer', opacity: !reviewerId ? 0.5 : 1 }}>
             <Check size={13} style={{ marginRight: 5, verticalAlign: 'middle' }} />Approve
           </button>
         </div>
-        {reviewMut.error && <div style={{ fontSize: 12, color: '#EF4444', marginTop: 8, textAlign: 'center' }}>{reviewMut.error.message}</div>}
+        {reviewMut.error && <div style={{ fontSize: 12, color: 'var(--mv-magenta)', marginTop: 8, textAlign: 'center' }}>{reviewMut.error.message}</div>}
       </div>
     </div>
   );
@@ -543,8 +543,8 @@ function ProspectRow({ prospect, staffList, navigate }) {
   const couriers = [...new Set((prospect.rate_cards || []).map(r => r.courier_code))].join(', ');
 
   const cardBase = {
-    background: expanded ? 'rgba(99,102,241,0.04)' : 'rgba(255,255,255,0.015)',
-    border: `1px solid ${expanded ? 'rgba(99,102,241,0.2)' : 'rgba(0,0,0,0.07)'}`,
+    background: expanded ? 'color-mix(in srgb, var(--mv-purple) 4%, transparent)' : 'color-mix(in srgb, var(--mv-ink) 1.5%, transparent)',
+    border: `1px solid ${expanded ? 'var(--mv-purple-200)' : 'color-mix(in srgb, var(--mv-ink) 7%, transparent)'}`,
     borderRadius: 12, marginBottom: 8, overflow: 'hidden',
     transition: 'border-color 0.15s',
   };
@@ -560,7 +560,7 @@ function ProspectRow({ prospect, staffList, navigate }) {
 
       {/* ── Edit form ── */}
       {editing && (
-        <div style={{ background: 'rgba(99,102,241,0.06)', borderBottom: '1px solid rgba(99,102,241,0.18)', padding: '16px 20px' }}>
+        <div style={{ background: 'color-mix(in srgb, var(--mv-purple) 6%, transparent)', borderBottom: '1px solid var(--mv-purple-200)', padding: '16px 20px' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '0 14px', marginBottom: 12 }}>
             {[
               { key: 'company_name', label: 'Company Name' },
@@ -569,16 +569,16 @@ function ProspectRow({ prospect, staffList, navigate }) {
               { key: 'contact_phone', label: 'Phone' },
             ].map(({ key, label }) => (
               <div key={key}>
-                <label style={{ fontSize: 10, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 }}>{label}</label>
+                <label style={{ fontSize: 10, color: 'var(--mv-ink-52)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', display: 'block', marginBottom: 5 }}>{label}</label>
                 <input value={editForm[key] ?? ''} onChange={e => setEditForm(p => ({ ...p, [key]: e.target.value }))}
-                  style={{ width: '100%', boxSizing: 'border-box', background: 'rgba(0,0,0,0.07)', border: '1px solid rgba(255,255,255,0.14)', borderRadius: 7, padding: '8px 11px', color: '#0F172A', fontSize: 13, outline: 'none' }} />
+                  style={{ width: '100%', boxSizing: 'border-box', background: 'color-mix(in srgb, var(--mv-ink) 7%, transparent)', border: '1px solid var(--mv-divider)', borderRadius: 7, padding: '8px 11px', color: 'var(--mv-ink)', fontSize: 13, outline: 'none' }} />
               </div>
             ))}
           </div>
           <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button onClick={() => setEditing(false)} style={{ ...btnBase, padding: '8px 18px', fontSize: 13, background: 'rgba(0,0,0,0.06)', borderColor: 'rgba(0,0,0,0.10)', color: '#64748B' }}>Cancel</button>
+            <button onClick={() => setEditing(false)} style={{ ...btnBase, padding: '8px 18px', fontSize: 13, background: 'color-mix(in srgb, var(--mv-ink) 6%, transparent)', borderColor: 'color-mix(in srgb, var(--mv-ink) 10%, transparent)', color: 'var(--mv-ink-52)' }}>Cancel</button>
             <button onClick={() => patchMut.mutate(editForm)} disabled={patchMut.isPending}
-              style={{ ...btnBase, padding: '8px 20px', fontSize: 13, background: 'rgba(99,102,241,0.18)', borderColor: '#6366F1', color: '#A5B4FC' }}>
+              style={{ ...btnBase, padding: '8px 20px', fontSize: 13, background: 'var(--mv-purple-100)', borderColor: 'var(--mv-purple)', color: 'var(--mv-purple)' }}>
               Save Changes
             </button>
           </div>
@@ -587,13 +587,13 @@ function ProspectRow({ prospect, staffList, navigate }) {
 
       {/* ── Delete confirm ── */}
       {confirmDel && (
-        <div style={{ background: 'rgba(239,68,68,0.07)', borderBottom: '1px solid rgba(239,68,68,0.2)', padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 14, fontSize: 13, color: '#F87171' }}>
+        <div style={{ background: 'color-mix(in srgb, var(--mv-magenta) 7%, transparent)', borderBottom: '1px solid var(--mv-magenta-200)', padding: '12px 20px', display: 'flex', alignItems: 'center', gap: 14, fontSize: 13, color: 'var(--mv-magenta)' }}>
           <AlertCircle size={15} />
           <span>Delete <strong>{prospect.company_name}</strong>? This removes the prospect and all their rate cards.</span>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-            <button onClick={() => setConfirmDel(false)} style={{ ...btnBase, padding: '7px 16px', fontSize: 12, background: 'none', borderColor: 'rgba(0,0,0,0.08)', color: '#64748B' }}>Cancel</button>
+            <button onClick={() => setConfirmDel(false)} style={{ ...btnBase, padding: '7px 16px', fontSize: 12, background: 'none', borderColor: 'color-mix(in srgb, var(--mv-ink) 8%, transparent)', color: 'var(--mv-ink-52)' }}>Cancel</button>
             <button onClick={() => deleteMut.mutate()} disabled={deleteMut.isPending}
-              style={{ ...btnBase, padding: '7px 18px', fontSize: 12, background: 'rgba(239,68,68,0.18)', borderColor: 'rgba(239,68,68,0.5)', color: '#EF4444' }}>
+              style={{ ...btnBase, padding: '7px 18px', fontSize: 12, background: 'var(--mv-magenta-100)', borderColor: 'var(--mv-magenta-200)', color: 'var(--mv-magenta)' }}>
               Yes, Delete
             </button>
           </div>
@@ -606,23 +606,23 @@ function ProspectRow({ prospect, staffList, navigate }) {
 
           {/* Left: name + contact */}
           <div style={{ flex: '0 0 220px' }}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: '#1E293B', lineHeight: 1.2, marginBottom: 3 }}>{prospect.company_name}</div>
-            <div style={{ fontSize: 12, color: '#64748B' }}>{prospect.contact_name}</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--mv-ink)', lineHeight: 1.2, marginBottom: 3 }}>{prospect.company_name}</div>
+            <div style={{ fontSize: 12, color: 'var(--mv-ink-52)' }}>{prospect.contact_name}</div>
           </div>
 
           {/* Centre: meta chips */}
           <div style={{ flex: 1, display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
             <StatusBadge status={prospect.status} />
             {couriers && couriers.split(', ').map(c => (
-              <span key={c} style={{ fontSize: 12, fontWeight: 700, color: '#64748B', background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 6, padding: '3px 10px' }}>{c}</span>
+              <span key={c} style={{ fontSize: 12, fontWeight: 700, color: 'var(--mv-ink-52)', background: 'color-mix(in srgb, var(--mv-ink) 6%, transparent)', border: '1px solid color-mix(in srgb, var(--mv-ink) 8%, transparent)', borderRadius: 6, padding: '3px 10px' }}>{c}</span>
             ))}
             {topRC?.projected_weekly_revenue && (
-              <span style={{ fontSize: 13, fontWeight: 800, color: '#A5B4FC', background: 'rgba(99,102,241,0.1)', border: '1px solid rgba(99,102,241,0.25)', borderRadius: 6, padding: '3px 10px' }}>
+              <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--mv-purple)', background: 'var(--mv-purple-100)', border: '1px solid var(--mv-purple-200)', borderRadius: 6, padding: '3px 10px' }}>
                 {gbp(topRC.projected_weekly_revenue)}/wk
               </span>
             )}
             {prospect.assigned_to_name && (
-              <span style={{ fontSize: 12, color: '#64748B' }}>→ {prospect.assigned_to_name}</span>
+              <span style={{ fontSize: 12, color: 'var(--mv-ink-52)' }}>→ {prospect.assigned_to_name}</span>
             )}
           </div>
 
@@ -630,17 +630,17 @@ function ProspectRow({ prospect, staffList, navigate }) {
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }} onClick={e => e.stopPropagation()}>
             <button
               onClick={() => { setEditForm({ company_name: prospect.company_name, contact_name: prospect.contact_name, contact_email: prospect.contact_email || '', contact_phone: prospect.contact_phone || '' }); setEditing(true); setConfirmDel(false); }}
-              style={{ ...btnBase, padding: '8px 16px', fontSize: 12, background: 'rgba(0,0,0,0.06)', borderColor: 'rgba(0,0,0,0.10)', color: '#64748B' }}>
+              style={{ ...btnBase, padding: '8px 16px', fontSize: 12, background: 'color-mix(in srgb, var(--mv-ink) 6%, transparent)', borderColor: 'color-mix(in srgb, var(--mv-ink) 10%, transparent)', color: 'var(--mv-ink-52)' }}>
               <Edit2 size={13} /> Edit
             </button>
             <button
               onClick={() => { setConfirmDel(true); setEditing(false); }}
-              style={{ ...btnBase, padding: '8px 16px', fontSize: 12, background: 'rgba(239,68,68,0.08)', borderColor: 'rgba(239,68,68,0.25)', color: '#EF4444' }}>
+              style={{ ...btnBase, padding: '8px 16px', fontSize: 12, background: 'color-mix(in srgb, var(--mv-magenta) 8%, transparent)', borderColor: 'var(--mv-magenta-200)', color: 'var(--mv-magenta)' }}>
               <Trash2 size={13} /> Delete
             </button>
             <button
               onClick={() => setExpanded(p => !p)}
-              style={{ ...btnBase, padding: '8px 12px', fontSize: 12, background: 'rgba(0,0,0,0.03)', borderColor: 'rgba(0,0,0,0.08)', color: '#64748B' }}>
+              style={{ ...btnBase, padding: '8px 12px', fontSize: 12, background: 'color-mix(in srgb, var(--mv-ink) 3%, transparent)', borderColor: 'color-mix(in srgb, var(--mv-ink) 8%, transparent)', color: 'var(--mv-ink-52)' }}>
               {expanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
             </button>
           </div>
@@ -648,29 +648,29 @@ function ProspectRow({ prospect, staffList, navigate }) {
 
         {/* Contact details strip */}
         {(prospect.contact_email || prospect.contact_phone) && (
-          <div style={{ display: 'flex', gap: 20, marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(0,0,0,0.04)' }}>
+          <div style={{ display: 'flex', gap: 20, marginTop: 10, paddingTop: 10, borderTop: '1px solid color-mix(in srgb, var(--mv-ink) 4%, transparent)' }}>
             {prospect.contact_email && (
-              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#64748B' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--mv-ink-52)' }}>
                 <Mail size={12} /> {prospect.contact_email}
               </span>
             )}
             {prospect.contact_phone && (
-              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: '#64748B' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--mv-ink-52)' }}>
                 <Phone size={12} /> {prospect.contact_phone}
               </span>
             )}
-            <span style={{ fontSize: 12, color: '#475569', marginLeft: 'auto' }}>Added {fmtD(prospect.created_at)}</span>
+            <span style={{ fontSize: 12, color: 'var(--mv-ink-62)', marginLeft: 'auto' }}>Added {fmtD(prospect.created_at)}</span>
           </div>
         )}
       </div>
 
       {/* ── Rate cards (expanded) ── */}
       {expanded && (
-        <div style={{ borderTop: '1px solid rgba(0,0,0,0.07)', background: 'rgba(0,0,0,0.15)', padding: '14px 20px 16px' }}>
+        <div style={{ borderTop: '1px solid color-mix(in srgb, var(--mv-ink) 7%, transparent)', background: 'color-mix(in srgb, var(--mv-ink) 15%, transparent)', padding: '14px 20px 16px' }}>
           {rcLoading ? (
-            <div style={{ color: '#64748B', fontSize: 13 }}>Loading rate cards…</div>
+            <div style={{ color: 'var(--mv-ink-52)', fontSize: 13 }}>Loading rate cards…</div>
           ) : rateCards.length === 0 ? (
-            <div style={{ color: '#64748B', fontSize: 13 }}>No rate cards yet.</div>
+            <div style={{ color: 'var(--mv-ink-52)', fontSize: 13 }}>No rate cards yet.</div>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {rateCards.map(rc => {
@@ -678,22 +678,22 @@ function ProspectRow({ prospect, staffList, navigate }) {
                 const rateCount = (rc.rates || []).length;
                 return (
                   <div key={rc.id} style={{
-                    background: 'rgba(0,0,0,0.03)', border: '1px solid rgba(0,0,0,0.08)',
+                    background: 'color-mix(in srgb, var(--mv-ink) 3%, transparent)', border: '1px solid color-mix(in srgb, var(--mv-ink) 8%, transparent)',
                     borderRadius: 10, padding: '14px 16px',
                     display: 'flex', alignItems: 'center', gap: 16,
                   }}>
                     {/* RC details */}
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 700, color: '#334155', marginBottom: 4 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--mv-ink-78)', marginBottom: 4 }}>
                         {rc.courier_name || rc.courier_code}
                         {rc.template_name && (
-                          <span style={{ fontSize: 11, color: '#64748B', fontWeight: 400, marginLeft: 8 }}>({rc.template_name})</span>
+                          <span style={{ fontSize: 11, color: 'var(--mv-ink-52)', fontWeight: 400, marginLeft: 8 }}>({rc.template_name})</span>
                         )}
                       </div>
-                      <div style={{ display: 'flex', gap: 14, fontSize: 12, color: '#64748B' }}>
+                      <div style={{ display: 'flex', gap: 14, fontSize: 12, color: 'var(--mv-ink-52)' }}>
                         <span>{rateCount} rates</span>
                         {rc.weekly_parcels    && <span>{rc.weekly_parcels.toLocaleString('en-GB')} pcls/wk</span>}
-                        {rc.projected_weekly_profit && <span style={{ color: '#34D399', fontWeight: 700 }}>{gbp(rc.projected_weekly_profit)}/wk profit</span>}
+                        {rc.projected_weekly_profit && <span style={{ color: 'var(--mv-green)', fontWeight: 700 }}>{gbp(rc.projected_weekly_profit)}/wk profit</span>}
                       </div>
                     </div>
 
@@ -703,9 +703,9 @@ function ProspectRow({ prospect, staffList, navigate }) {
                       {approvalStatus && (
                         <span style={{
                           fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 6,
-                          background: approvalStatus === 'approved' ? 'rgba(52,211,153,0.12)' : approvalStatus === 'rejected' ? 'rgba(239,68,68,0.12)' : 'rgba(245,158,11,0.1)',
-                          color:      approvalStatus === 'approved' ? '#34D399'                : approvalStatus === 'rejected' ? '#EF4444'                : '#F59E0B',
-                          border:     `1px solid ${approvalStatus === 'approved' ? 'rgba(52,211,153,0.3)' : approvalStatus === 'rejected' ? 'rgba(239,68,68,0.3)' : 'rgba(245,158,11,0.2)'}`,
+                          background: approvalStatus === 'approved' ? 'var(--mv-purple-100)' : approvalStatus === 'rejected' ? 'var(--mv-magenta-100)' : 'var(--mv-amber-100)',
+                          color:      approvalStatus === 'approved' ? 'var(--mv-green)'       : approvalStatus === 'rejected' ? 'var(--mv-magenta)'      : 'var(--mv-amber-deep)',
+                          border:     `1px solid ${approvalStatus === 'approved' ? 'var(--mv-purple-200)' : approvalStatus === 'rejected' ? 'var(--mv-magenta-200)' : 'var(--mv-amber-200)'}`,
                         }}>
                           {approvalStatus === 'approved' ? '✓ Approved' : approvalStatus === 'rejected' ? '✗ Rejected' : '⏳ Pending'}
                         </span>
@@ -716,13 +716,13 @@ function ProspectRow({ prospect, staffList, navigate }) {
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0 }}>
                       {(rc.status === 'draft' || rc.status === 'rejected') && (
                         <button onClick={() => navigate(`/pricing/rate-card/${rc.id}`)}
-                          style={{ ...btnBase, padding: '9px 18px', fontSize: 13, background: 'rgba(0,0,0,0.07)', borderColor: 'rgba(0,0,0,0.12)', color: '#334155' }}>
+                          style={{ ...btnBase, padding: '9px 18px', fontSize: 13, background: 'color-mix(in srgb, var(--mv-ink) 7%, transparent)', borderColor: 'color-mix(in srgb, var(--mv-ink) 12%, transparent)', color: 'var(--mv-ink-78)' }}>
                           <Edit2 size={13} /> Edit Rates
                         </button>
                       )}
                       {rc.status !== 'draft' && (
                         <button onClick={() => navigate(`/pricing/rate-card/${rc.id}`)}
-                          style={{ ...btnBase, padding: '9px 18px', fontSize: 13, background: 'rgba(0,0,0,0.03)', borderColor: 'rgba(0,0,0,0.08)', color: '#64748B' }}>
+                          style={{ ...btnBase, padding: '9px 18px', fontSize: 13, background: 'color-mix(in srgb, var(--mv-ink) 3%, transparent)', borderColor: 'color-mix(in srgb, var(--mv-ink) 8%, transparent)', color: 'var(--mv-ink-52)' }}>
                           View
                         </button>
                       )}
@@ -736,7 +736,7 @@ function ProspectRow({ prospect, staffList, navigate }) {
                             ))}
                           </select>
                           <button onClick={() => submitMut.mutate(rc.id)} disabled={!submitStaff || submitMut.isPending}
-                            style={{ ...btnBase, padding: '9px 20px', fontSize: 13, background: 'rgba(99,102,241,0.18)', borderColor: '#6366F1', color: '#A5B4FC', opacity: !submitStaff ? 0.4 : 1 }}>
+                            style={{ ...btnBase, padding: '9px 20px', fontSize: 13, background: 'var(--mv-purple-100)', borderColor: 'var(--mv-purple)', color: 'var(--mv-purple)', opacity: !submitStaff ? 0.4 : 1 }}>
                             <Send size={13} /> Submit for Approval
                           </button>
                         </div>
@@ -787,33 +787,33 @@ export default function PricingPage() {
   ];
 
   return (
-    <div style={{ padding: '24px 28px', minHeight: '100%', fontFamily: 'system-ui, sans-serif', color: '#334155' }}>
+    <div style={{ padding: '24px 28px', minHeight: '100%', fontFamily: 'system-ui, sans-serif', color: 'var(--mv-ink-78)' }}>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
       {/* Title */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: '#0F172A' }}>Pricing &amp; Rate Cards</h1>
-          <div style={{ fontSize: 13, color: '#64748B', marginTop: 3 }}>Manage prospects, build rate cards, and track conversions</div>
+          <h1 style={{ margin: 0, fontSize: 22, fontWeight: 800, color: 'var(--mv-ink)' }}>Pricing &amp; Rate Cards</h1>
+          <div style={{ fontSize: 13, color: 'var(--mv-ink-52)', marginTop: 3 }}>Manage prospects, build rate cards, and track conversions</div>
         </div>
         <button onClick={() => setShowWizard(true)}
-          style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'rgba(99,102,241,0.15)',
-            border: '1px solid #6366F1', borderRadius: 8, padding: '9px 18px',
-            color: '#A5B4FC', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+          style={{ display: 'flex', alignItems: 'center', gap: 7, background: 'var(--mv-purple-100)',
+            border: '1px solid var(--mv-purple)', borderRadius: 8, padding: '9px 18px',
+            color: 'var(--mv-purple)', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
           <Plus size={15} /> New Rate Card
         </button>
       </div>
 
       {/* KPI Strip */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
-        <StatCard label="Quotes Out"     value={stats?.quotes_out    ?? '—'} color="#F59E0B" />
-        <StatCard label="Forms Sent"     value={stats?.forms_sent    ?? '—'} color="#A78BFA" />
-        <StatCard label="Forms Returned" value={stats?.forms_returned ?? '—'} color="#60A5FA" />
-        <StatCard label="In Onboarding"  value={stats?.in_onboarding ?? '—'} color="#34D399"
-          bg={stats?.in_onboarding > 0 ? 'rgba(52,211,153,0.06)' : 'rgba(0,0,0,0.03)'}
+        <StatCard label="Quotes Out"     value={stats?.quotes_out    ?? '—'} color="var(--mv-amber-deep)" />
+        <StatCard label="Forms Sent"     value={stats?.forms_sent    ?? '—'} color="var(--mv-purple)" />
+        <StatCard label="Forms Returned" value={stats?.forms_returned ?? '—'} color="var(--mv-teal)" />
+        <StatCard label="In Onboarding"  value={stats?.in_onboarding ?? '—'} color="var(--mv-green)"
+          bg={stats?.in_onboarding > 0 ? 'color-mix(in srgb, var(--mv-purple) 6%, transparent)' : 'color-mix(in srgb, var(--mv-ink) 3%, transparent)'}
           tooltip={stats?.onboarding_list} />
-        <StatCard label="Converted" value={stats?.converted ?? '—'} color="var(--mv-green)" bg="rgba(15,122,70,0.05)" />
-        <StatCard label="Lost"      value={stats?.lost      ?? '—'} color="#EF4444" />
+        <StatCard label="Converted" value={stats?.converted ?? '—'} color="var(--mv-green)" bg="color-mix(in srgb, var(--mv-purple) 5%, transparent)" />
+        <StatCard label="Lost"      value={stats?.lost      ?? '—'} color="var(--mv-magenta)" />
       </div>
 
       {/* Pending approvals */}
@@ -822,7 +822,7 @@ export default function PricingPage() {
       {/* Toolbar */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 14, alignItems: 'center', flexWrap: 'wrap' }}>
         <div style={{ position: 'relative', flex: 1, minWidth: 200, maxWidth: 320 }}>
-          <Search size={14} color="#475569" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} />
+          <Search size={14} color="var(--mv-ink-62)" style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)' }} />
           <input value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Search company…" style={{ ...inputStyle, paddingLeft: 30 }} />
         </div>
@@ -830,9 +830,9 @@ export default function PricingPage() {
           {STATUS_FILTERS.map(f => (
             <button key={f.value} onClick={() => setStatusFilter(f.value)}
               style={{ padding: '5px 12px', borderRadius: 20, fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
-                background: statusFilter === f.value ? 'rgba(99,102,241,0.2)' : 'rgba(0,0,0,0.04)',
-                border: statusFilter === f.value ? '1px solid #6366F1' : '1px solid rgba(0,0,0,0.08)',
-                color: statusFilter === f.value ? '#A5B4FC' : '#666' }}>
+                background: statusFilter === f.value ? 'var(--mv-purple-100)' : 'color-mix(in srgb, var(--mv-ink) 4%, transparent)',
+                border: statusFilter === f.value ? '1px solid var(--mv-purple)' : '1px solid color-mix(in srgb, var(--mv-ink) 8%, transparent)',
+                color: statusFilter === f.value ? 'var(--mv-purple)' : 'var(--mv-ink-52)' }}>
               {f.label}
             </button>
           ))}
@@ -840,16 +840,16 @@ export default function PricingPage() {
       </div>
 
       {/* Prospect list */}
-      <div style={{ background: 'rgba(0,0,0,0.02)', border: '1px solid rgba(0,0,0,0.07)', borderRadius: 10, overflow: 'hidden', padding: 8 }}>
+      <div style={{ background: 'color-mix(in srgb, var(--mv-ink) 2%, transparent)', border: '1px solid color-mix(in srgb, var(--mv-ink) 7%, transparent)', borderRadius: 10, overflow: 'hidden', padding: 8 }}>
         {isLoading ? (
-          <div style={{ padding: '40px 0', textAlign: 'center', color: '#64748B', fontSize: 13 }}>
+          <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--mv-ink-52)', fontSize: 13 }}>
             <RefreshCw size={16} style={{ animation: 'spin 1s linear infinite', marginRight: 8, verticalAlign: 'middle' }} />
             Loading…
           </div>
         ) : prospects.length === 0 ? (
-          <div style={{ padding: '48px 0', textAlign: 'center', color: '#475569', fontSize: 14 }}>
-            <Package size={28} color="#333" style={{ display: 'block', margin: '0 auto 10px' }} />
-            No prospects yet. Click <strong style={{ color: '#A5B4FC' }}>New Rate Card</strong> to get started.
+          <div style={{ padding: '48px 0', textAlign: 'center', color: 'var(--mv-ink-62)', fontSize: 14 }}>
+            <Package size={28} color="var(--mv-ink-45)" style={{ display: 'block', margin: '0 auto 10px' }} />
+            No prospects yet. Click <strong style={{ color: 'var(--mv-purple)' }}>New Rate Card</strong> to get started.
           </div>
         ) : (
           prospects.map(p => <ProspectRow key={p.id} prospect={p} staffList={staffList} navigate={navigate} />)
@@ -857,7 +857,7 @@ export default function PricingPage() {
       </div>
 
       {prospectsData?.total > prospects.length && (
-        <div style={{ textAlign: 'center', fontSize: 12, color: '#64748B', marginTop: 10 }}>
+        <div style={{ textAlign: 'center', fontSize: 12, color: 'var(--mv-ink-52)', marginTop: 10 }}>
           Showing {prospects.length} of {prospectsData.total} prospects
         </div>
       )}

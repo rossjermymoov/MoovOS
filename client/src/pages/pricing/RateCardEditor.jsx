@@ -51,23 +51,23 @@ function markupPct(sell, cost) {
 
 function MarkupChip({ sell, cost }) {
   const mu = markupPct(sell, cost);
-  if (mu == null) return <span style={{ color: '#475569', fontSize: 12 }}>—</span>;
-  const color = mu < 0 ? '#EF4444' : mu < 15 ? '#F59E0B' : '#34D399';
+  if (mu == null) return <span style={{ color: 'var(--mv-ink-62)', fontSize: 12 }}>—</span>;
+  const color = mu < 0 ? 'var(--mv-magenta)' : mu < 15 ? 'var(--mv-amber-deep)' : 'var(--mv-green)';
   return <span style={{ fontSize: 12, color, fontWeight: 700 }}>{mu.toFixed(1)}%</span>;
 }
 
 const inputStyle = {
   width: '100%', boxSizing: 'border-box',
-  background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.08)',
-  borderRadius: 6, padding: '5px 9px', color: '#0F172A', fontSize: 12, outline: 'none',
+  background: 'color-mix(in srgb, var(--mv-ink) 6%, transparent)', border: '1px solid color-mix(in srgb, var(--mv-ink) 8%, transparent)',
+  borderRadius: 6, padding: '5px 9px', color: 'var(--mv-ink)', fontSize: 12, outline: 'none',
 };
 
 const STATUS_COLOR = {
-  draft:            '#64748B',
-  pending_approval: '#FB923C',
-  approved:         '#60A5FA',
-  rejected:         '#EF4444',
-  sent:             '#A78BFA',
+  draft:            'var(--mv-ink-52)',
+  pending_approval: 'var(--mv-amber-deep)',
+  approved:         'var(--mv-teal)',
+  rejected:         'var(--mv-magenta)',
+  sent:             'var(--mv-purple)',
 };
 
 const STATUS_LABEL = {
@@ -335,7 +335,7 @@ export default function RateCardEditor() {
 
   if (isLoading) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300, color: '#64748B', fontFamily: 'system-ui, sans-serif' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 300, color: 'var(--mv-ink-52)', fontFamily: 'system-ui, sans-serif' }}>
         <RefreshCw size={16} style={{ animation: 'spin 1s linear infinite', marginRight: 8 }} />
         Loading rate card…
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
@@ -345,7 +345,7 @@ export default function RateCardEditor() {
 
   if (error || !rc) {
     return (
-      <div style={{ padding: 32, color: '#EF4444', fontFamily: 'system-ui, sans-serif' }}>
+      <div style={{ padding: 32, color: 'var(--mv-magenta)', fontFamily: 'system-ui, sans-serif' }}>
         <AlertCircle size={18} style={{ marginRight: 8, verticalAlign: 'middle' }} />
         {error?.message || 'Rate card not found'}
       </div>
@@ -353,33 +353,33 @@ export default function RateCardEditor() {
   }
 
   const isEditable = rc.status === 'draft' || rc.status === 'rejected';
-  const statusColor = STATUS_COLOR[rc.status] || '#64748B';
+  const statusColor = STATUS_COLOR[rc.status] || 'var(--mv-ink-52)';
 
   return (
-    <div style={{ padding: '20px 28px', minHeight: '100%', fontFamily: 'system-ui, sans-serif', color: '#334155' }}>
+    <div style={{ padding: '20px 28px', minHeight: '100%', fontFamily: 'system-ui, sans-serif', color: 'var(--mv-ink-78)' }}>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <button onClick={() => navigate('/pricing')}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(0,0,0,0.06)',
-              border: '1px solid rgba(0,0,0,0.08)', borderRadius: 7, padding: '7px 14px',
-              color: '#64748B', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>
+            style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'color-mix(in srgb, var(--mv-ink) 6%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--mv-ink) 8%, transparent)', borderRadius: 7, padding: '7px 14px',
+              color: 'var(--mv-ink-52)', fontSize: 13, cursor: 'pointer', fontWeight: 600 }}>
             <ArrowLeft size={14} /> Back
           </button>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: '#0F172A' }}>
+              <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800, color: 'var(--mv-ink)' }}>
                 {rc.prospect_company || 'Rate Card'}
               </h1>
               <span style={{ fontSize: 12, fontWeight: 700, color: statusColor,
-                background: `${statusColor}18`, border: `1px solid ${statusColor}44`,
+                background: `color-mix(in srgb, ${statusColor} 10%, transparent)`, border: `1px solid color-mix(in srgb, ${statusColor} 27%, transparent)`,
                 borderRadius: 20, padding: '2px 10px' }}>
                 {STATUS_LABEL[rc.status] || rc.status}
               </span>
             </div>
-            <div style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
+            <div style={{ fontSize: 12, color: 'var(--mv-ink-52)', marginTop: 2 }}>
               {rc.courier_name || rc.courier_code}
               {rc.template_name ? ` · template: ${rc.template_name}` : ''}
             </div>
@@ -388,7 +388,7 @@ export default function RateCardEditor() {
 
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {savedMsg && (
-            <span style={{ fontSize: 12, color: '#34D399', display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ fontSize: 12, color: 'var(--mv-green)', display: 'flex', alignItems: 'center', gap: 5 }}>
               <Check size={12} /> {savedMsg}
             </span>
           )}
@@ -396,17 +396,17 @@ export default function RateCardEditor() {
             <>
               <button onClick={() => updateMut.mutate()} disabled={!dirty || updateMut.isPending}
                 style={{ display: 'flex', alignItems: 'center', gap: 6,
-                  background: dirty ? 'rgba(99,102,241,0.15)' : 'rgba(0,0,0,0.03)',
-                  border: `1px solid ${dirty ? '#6366F1' : 'rgba(0,0,0,0.08)'}`,
+                  background: dirty ? 'var(--mv-purple-100)' : 'color-mix(in srgb, var(--mv-ink) 3%, transparent)',
+                  border: `1px solid ${dirty ? 'var(--mv-purple)' : 'color-mix(in srgb, var(--mv-ink) 8%, transparent)'}`,
                   borderRadius: 7, padding: '8px 16px',
-                  color: dirty ? '#A5B4FC' : '#475569',
+                  color: dirty ? 'var(--mv-purple)' : 'var(--mv-ink-62)',
                   fontSize: 13, cursor: dirty ? 'pointer' : 'default', fontWeight: 700 }}>
                 {updateMut.isPending ? <RefreshCw size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <Save size={13} />}
                 Save
               </button>
               <button onClick={() => setShowSubmit(p => !p)}
                 style={{ display: 'flex', alignItems: 'center', gap: 6,
-                  background: 'rgba(15,122,70,0.1)', border: '1px solid rgba(15,122,70,0.35)',
+                  background: 'var(--mv-purple-100)', border: '1px solid var(--mv-purple-200)',
                   borderRadius: 7, padding: '8px 16px',
                   color: 'var(--mv-green)', fontSize: 13, cursor: 'pointer', fontWeight: 700 }}>
                 <Send size={13} /> Submit for Approval
@@ -418,12 +418,12 @@ export default function RateCardEditor() {
 
       {/* Submit panel */}
       {showSubmit && isEditable && (
-        <div style={{ marginBottom: 16, background: 'rgba(15,122,70,0.06)', border: '1px solid rgba(15,122,70,0.2)',
+        <div style={{ marginBottom: 16, background: 'var(--mv-purple-100)', border: '1px solid var(--mv-purple-200)',
           borderRadius: 9, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 13, color: '#64748B' }}>Submit as:</span>
+          <span style={{ fontSize: 13, color: 'var(--mv-ink-52)' }}>Submit as:</span>
           <select value={submitStaff} onChange={e => setSubmitStaff(e.target.value)}
-            style={{ background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.10)',
-              borderRadius: 6, padding: '6px 10px', color: '#0F172A', fontSize: 13, outline: 'none', minWidth: 180 }}>
+            style={{ background: 'color-mix(in srgb, var(--mv-ink) 6%, transparent)', border: '1px solid color-mix(in srgb, var(--mv-ink) 10%, transparent)',
+              borderRadius: 6, padding: '6px 10px', color: 'var(--mv-ink)', fontSize: 13, outline: 'none', minWidth: 180 }}>
             <option value="">— Your name —</option>
             {staffList.filter(s => s.is_active).map(s => (
               <option key={s.id} value={s.id}>{s.full_name}</option>
@@ -431,24 +431,24 @@ export default function RateCardEditor() {
           </select>
           <button onClick={() => submitMut.mutate()} disabled={!submitStaff || submitMut.isPending}
             style={{ display: 'flex', alignItems: 'center', gap: 6,
-              background: 'rgba(15,122,70,0.15)', border: '1px solid rgba(15,122,70,0.4)',
+              background: 'var(--mv-purple-100)', border: '1px solid var(--mv-purple)',
               borderRadius: 7, padding: '7px 16px', color: 'var(--mv-green)',
               fontSize: 13, cursor: 'pointer', fontWeight: 700, opacity: !submitStaff ? 0.5 : 1 }}>
             {submitMut.isPending ? <RefreshCw size={13} style={{ animation: 'spin 1s linear infinite' }} /> : <Send size={13} />}
             Confirm
           </button>
           <button onClick={() => setShowSubmit(false)}
-            style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', padding: 4 }}>
+            style={{ background: 'none', border: 'none', color: 'var(--mv-ink-52)', cursor: 'pointer', padding: 4 }}>
             <X size={15} />
           </button>
-          {submitMut.error && <span style={{ fontSize: 12, color: '#EF4444' }}>{submitMut.error.message}</span>}
+          {submitMut.error && <span style={{ fontSize: 12, color: 'var(--mv-magenta)' }}>{submitMut.error.message}</span>}
         </div>
       )}
 
       {/* Rejected note */}
       {rc.status === 'rejected' && rc.latest_approval?.comment && (
-        <div style={{ marginBottom: 16, background: 'rgba(239,68,68,0.07)', border: '1px solid rgba(239,68,68,0.2)',
-          borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#F87171' }}>
+        <div style={{ marginBottom: 16, background: 'var(--mv-magenta-100)', border: '1px solid var(--mv-magenta-200)',
+          borderRadius: 8, padding: '10px 14px', fontSize: 12, color: 'var(--mv-magenta)' }}>
           <strong>Rejected:</strong> {rc.latest_approval.comment}
         </div>
       )}
@@ -459,17 +459,17 @@ export default function RateCardEditor() {
         <div>
 
           {/* ── Surcharge Overrides ───────────────────────────────────────── */}
-          <div style={{ marginBottom: 16, background: 'rgba(0,0,0,0.02)', border: '1px solid rgba(0,0,0,0.07)', borderRadius: 10, overflow: 'hidden' }}>
-            <div style={{ padding: '10px 14px', background: 'rgba(0,0,0,0.03)', borderBottom: '1px solid rgba(0,0,0,0.07)',
+          <div style={{ marginBottom: 16, background: 'color-mix(in srgb, var(--mv-ink) 2%, transparent)', border: '1px solid color-mix(in srgb, var(--mv-ink) 7%, transparent)', borderRadius: 10, overflow: 'hidden' }}>
+            <div style={{ padding: '10px 14px', background: 'color-mix(in srgb, var(--mv-ink) 3%, transparent)', borderBottom: '1px solid color-mix(in srgb, var(--mv-ink) 7%, transparent)',
               display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 11, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <span style={{ fontSize: 11, color: 'var(--mv-ink-52)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 Surcharge Overrides
               </span>
               {isEditable && (
                 <button onClick={() => { setSurchargeMarkups(p => [...p, { surcharge_name: '', markup_pct: '' }]); markDirty(); }}
-                  style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'rgba(99,102,241,0.12)',
-                    border: '1px solid rgba(99,102,241,0.3)', borderRadius: 6, padding: '4px 10px',
-                    color: '#A5B4FC', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                  style={{ display: 'flex', alignItems: 'center', gap: 5, background: 'var(--mv-purple-100)',
+                    border: '1px solid var(--mv-purple-200)', borderRadius: 6, padding: '4px 10px',
+                    color: 'var(--mv-purple)', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
                   <Plus size={11} /> Add Surcharge
                 </button>
               )}
@@ -478,17 +478,17 @@ export default function RateCardEditor() {
 
               {/* Fuel markup — always visible, with warning if blank */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <div style={{ flex: '0 0 160px', fontSize: 12, color: '#64748B', fontWeight: 600 }}>Fuel surcharge markup</div>
+                <div style={{ flex: '0 0 160px', fontSize: 12, color: 'var(--mv-ink-52)', fontWeight: 600 }}>Fuel surcharge markup</div>
                 <div style={{ position: 'relative', flex: '0 0 90px' }}>
                   <input value={fuelMarkup} onChange={e => { setFuelMarkup(e.target.value); markDirty(); }}
                     disabled={!isEditable} type="number" step="0.1" placeholder="e.g. 5"
                     style={{ ...inputStyle, width: '100%', padding: '5px 28px 5px 9px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700,
-                      borderColor: fuelMarkup === '' || fuelMarkup == null ? 'rgba(245,158,11,0.5)' : 'rgba(0,0,0,0.08)',
-                      background: fuelMarkup === '' || fuelMarkup == null ? 'rgba(245,158,11,0.06)' : 'rgba(0,0,0,0.06)' }} />
-                  <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 11, color: '#64748B', pointerEvents: 'none' }}>%</span>
+                      borderColor: fuelMarkup === '' || fuelMarkup == null ? 'var(--mv-amber-200)' : 'color-mix(in srgb, var(--mv-ink) 8%, transparent)',
+                      background: fuelMarkup === '' || fuelMarkup == null ? 'var(--mv-amber-100)' : 'color-mix(in srgb, var(--mv-ink) 6%, transparent)' }} />
+                  <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 11, color: 'var(--mv-ink-52)', pointerEvents: 'none' }}>%</span>
                 </div>
                 {(fuelMarkup === '' || fuelMarkup == null) && (
-                  <span style={{ fontSize: 11, color: '#F59E0B', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ fontSize: 11, color: 'var(--mv-amber-deep)', display: 'flex', alignItems: 'center', gap: 4 }}>
                     <AlertCircle size={12} /> Enter a fuel markup % — leave blank to pass cost through at zero margin
                   </span>
                 )}
@@ -502,18 +502,18 @@ export default function RateCardEditor() {
                       onChange={e => { setSurchargeMarkups(p => p.map((x, j) => j === i ? { ...x, surcharge_name: e.target.value } : x)); markDirty(); }}
                       style={{ ...inputStyle, flex: '0 0 160px', padding: '5px 9px', fontSize: 12 }} />
                   ) : (
-                    <div style={{ flex: '0 0 160px', fontSize: 12, color: '#64748B', fontWeight: 600 }}>{s.surcharge_name || '—'}</div>
+                    <div style={{ flex: '0 0 160px', fontSize: 12, color: 'var(--mv-ink-52)', fontWeight: 600 }}>{s.surcharge_name || '—'}</div>
                   )}
                   <div style={{ position: 'relative', flex: '0 0 90px' }}>
                     <input value={s.markup_pct ?? ''} type="number" step="0.1" placeholder="0"
                       disabled={!isEditable}
                       onChange={e => { setSurchargeMarkups(p => p.map((x, j) => j === i ? { ...x, markup_pct: e.target.value } : x)); markDirty(); }}
                       style={{ ...inputStyle, width: '100%', padding: '5px 28px 5px 9px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 700 }} />
-                    <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 11, color: '#64748B', pointerEvents: 'none' }}>%</span>
+                    <span style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', fontSize: 11, color: 'var(--mv-ink-52)', pointerEvents: 'none' }}>%</span>
                   </div>
                   {isEditable && (
                     <button onClick={() => { setSurchargeMarkups(p => p.filter((_, j) => j !== i)); markDirty(); }}
-                      style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', padding: 4 }}>
+                      style={{ background: 'none', border: 'none', color: 'var(--mv-ink-62)', cursor: 'pointer', padding: 4 }}>
                       <Trash2 size={13} />
                     </button>
                   )}
@@ -521,7 +521,7 @@ export default function RateCardEditor() {
               ))}
 
               {surchargeMarkups.length === 0 && (
-                <div style={{ fontSize: 11, color: '#475569', fontStyle: 'italic' }}>
+                <div style={{ fontSize: 11, color: 'var(--mv-ink-62)', fontStyle: 'italic' }}>
                   No additional surcharge overrides — click Add Surcharge to define markups for remote area, out of area, residential, etc.
                 </div>
               )}
@@ -531,11 +531,11 @@ export default function RateCardEditor() {
           {/* ── DOMESTIC SERVICES ──────────────────────────────────────────── */}
           <div style={{ marginBottom: 24 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--mv-green)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
-              Domestic Services <span style={{ color: '#475569', fontWeight: 400, textTransform: 'none' }}>({domesticServices.length} services · {domesticRates.length} zones)</span>
+              Domestic Services <span style={{ color: 'var(--mv-ink-62)', fontWeight: 400, textTransform: 'none' }}>({domesticServices.length} services · {domesticRates.length} zones)</span>
             </div>
             {domesticServices.length === 0 && (
-              <div style={{ padding: '20px', textAlign: 'center', color: '#475569', fontSize: 12, fontStyle: 'italic',
-                border: '1px solid rgba(0,0,0,0.06)', borderRadius: 9 }}>
+              <div style={{ padding: '20px', textAlign: 'center', color: 'var(--mv-ink-62)', fontSize: 12, fontStyle: 'italic',
+                border: '1px solid color-mix(in srgb, var(--mv-ink) 6%, transparent)', borderRadius: 9 }}>
                 No domestic rates yet.
               </div>
             )}
@@ -543,27 +543,27 @@ export default function RateCardEditor() {
               const svcOpen = openSvcs.has(svc.service_code);
               const allPriced = svc.zones.every(z => z.price);
               return (
-                <div key={svc.service_code} style={{ border: '1px solid rgba(0,0,0,0.06)', borderRadius: 10, marginBottom: 8, overflow: 'hidden' }}>
+                <div key={svc.service_code} style={{ border: '1px solid color-mix(in srgb, var(--mv-ink) 6%, transparent)', borderRadius: 10, marginBottom: 8, overflow: 'hidden' }}>
                   <div onClick={() => toggleSvc(svc.service_code)}
                     style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
-                      cursor: 'pointer', background: svcOpen ? 'rgba(0,0,0,0.03)' : 'transparent' }}>
-                    {svcOpen ? <ChevronDown size={13} color="#64748B"/> : <ChevronRight size={13} color="#64748B"/>}
-                    <span style={{ fontWeight: 600, fontSize: 13, color: '#0F172A', flex: 1 }}>{svc.service_name}</span>
-                    <span style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--mv-green)', background: 'rgba(15,122,70,0.08)', padding: '1px 8px', borderRadius: 9999 }}>{svc.service_code}</span>
-                    {allPriced && <span style={{ fontSize: 10, color: '#34D399', background: 'rgba(52,211,153,0.1)', padding: '1px 7px', borderRadius: 9999 }}>✓ priced</span>}
-                    <span style={{ fontSize: 11, color: '#64748B' }}>{svc.zones.length} zone{svc.zones.length !== 1 ? 's' : ''}</span>
+                      cursor: 'pointer', background: svcOpen ? 'color-mix(in srgb, var(--mv-ink) 3%, transparent)' : 'transparent' }}>
+                    {svcOpen ? <ChevronDown size={13} color="var(--mv-ink-52)"/> : <ChevronRight size={13} color="var(--mv-ink-52)"/>}
+                    <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--mv-ink)', flex: 1 }}>{svc.service_name}</span>
+                    <span style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--mv-green)', background: 'var(--mv-purple-100)', padding: '1px 8px', borderRadius: 9999 }}>{svc.service_code}</span>
+                    {allPriced && <span style={{ fontSize: 10, color: 'var(--mv-green)', background: 'var(--mv-purple-100)', padding: '1px 7px', borderRadius: 9999 }}>✓ priced</span>}
+                    <span style={{ fontSize: 11, color: 'var(--mv-ink-52)' }}>{svc.zones.length} zone{svc.zones.length !== 1 ? 's' : ''}</span>
                   </div>
                   {svcOpen && (
-                    <div style={{ borderTop: '1px solid rgba(0,0,0,0.06)', padding: 12 }}>
+                    <div style={{ borderTop: '1px solid color-mix(in srgb, var(--mv-ink) 6%, transparent)', padding: 12 }}>
                       <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                         <thead>
-                          <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
-                            <th style={{ textAlign: 'left',  padding: '4px 8px', color: '#64748B', fontWeight: 600, fontSize: 11 }}>Zone</th>
-                            <th style={{ textAlign: 'right', padding: '4px 8px', color: '#B39DDB', fontWeight: 600, fontSize: 11 }}>Cost (1st)</th>
-                            <th style={{ textAlign: 'right', padding: '4px 8px', color: '#A5B4FC', fontWeight: 700, fontSize: 11 }}>Markup %</th>
+                          <tr style={{ borderBottom: '1px solid color-mix(in srgb, var(--mv-ink) 6%, transparent)' }}>
+                            <th style={{ textAlign: 'left',  padding: '4px 8px', color: 'var(--mv-ink-52)', fontWeight: 600, fontSize: 11 }}>Zone</th>
+                            <th style={{ textAlign: 'right', padding: '4px 8px', color: 'var(--mv-purple)', fontWeight: 600, fontSize: 11 }}>Cost (1st)</th>
+                            <th style={{ textAlign: 'right', padding: '4px 8px', color: 'var(--mv-purple)', fontWeight: 700, fontSize: 11 }}>Markup %</th>
                             <th style={{ textAlign: 'right', padding: '4px 8px', color: 'var(--mv-green)', fontWeight: 600, fontSize: 11 }}>Sell (1st)</th>
-                            <th style={{ textAlign: 'right', padding: '4px 8px', color: '#D97706', fontWeight: 600, fontSize: 11 }}>Sell (sub)</th>
-                            <th style={{ textAlign: 'right', padding: '4px 8px', color: '#64748B',    fontWeight: 600, fontSize: 11 }}>Margin</th>
+                            <th style={{ textAlign: 'right', padding: '4px 8px', color: 'var(--mv-amber-deep)', fontWeight: 600, fontSize: 11 }}>Sell (sub)</th>
+                            <th style={{ textAlign: 'right', padding: '4px 8px', color: 'var(--mv-ink-52)',    fontWeight: 600, fontSize: 11 }}>Margin</th>
                             <th style={{ width: 28 }}></th>
                           </tr>
                         </thead>
@@ -571,25 +571,25 @@ export default function RateCardEditor() {
                           {svc.zones.map(r => {
                             const origIdx = rates.indexOf(r);
                             return (
-                              <tr key={origIdx} style={{ borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
-                                <td style={{ padding: '5px 8px', color: '#64748B' }}>{r.zone_name || '—'}</td>
-                                <td style={{ padding: '5px 8px', textAlign: 'right', color: '#B39DDB', fontFamily: 'monospace' }}>{gbp(r.cost_price)}</td>
+                              <tr key={origIdx} style={{ borderBottom: '1px solid color-mix(in srgb, var(--mv-ink) 3%, transparent)' }}>
+                                <td style={{ padding: '5px 8px', color: 'var(--mv-ink-52)' }}>{r.zone_name || '—'}</td>
+                                <td style={{ padding: '5px 8px', textAlign: 'right', color: 'var(--mv-purple)', fontFamily: 'monospace' }}>{gbp(r.cost_price)}</td>
                                 <td style={{ padding: '5px 8px', textAlign: 'right' }}>
                                   {isEditable ? (
                                     <input value={r.markup_pct ?? ''} type="number" step="0.1" placeholder="—"
                                       onChange={e => applyMarkupToRate(origIdx, e.target.value)}
                                       style={{ width: 64, textAlign: 'right', fontFamily: 'monospace', fontSize: 12,
-                                        color: '#A5B4FC', fontWeight: 700, background: 'rgba(99,102,241,0.08)',
-                                        border: '1px solid rgba(99,102,241,0.3)', borderRadius: 9999, padding: '2px 8px', outline: 'none' }} />
-                                  ) : <span style={{ color: '#A5B4FC', fontFamily: 'monospace' }}>{r.markup_pct != null ? `${r.markup_pct}%` : '—'}</span>}
+                                        color: 'var(--mv-purple)', fontWeight: 700, background: 'var(--mv-purple-100)',
+                                        border: '1px solid var(--mv-purple-200)', borderRadius: 9999, padding: '2px 8px', outline: 'none' }} />
+                                  ) : <span style={{ color: 'var(--mv-purple)', fontFamily: 'monospace' }}>{r.markup_pct != null ? `${r.markup_pct}%` : '—'}</span>}
                                 </td>
                                 <td style={{ padding: '5px 8px', textAlign: 'right' }}>
                                   {isEditable ? (
                                     <input value={r.price ?? ''} type="number" step="0.01" placeholder="0.00"
                                       onChange={e => updateRate(origIdx, 'price', e.target.value)}
                                       style={{ width: 72, textAlign: 'right', fontFamily: 'monospace', fontSize: 12,
-                                        color: 'var(--mv-green)', fontWeight: 700, background: 'rgba(15,122,70,0.08)',
-                                        border: '1px solid rgba(15,122,70,0.3)', borderRadius: 9999, padding: '2px 8px', outline: 'none' }} />
+                                        color: 'var(--mv-green)', fontWeight: 700, background: 'var(--mv-purple-100)',
+                                        border: '1px solid var(--mv-purple-200)', borderRadius: 9999, padding: '2px 8px', outline: 'none' }} />
                                   ) : <span style={{ color: 'var(--mv-green)', fontFamily: 'monospace', fontWeight: 700 }}>{gbp(r.price)}</span>}
                                 </td>
                                 <td style={{ padding: '5px 8px', textAlign: 'right' }}>
@@ -597,15 +597,15 @@ export default function RateCardEditor() {
                                     <input value={r.price_sub ?? ''} type="number" step="0.01" placeholder="0.00"
                                       onChange={e => updateRate(origIdx, 'price_sub', e.target.value)}
                                       style={{ width: 72, textAlign: 'right', fontFamily: 'monospace', fontSize: 12,
-                                        color: '#D97706', background: 'rgba(255,193,7,0.08)',
-                                        border: '1px solid rgba(255,193,7,0.3)', borderRadius: 9999, padding: '2px 8px', outline: 'none' }} />
-                                  ) : <span style={{ color: '#D97706', fontFamily: 'monospace' }}>{gbp(r.price_sub)}</span>}
+                                        color: 'var(--mv-amber-deep)', background: 'var(--mv-amber-100)',
+                                        border: '1px solid var(--mv-amber-200)', borderRadius: 9999, padding: '2px 8px', outline: 'none' }} />
+                                  ) : <span style={{ color: 'var(--mv-amber-deep)', fontFamily: 'monospace' }}>{gbp(r.price_sub)}</span>}
                                 </td>
                                 <td style={{ padding: '5px 8px', textAlign: 'right' }}><MarkupChip sell={r.price} cost={r.cost_price} /></td>
                                 <td style={{ padding: '5px 8px' }}>
                                   {isEditable && (
                                     <button onClick={() => removeRow(origIdx)}
-                                      style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', padding: 3 }}>
+                                      style={{ background: 'none', border: 'none', color: 'var(--mv-ink-62)', cursor: 'pointer', padding: 3 }}>
                                       <Trash2 size={11} />
                                     </button>
                                   )}
@@ -625,13 +625,13 @@ export default function RateCardEditor() {
           {/* ── INTERNATIONAL SERVICES ─────────────────────────────────────────── */}
           <div>
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--mv-purple)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
-              International Services <span style={{ color: '#475569', fontWeight: 400, textTransform: 'none' }}>({intlServices.length} services · {intlRates.length} zones)</span>
+              International Services <span style={{ color: 'var(--mv-ink-62)', fontWeight: 400, textTransform: 'none' }}>({intlServices.length} services · {intlRates.length} zones)</span>
             </div>
 
 
             {intlServices.length === 0 && (
-              <div style={{ padding: '20px', textAlign: 'center', color: '#475569', fontSize: 12, fontStyle: 'italic',
-                border: '1px solid rgba(0,0,0,0.06)', borderRadius: 9 }}>
+              <div style={{ padding: '20px', textAlign: 'center', color: 'var(--mv-ink-62)', fontSize: 12, fontStyle: 'italic',
+                border: '1px solid color-mix(in srgb, var(--mv-ink) 6%, transparent)', borderRadius: 9 }}>
                 No international rates.
               </div>
             )}
@@ -640,14 +640,14 @@ export default function RateCardEditor() {
                 const svcOpen = openIntlSvcs.has(svc.service_code);
                 const filledZones = svc.zones.filter(z => z.markup_pct || z.price).length;
                 return (
-                  <div key={svc.service_code} style={{ border: '1px solid rgba(15,122,70,0.2)', borderRadius: 10,
-                    background: 'rgba(15,122,70,0.04)', overflow: 'hidden' }}>
+                  <div key={svc.service_code} style={{ border: '1px solid var(--mv-purple-200)', borderRadius: 10,
+                    background: 'color-mix(in srgb, var(--mv-purple) 4%, transparent)', overflow: 'hidden' }}>
                     <div style={{ padding: '12px 14px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 5 }}>
-                        <span style={{ fontWeight: 600, fontSize: 13, color: '#0F172A', flex: 1 }}>{svc.service_name}</span>
-                        <span style={{ fontFamily: 'monospace', fontSize: 10, color: 'var(--mv-purple)', background: 'rgba(15,122,70,0.12)', padding: '1px 7px', borderRadius: 9999 }}>{svc.service_code}</span>
+                        <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--mv-ink)', flex: 1 }}>{svc.service_name}</span>
+                        <span style={{ fontFamily: 'monospace', fontSize: 10, color: 'var(--mv-purple)', background: 'var(--mv-purple-100)', padding: '1px 7px', borderRadius: 9999 }}>{svc.service_code}</span>
                       </div>
-                      <div style={{ fontSize: 12, color: '#64748B', marginBottom: 10 }}>
+                      <div style={{ fontSize: 12, color: 'var(--mv-ink-52)', marginBottom: 10 }}>
                         {svc.zones.length} zone{svc.zones.length !== 1 ? 's' : ''}
                         {filledZones > 0 && <span style={{ color: 'var(--mv-green)', marginLeft: 8 }}>· {filledZones} priced</span>}
                       </div>
@@ -670,31 +670,31 @@ export default function RateCardEditor() {
                               markDirty();
                             }}
                             style={{ width: 80, textAlign: 'right', fontFamily: 'monospace', fontSize: 13,
-                              color: '#C084FC', fontWeight: 700, background: 'rgba(15,122,70,0.12)',
-                              border: '1px solid rgba(15,122,70,0.45)', borderRadius: 8, padding: '5px 10px', outline: 'none' }} />
+                              color: 'var(--mv-purple)', fontWeight: 700, background: 'var(--mv-purple-100)',
+                              border: '1px solid var(--mv-purple-200)', borderRadius: 8, padding: '5px 10px', outline: 'none' }} />
                           <span style={{ fontSize: 13, color: 'var(--mv-purple)', fontWeight: 700 }}>%</span>
-                          <span style={{ fontSize: 11, color: '#64748B' }}>all zones</span>
+                          <span style={{ fontSize: 11, color: 'var(--mv-ink-52)' }}>all zones</span>
                         </div>
                       )}
 
                       <button onClick={() => toggleIntlSvc(svc.service_code)}
                         style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 12px',
                           borderRadius: 9999, fontSize: 11, fontWeight: 700,
-                          background: svcOpen ? 'rgba(15,122,70,0.2)' : 'rgba(15,122,70,0.12)',
-                          color: '#9B59E8', border: '1px solid rgba(15,122,70,0.3)', cursor: 'pointer' }}>
+                          background: svcOpen ? 'var(--mv-purple-200)' : 'var(--mv-purple-100)',
+                          color: 'var(--mv-purple)', border: '1px solid var(--mv-purple-200)', cursor: 'pointer' }}>
                         <FileText size={11}/> {svcOpen ? 'Hide Rates' : 'Edit Rates'}
                       </button>
                     </div>
                     {svcOpen && (
-                      <div style={{ borderTop: '1px solid rgba(15,122,70,0.15)', padding: '10px 14px', maxHeight: 340, overflowY: 'auto' }}>
+                      <div style={{ borderTop: '1px solid var(--mv-purple-200)', padding: '10px 14px', maxHeight: 340, overflowY: 'auto' }}>
                         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                           <thead>
-                            <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
-                              <th style={{ textAlign: 'left',  padding: '4px 6px', color: '#64748B', fontWeight: 600, fontSize: 10 }}>Zone</th>
-                              <th style={{ textAlign: 'right', padding: '4px 6px', color: '#B39DDB', fontWeight: 600, fontSize: 10 }}>Cost</th>
-                              <th style={{ textAlign: 'right', padding: '4px 6px', color: '#A5B4FC', fontWeight: 700, fontSize: 10 }}>Markup %</th>
+                            <tr style={{ borderBottom: '1px solid color-mix(in srgb, var(--mv-ink) 6%, transparent)' }}>
+                              <th style={{ textAlign: 'left',  padding: '4px 6px', color: 'var(--mv-ink-52)', fontWeight: 600, fontSize: 10 }}>Zone</th>
+                              <th style={{ textAlign: 'right', padding: '4px 6px', color: 'var(--mv-purple)', fontWeight: 600, fontSize: 10 }}>Cost</th>
+                              <th style={{ textAlign: 'right', padding: '4px 6px', color: 'var(--mv-purple)', fontWeight: 700, fontSize: 10 }}>Markup %</th>
                               <th style={{ textAlign: 'right', padding: '4px 6px', color: 'var(--mv-green)', fontWeight: 600, fontSize: 10 }}>Sell</th>
-                              <th style={{ textAlign: 'right', padding: '4px 6px', color: '#64748B',    fontWeight: 600, fontSize: 10 }}>Margin</th>
+                              <th style={{ textAlign: 'right', padding: '4px 6px', color: 'var(--mv-ink-52)',    fontWeight: 600, fontSize: 10 }}>Margin</th>
                               <th style={{ width: 24 }}></th>
                             </tr>
                           </thead>
@@ -702,32 +702,32 @@ export default function RateCardEditor() {
                             {svc.zones.map(r => {
                               const origIdx = rates.indexOf(r);
                               return (
-                                <tr key={origIdx} style={{ borderBottom: '1px solid rgba(0,0,0,0.03)' }}>
-                                  <td style={{ padding: '4px 6px', color: '#64748B', fontSize: 11, maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.zone_name || '—'}</td>
-                                  <td style={{ padding: '4px 6px', textAlign: 'right', color: '#B39DDB', fontFamily: 'monospace', fontSize: 11 }}>{gbp(r.cost_price)}</td>
+                                <tr key={origIdx} style={{ borderBottom: '1px solid color-mix(in srgb, var(--mv-ink) 3%, transparent)' }}>
+                                  <td style={{ padding: '4px 6px', color: 'var(--mv-ink-52)', fontSize: 11, maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.zone_name || '—'}</td>
+                                  <td style={{ padding: '4px 6px', textAlign: 'right', color: 'var(--mv-purple)', fontFamily: 'monospace', fontSize: 11 }}>{gbp(r.cost_price)}</td>
                                   <td style={{ padding: '4px 6px', textAlign: 'right' }}>
                                     {isEditable ? (
                                       <input value={r.markup_pct ?? ''} type="number" step="0.1" placeholder="%"
                                         onChange={e => applyMarkupToRate(origIdx, e.target.value)}
                                         style={{ width: 56, textAlign: 'right', fontFamily: 'monospace', fontSize: 11,
-                                          color: '#A5B4FC', fontWeight: 700, background: 'rgba(99,102,241,0.1)',
-                                          border: '1px solid rgba(99,102,241,0.4)', borderRadius: 9999, padding: '2px 6px', outline: 'none' }} />
-                                    ) : <span style={{ color: '#A5B4FC', fontFamily: 'monospace', fontWeight: 700 }}>{r.markup_pct != null ? `${r.markup_pct}%` : '—'}</span>}
+                                          color: 'var(--mv-purple)', fontWeight: 700, background: 'var(--mv-purple-100)',
+                                          border: '1px solid var(--mv-purple-200)', borderRadius: 9999, padding: '2px 6px', outline: 'none' }} />
+                                    ) : <span style={{ color: 'var(--mv-purple)', fontFamily: 'monospace', fontWeight: 700 }}>{r.markup_pct != null ? `${r.markup_pct}%` : '—'}</span>}
                                   </td>
                                   <td style={{ padding: '4px 6px', textAlign: 'right' }}>
                                     {isEditable ? (
                                       <input value={r.price ?? ''} type="number" step="0.01" placeholder="0.00"
                                         onChange={e => updateRate(origIdx, 'price', e.target.value)}
                                         style={{ width: 60, textAlign: 'right', fontFamily: 'monospace', fontSize: 11,
-                                          color: 'var(--mv-green)', background: 'rgba(15,122,70,0.08)',
-                                          border: '1px solid rgba(15,122,70,0.25)', borderRadius: 9999, padding: '2px 6px', outline: 'none' }} />
+                                          color: 'var(--mv-green)', background: 'var(--mv-purple-100)',
+                                          border: '1px solid var(--mv-purple-200)', borderRadius: 9999, padding: '2px 6px', outline: 'none' }} />
                                     ) : <span style={{ color: 'var(--mv-green)', fontFamily: 'monospace' }}>{gbp(r.price)}</span>}
                                   </td>
                                   <td style={{ padding: '4px 6px', textAlign: 'right' }}><MarkupChip sell={r.price} cost={r.cost_price} /></td>
                                   <td style={{ padding: '4px 6px' }}>
                                     {isEditable && (
                                       <button onClick={() => removeRow(origIdx)}
-                                        style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', padding: 2 }}>
+                                        style={{ background: 'none', border: 'none', color: 'var(--mv-ink-62)', cursor: 'pointer', padding: 2 }}>
                                         <Trash2 size={10} />
                                       </button>
                                     )}
@@ -748,8 +748,8 @@ export default function RateCardEditor() {
 
         {/* ── Right: Projections ────────────────────────────────────────────── */}
         <div style={{ position: 'sticky', top: 20 }}>
-          <div style={{ background: 'rgba(0,0,0,0.03)', border: '1px solid rgba(0,0,0,0.08)', borderRadius: 10, padding: 18 }}>
-            <div style={{ fontSize: 11, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 14 }}>
+          <div style={{ background: 'color-mix(in srgb, var(--mv-ink) 3%, transparent)', border: '1px solid color-mix(in srgb, var(--mv-ink) 8%, transparent)', borderRadius: 10, padding: 18 }}>
+            <div style={{ fontSize: 11, color: 'var(--mv-ink-52)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 14 }}>
               Projections
             </div>
 
@@ -757,31 +757,31 @@ export default function RateCardEditor() {
             {projections ? (
               <div style={{ marginBottom: 18 }}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <div style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 8, padding: '10px 12px' }}>
-                    <div style={{ fontSize: 10, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Revenue / wk</div>
-                    <div style={{ fontSize: 20, fontWeight: 800, color: '#A5B4FC' }}>{gbp(projections.rev)}</div>
+                  <div style={{ background: 'var(--mv-purple-100)', border: '1px solid var(--mv-purple-200)', borderRadius: 8, padding: '10px 12px' }}>
+                    <div style={{ fontSize: 10, color: 'var(--mv-ink-52)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Revenue / wk</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--mv-purple)' }}>{gbp(projections.rev)}</div>
                   </div>
-                  <div style={{ background: 'rgba(179,157,219,0.06)', border: '1px solid rgba(179,157,219,0.2)', borderRadius: 8, padding: '10px 12px' }}>
-                    <div style={{ fontSize: 10, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Cost / wk</div>
-                    <div style={{ fontSize: 20, fontWeight: 800, color: '#B39DDB' }}>{gbp(projections.cost)}</div>
+                  <div style={{ background: 'var(--mv-purple-100)', border: '1px solid var(--mv-purple-200)', borderRadius: 8, padding: '10px 12px' }}>
+                    <div style={{ fontSize: 10, color: 'var(--mv-ink-52)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Cost / wk</div>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--mv-purple)' }}>{gbp(projections.cost)}</div>
                   </div>
-                  <div style={{ background: projections.profit >= 0 ? 'rgba(15,122,70,0.07)' : 'rgba(239,68,68,0.07)',
-                    border: `1px solid ${projections.profit >= 0 ? 'rgba(15,122,70,0.25)' : 'rgba(239,68,68,0.25)'}`,
+                  <div style={{ background: projections.profit >= 0 ? 'var(--mv-purple-100)' : 'var(--mv-magenta-100)',
+                    border: `1px solid ${projections.profit >= 0 ? 'var(--mv-purple-200)' : 'var(--mv-magenta-200)'}`,
                     borderRadius: 8, padding: '10px 12px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div>
-                        <div style={{ fontSize: 10, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Profit / wk</div>
-                        <div style={{ fontSize: 20, fontWeight: 800, color: projections.profit >= 0 ? 'var(--mv-green)' : '#EF4444' }}>{gbp(projections.profit)}</div>
-                        <div style={{ fontSize: 11, color: projections.profit >= 0 ? 'var(--mv-green)' : '#EF4444', marginTop: 2 }}>{projections.margin.toFixed(1)}% margin</div>
+                        <div style={{ fontSize: 10, color: 'var(--mv-ink-52)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>Profit / wk</div>
+                        <div style={{ fontSize: 20, fontWeight: 800, color: projections.profit >= 0 ? 'var(--mv-green)' : 'var(--mv-magenta)' }}>{gbp(projections.profit)}</div>
+                        <div style={{ fontSize: 11, color: projections.profit >= 0 ? 'var(--mv-green)' : 'var(--mv-magenta)', marginTop: 2 }}>{projections.margin.toFixed(1)}% margin</div>
                       </div>
                       <button
                         onClick={() => setShowDebug(d => !d)}
                         title="Show calculation"
                         style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '4px 9px',
                           borderRadius: 6, fontSize: 10, fontWeight: 700, cursor: 'pointer',
-                          background: showDebug ? 'rgba(245,158,11,0.15)' : 'rgba(0,0,0,0.06)',
-                          border: `1px solid ${showDebug ? 'rgba(245,158,11,0.4)' : 'rgba(0,0,0,0.08)'}`,
-                          color: showDebug ? '#F59E0B' : '#475569', marginTop: 2 }}>
+                          background: showDebug ? 'var(--mv-amber-100)' : 'color-mix(in srgb, var(--mv-ink) 6%, transparent)',
+                          border: `1px solid ${showDebug ? 'var(--mv-amber-200)' : 'color-mix(in srgb, var(--mv-ink) 8%, transparent)'}`,
+                          color: showDebug ? 'var(--mv-amber-deep)' : 'var(--mv-ink-62)', marginTop: 2 }}>
                         {showDebug ? <ChevronDown size={10}/> : <ChevronRight size={10}/>}
                         Debug
                       </button>
@@ -791,15 +791,15 @@ export default function RateCardEditor() {
 
                 {/* Debug: show both domestic and international assumptions */}
                 {showDebug && projections && (
-                  <div style={{ marginTop: 10, background: 'rgba(245,158,11,0.03)', border: '1px solid rgba(245,158,11,0.15)', borderRadius: 8, overflow: 'hidden', fontSize: 11 }}>
-                    <div style={{ padding: '8px 12px', borderBottom: '1px solid rgba(245,158,11,0.1)', fontSize: 10, color: '#F59E0B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  <div style={{ marginTop: 10, background: 'color-mix(in srgb, var(--mv-amber) 3%, transparent)', border: '1px solid color-mix(in srgb, var(--mv-amber) 15%, transparent)', borderRadius: 8, overflow: 'hidden', fontSize: 11 }}>
+                    <div style={{ padding: '8px 12px', borderBottom: '1px solid color-mix(in srgb, var(--mv-amber) 10%, transparent)', fontSize: 10, color: 'var(--mv-amber)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                       Projection assumptions
                     </div>
                     {/* Domestic leg */}
-                    <div style={{ padding: '10px 12px', borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
-                      <div style={{ fontSize: 10, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <div style={{ padding: '10px 12px', borderBottom: '1px solid color-mix(in srgb, var(--mv-ink) 4%, transparent)' }}>
+                      <div style={{ fontSize: 10, color: 'var(--mv-ink-52)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
                         Domestic — {projections.dom.parcels.toLocaleString()} parcels ({domesticPct}%)
-                        <span style={{ color: '#64748B', fontWeight: 400, textTransform: 'none' }}>
+                        <span style={{ color: 'var(--mv-ink-52)', fontWeight: 400, textTransform: 'none' }}>
                           {projections.dom.service_count} service type{projections.dom.service_count !== 1 ? 's' : ''} used
                         </span>
                       </div>
@@ -807,43 +807,43 @@ export default function RateCardEditor() {
                         {[
                           { label: 'Service',       val: primaryRate.service_name || primaryRate.service_code },
                           { label: 'Zone',          val: primaryRate.zone_name || 'Mainland', mono: true },
-                          { label: 'Carrier cost',  val: gbp(projections.dom.cost_rate), mono: true, color: '#B39DDB' },
+                          { label: 'Carrier cost',  val: gbp(projections.dom.cost_rate), mono: true, color: 'var(--mv-purple)' },
                         ].map(({ label, val, mono, color }) => (
                           <div key={label}>
-                            <div style={{ fontSize: 10, color: '#64748B', marginBottom: 2 }}>{label}</div>
-                            <div style={{ color: color || '#334155', fontFamily: mono ? 'monospace' : 'inherit', fontWeight: 600 }}>{val}</div>
+                            <div style={{ fontSize: 10, color: 'var(--mv-ink-52)', marginBottom: 2 }}>{label}</div>
+                            <div style={{ color: color || 'var(--mv-ink-78)', fontFamily: mono ? 'monospace' : 'inherit', fontWeight: 600 }}>{val}</div>
                           </div>
                         ))}
                       </div>
                       {/* Margin weighting breakdown */}
-                      <div style={{ background: 'rgba(0,0,0,0.03)', borderRadius: 6, padding: '6px 10px', fontSize: 10 }}>
-                        <div style={{ color: '#64748B', marginBottom: 4, fontWeight: 600 }}>Margin weighting</div>
+                      <div style={{ background: 'color-mix(in srgb, var(--mv-ink) 3%, transparent)', borderRadius: 6, padding: '6px 10px', fontSize: 10 }}>
+                        <div style={{ color: 'var(--mv-ink-52)', marginBottom: 4, fontWeight: 600 }}>Margin weighting</div>
                         <div style={{ display: 'flex', gap: 12 }}>
-                          <span style={{ color: '#A5B4FC' }}>
+                          <span style={{ color: 'var(--mv-purple)' }}>
                             80% × mainland {projections.dom.mainland_margin != null ? `${projections.dom.mainland_margin.toFixed(1)}%` : 'no price set'}
                           </span>
-                          <span style={{ color: '#64748B' }}>+</span>
-                          <span style={{ color: '#64748B' }}>
+                          <span style={{ color: 'var(--mv-ink-52)' }}>+</span>
+                          <span style={{ color: 'var(--mv-ink-52)' }}>
                             20% × other services ({projections.dom.other_service_count}) {projections.dom.other_avg_margin.toFixed(1)}%
                           </span>
-                          <span style={{ color: '#64748B' }}>=</span>
-                          <span style={{ color: '#34D399', fontWeight: 700 }}>
+                          <span style={{ color: 'var(--mv-ink-52)' }}>=</span>
+                          <span style={{ color: 'var(--mv-green)', fontWeight: 700 }}>
                             {projections.dom.weighted_margin.toFixed(1)}% weighted margin
                           </span>
                         </div>
                         <div style={{ marginTop: 6, display: 'flex', gap: 16 }}>
                           <span>Projected sell: <span style={{ color: 'var(--mv-green)', fontFamily: 'monospace', fontWeight: 700 }}>{gbp(projections.dom.sell_rate)}</span>/parcel</span>
                           <span>Dom profit: <span style={{ fontFamily: 'monospace', fontWeight: 700,
-                            color: projections.dom.profit >= 0 ? '#34D399' : '#EF4444' }}>{gbp(projections.dom.profit)}</span></span>
+                            color: projections.dom.profit >= 0 ? 'var(--mv-green)' : 'var(--mv-magenta)' }}>{gbp(projections.dom.profit)}</span></span>
                         </div>
                       </div>
                     </div>
                     {/* International leg */}
                     <div style={{ padding: '10px 12px' }}>
-                      <div style={{ fontSize: 10, color: '#64748B', fontWeight: 700, textTransform: 'uppercase', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ fontSize: 10, color: 'var(--mv-ink-52)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
                         International — {projections.intl.parcels.toLocaleString()} parcels ({100 - domesticPct}%)
                         {projections.intl.sample_count < 10 && (
-                          <span style={{ background: 'rgba(245,158,11,0.1)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: 99, padding: '1px 6px', color: '#F59E0B', fontSize: 9, fontWeight: 700, textTransform: 'none' }}>
+                          <span style={{ background: 'color-mix(in srgb, var(--mv-amber) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--mv-amber) 30%, transparent)', borderRadius: 99, padding: '1px 6px', color: 'var(--mv-amber)', fontSize: 9, fontWeight: 700, textTransform: 'none' }}>
                             {projections.intl.sample_count === 0 ? 'No data yet' : `${projections.intl.sample_count} charges`}
                           </span>
                         )}
@@ -851,13 +851,13 @@ export default function RateCardEditor() {
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
                         {[
                           { label: 'Avg sell/parcel', val: projections.intl.avg_sell > 0 ? gbp(projections.intl.avg_sell) : '—', mono: true, color: 'var(--mv-green)' },
-                          { label: 'Avg cost/parcel', val: projections.intl.avg_cost > 0 ? gbp(projections.intl.avg_cost) : '—', mono: true, color: '#B39DDB' },
+                          { label: 'Avg cost/parcel', val: projections.intl.avg_cost > 0 ? gbp(projections.intl.avg_cost) : '—', mono: true, color: 'var(--mv-purple)' },
                           { label: 'Intl profit',     val: projections.intl.rev > 0 ? gbp(projections.intl.profit) : '—', mono: true,
-                            color: projections.intl.profit >= 0 ? '#34D399' : '#EF4444' },
+                            color: projections.intl.profit >= 0 ? 'var(--mv-green)' : 'var(--mv-magenta)' },
                         ].map(({ label, val, mono, color }) => (
                           <div key={label}>
-                            <div style={{ fontSize: 10, color: '#64748B', marginBottom: 2 }}>{label}</div>
-                            <div style={{ color: color || '#334155', fontFamily: mono ? 'monospace' : 'inherit', fontWeight: 600 }}>{val}</div>
+                            <div style={{ fontSize: 10, color: 'var(--mv-ink-52)', marginBottom: 2 }}>{label}</div>
+                            <div style={{ color: color || 'var(--mv-ink-78)', fontFamily: mono ? 'monospace' : 'inherit', fontWeight: 600 }}>{val}</div>
                           </div>
                         ))}
                       </div>
@@ -866,15 +866,15 @@ export default function RateCardEditor() {
                 )}
               </div>
             ) : (
-              <div style={{ fontSize: 12, color: '#475569', textAlign: 'center', padding: '10px 0 16px',
-                background: 'rgba(0,0,0,0.02)', border: '1px solid rgba(0,0,0,0.04)', borderRadius: 8, marginBottom: 16 }}>
+              <div style={{ fontSize: 12, color: 'var(--mv-ink-62)', textAlign: 'center', padding: '10px 0 16px',
+                background: 'color-mix(in srgb, var(--mv-ink) 2%, transparent)', border: '1px solid color-mix(in srgb, var(--mv-ink) 4%, transparent)', borderRadius: 8, marginBottom: 16 }}>
                 {!weeklyParcels ? 'Enter weekly parcels below to see projection' :
                  !primaryRate?.cost_price ? 'Add domestic rates with cost prices to calculate' :
                  'Set sell prices on domestic rates to project margin'}
               </div>
             )}
 
-            <label style={{ fontSize: 12, color: '#64748B', display: 'block', marginBottom: 4 }}>Est. weekly parcels</label>
+            <label style={{ fontSize: 12, color: 'var(--mv-ink-52)', display: 'block', marginBottom: 4 }}>Est. weekly parcels</label>
             <input value={weeklyParcels} onChange={e => { setWeeklyParcels(e.target.value); markDirty(); }}
               type="number" min={0} disabled={!isEditable}
               style={{ ...inputStyle, marginBottom: 12 }} placeholder="e.g. 500" />
@@ -882,20 +882,20 @@ export default function RateCardEditor() {
             {/* Domestic / International split slider */}
             <div style={{ marginBottom: 16 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                <label style={{ fontSize: 12, color: '#64748B' }}>Domestic / International split</label>
+                <label style={{ fontSize: 12, color: 'var(--mv-ink-52)' }}>Domestic / International split</label>
                 <span style={{ fontSize: 12, fontFamily: 'monospace', fontWeight: 700 }}>
-                  <span style={{ color: '#A5B4FC' }}>{domesticPct}% dom</span>
-                  <span style={{ color: '#64748B', margin: '0 4px' }}>·</span>
-                  <span style={{ color: '#B39DDB' }}>{100 - domesticPct}% intl</span>
+                  <span style={{ color: 'var(--mv-purple)' }}>{domesticPct}% dom</span>
+                  <span style={{ color: 'var(--mv-ink-52)', margin: '0 4px' }}>·</span>
+                  <span style={{ color: 'var(--mv-purple)' }}>{100 - domesticPct}% intl</span>
                 </span>
               </div>
               <input
                 type="range" min={50} max={100} step={1} value={domesticPct}
                 onChange={e => { setDomesticPct(parseInt(e.target.value)); markDirty(); }}
                 disabled={!isEditable}
-                style={{ width: '100%', accentColor: '#6366F1', cursor: isEditable ? 'pointer' : 'default' }}
+                style={{ width: '100%', accentColor: 'var(--mv-purple)', cursor: isEditable ? 'pointer' : 'default' }}
               />
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: '#475569', marginTop: 2 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--mv-ink-62)', marginTop: 2 }}>
                 <span>50% dom</span><span>100% dom</span>
               </div>
             </div>

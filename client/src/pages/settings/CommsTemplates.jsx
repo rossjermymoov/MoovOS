@@ -31,8 +31,8 @@ function describeSample(sample) {
 }
 
 const taSt = {
-  width: '100%', boxSizing: 'border-box', background: '#fff',
-  border: '1px solid #E2E8F0', borderRadius: 10, color: '#0F172A',
+  width: '100%', boxSizing: 'border-box', background: 'var(--mv-surface)',
+  border: '1px solid var(--mv-hairline)', borderRadius: 10, color: 'var(--mv-ink)',
   fontSize: 13, lineHeight: 1.5, padding: '12px 14px', outline: 'none',
   fontFamily: 'inherit', resize: 'vertical', minHeight: 96,
 };
@@ -87,13 +87,13 @@ export default function CommsTemplates() {
 
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 18, gap: 16 }}>
         <div>
-          <h2 style={{ fontSize: 19, fontWeight: 800, color: '#0F172A', margin: 0 }}>✉️ Carrier Communication Templates</h2>
-          <p style={{ fontSize: 12.5, color: '#64748B', marginTop: 5, maxWidth: 620, lineHeight: 1.5 }}>
+          <h2 style={{ fontSize: 19, fontWeight: 800, color: 'var(--mv-ink)', margin: 0 }}>✉️ Carrier Communication Templates</h2>
+          <p style={{ fontSize: 12.5, color: 'var(--mv-ink-52)', marginTop: 5, maxWidth: 620, lineHeight: 1.5 }}>
             Top-and-Tail boilerplate per carrier. Gemini's dynamic analysis is dropped between your header and footer when drafting outbound mail.
           </p>
         </div>
         <div style={{ flexShrink: 0 }}>
-          <label style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#94A3B8', display: 'block', marginBottom: 5 }}>Carrier</label>
+          <label style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--mv-ink-45)', display: 'block', marginBottom: 5 }}>Carrier</label>
           <select value={code} onChange={e => selectCourier(e.target.value)}
             style={{ ...taSt, minHeight: 0, padding: '8px 12px', minWidth: 160 }}>
             {couriers.map(c => (
@@ -105,9 +105,9 @@ export default function CommsTemplates() {
         </div>
       </div>
 
-      {loading && <div style={{ padding: 28, textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>Loading carriers…</div>}
+      {loading && <div style={{ padding: 28, textAlign: 'center', color: 'var(--mv-ink-45)', fontSize: 13 }}>Loading carriers…</div>}
       {!loading && couriers.length === 0 && (
-        <div style={{ padding: 28, textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>
+        <div style={{ padding: 28, textAlign: 'center', color: 'var(--mv-ink-45)', fontSize: 13 }}>
           No carriers found. Add a courier routing rule first.
         </div>
       )}
@@ -117,26 +117,26 @@ export default function CommsTemplates() {
           {/* Routing endpoints — queries + claims only (no billing). */}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, marginBottom: 22 }}>
             <div>
-              <label style={{ fontSize: 11, fontWeight: 700, color: '#334155', display: 'block', marginBottom: 4 }}>📬 Queries Email Address</label>
-              <p style={{ fontSize: 11, color: '#94A3B8', margin: '0 0 7px' }}>For delays, missing scans, POD searches, etc.</p>
+              <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--mv-ink-78)', display: 'block', marginBottom: 4 }}>📬 Queries Email Address</label>
+              <p style={{ fontSize: 11, color: 'var(--mv-ink-45)', margin: '0 0 7px' }}>For delays, missing scans, POD searches, etc.</p>
               <input type="email" value={form.queries_email ?? ''} onChange={e => set('queries_email', e.target.value)}
                 placeholder="queries@dpd.co.uk" style={{ ...taSt, minHeight: 0, padding: '9px 12px' }} />
             </div>
             <div>
-              <label style={{ fontSize: 11, fontWeight: 700, color: '#334155', display: 'block', marginBottom: 4 }}>💼 Claims Email Address</label>
-              <p style={{ fontSize: 11, color: '#94A3B8', margin: '0 0 7px' }}>Only targeted when manually hitting ‘Raise Formal Claim’.</p>
+              <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--mv-ink-78)', display: 'block', marginBottom: 4 }}>💼 Claims Email Address</label>
+              <p style={{ fontSize: 11, color: 'var(--mv-ink-45)', margin: '0 0 7px' }}>Only targeted when manually hitting ‘Raise Formal Claim’.</p>
               <input type="email" value={form.claims_email ?? ''} onChange={e => set('claims_email', e.target.value)}
                 placeholder="claims@dpd.co.uk" style={{ ...taSt, minHeight: 0, padding: '9px 12px' }} />
             </div>
           </div>
 
           {/* Sample tracking numbers — the engine derives the format from these. */}
-          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#94A3B8', marginBottom: 10 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--mv-ink-45)', marginBottom: 10 }}>
             Tracking Number Samples
           </div>
           <div style={{ marginBottom: 22 }}>
-            <label style={{ fontSize: 11, fontWeight: 700, color: '#334155', display: 'block', marginBottom: 4 }}>📦 Sample tracking number(s)</label>
-            <p style={{ fontSize: 11, color: '#94A3B8', margin: '0 0 7px' }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--mv-ink-78)', display: 'block', marginBottom: 4 }}>📦 Sample tracking number(s)</label>
+            <p style={{ fontSize: 11, color: 'var(--mv-ink-45)', margin: '0 0 7px' }}>
               Paste one real tracking number per line — add as many formats as this carrier uses (e.g. the different Yodel/AGL variants).
               We learn the shape automatically; anything that doesn’t match is treated as “no tracking” and we ask the customer.
             </p>
@@ -145,12 +145,12 @@ export default function CommsTemplates() {
               placeholder={'9753172394\nJD0002345678901'} />
             {/* Live derived-shape preview */}
             {(form.tracking_samples ?? '').trim() && (
-              <div style={{ marginTop: 8, fontSize: 11, color: '#475569' }}>
+              <div style={{ marginTop: 8, fontSize: 11, color: 'var(--mv-ink-62)' }}>
                 {(form.tracking_samples).split(/[\n,;]+/).map(s => s.trim()).filter(Boolean).map((s, i) => (
                   <div key={i} style={{ marginTop: 2 }}>
-                    <code style={{ background: '#F1F5F9', padding: '1px 6px', borderRadius: 4 }}>{s}</code>
-                    <span style={{ color: '#94A3B8' }}> → detected: </span>
-                    <strong style={{ color: '#0F172A' }}>{describeSample(s)}</strong>
+                    <code style={{ background: 'var(--mv-bg)', padding: '1px 6px', borderRadius: 4 }}>{s}</code>
+                    <span style={{ color: 'var(--mv-ink-45)' }}> → detected: </span>
+                    <strong style={{ color: 'var(--mv-ink)' }}>{describeSample(s)}</strong>
                   </div>
                 ))}
               </div>
@@ -160,12 +160,12 @@ export default function CommsTemplates() {
           {/* Known copy-paste non-answers — the Reply Interpreter treats a match as
               "needs more info", never "resolved", so a courier's boilerplate can't
               falsely close out a case. */}
-          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#94A3B8', marginBottom: 10 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--mv-ink-45)', marginBottom: 10 }}>
             Known Non-Answer Phrases
           </div>
           <div style={{ marginBottom: 22 }}>
-            <label style={{ fontSize: 11, fontWeight: 700, color: '#334155', display: 'block', marginBottom: 4 }}>🚩 Generic reply phrases</label>
-            <p style={{ fontSize: 11, color: '#94A3B8', margin: '0 0 7px' }}>
+            <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--mv-ink-78)', display: 'block', marginBottom: 4 }}>🚩 Generic reply phrases</label>
+            <p style={{ fontSize: 11, color: 'var(--mv-ink-45)', margin: '0 0 7px' }}>
               One phrase per line. If a courier's reply contains any of these, we treat it as a non-answer and
               follow up automatically instead of relaying it to the customer as a resolution.
             </p>
@@ -175,14 +175,14 @@ export default function CommsTemplates() {
           </div>
 
           {/* Top-and-Tail boilerplate templates. */}
-          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#94A3B8', marginBottom: 10 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--mv-ink-45)', marginBottom: 10 }}>
             Header &amp; Footer Boilerplate
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
             {FIELDS.map(f => (
               <div key={f.key}>
-                <label style={{ fontSize: 11, fontWeight: 700, color: '#334155', display: 'block', marginBottom: 4 }}>{f.label}</label>
-                <p style={{ fontSize: 11, color: '#94A3B8', margin: '0 0 7px' }}>{f.hint}</p>
+                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--mv-ink-78)', display: 'block', marginBottom: 4 }}>{f.label}</label>
+                <p style={{ fontSize: 11, color: 'var(--mv-ink-45)', margin: '0 0 7px' }}>{f.hint}</p>
                 <textarea value={form[f.key] ?? ''} onChange={e => set(f.key, e.target.value)} style={taSt} rows={4} />
               </div>
             ))}
@@ -193,7 +193,7 @@ export default function CommsTemplates() {
               style={{ opacity: saving ? 0.6 : 1 }}>
               {saving ? 'Saving…' : 'Save templates'}
             </button>
-            {saved && <span style={{ fontSize: 13, fontWeight: 600, color: '#059669' }}>✓ Saved</span>}
+            {saved && <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--mv-green-deep)' }}>✓ Saved</span>}
           </div>
         </>
       )}

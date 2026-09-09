@@ -18,6 +18,10 @@ import { getCourierLogo } from '../../utils/courierLogos';
 
 const api = axios.create({ baseURL: '/api' });
 
+// Small helper: preserve an exact alpha tint when the base colour is a CSS
+// var() reference (hex + appended alpha-suffix doesn't work on var() output).
+const mix = (c, pct) => `color-mix(in srgb, ${c} ${pct}%, transparent)`;
+
 // Small inline logo for table rows / drawer
 function CourierBadge({ name, code }) {
   const logo = getCourierLogo(code) || getCourierLogo(name);
@@ -25,9 +29,9 @@ function CourierBadge({ name, code }) {
     return (
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
         <span style={{
-          width: 22, height: 22, borderRadius: 4, background: '#fff',
+          width: 22, height: 22, borderRadius: 4, background: 'var(--mv-surface)',
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          flexShrink: 0, overflow: 'hidden', border: '1px solid rgba(0,0,0,0.12)',
+          flexShrink: 0, overflow: 'hidden', border: '1px solid var(--mv-hairline)',
         }}>
           <img src={logo} alt={name || code} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 2 }}
             onError={e => { e.currentTarget.style.display = 'none'; }} />
@@ -41,22 +45,22 @@ function CourierBadge({ name, code }) {
 
 // ─── Status config ────────────────────────────────────────────
 const STATUS = {
-  booked:              { label: 'Booked',                      color: 'var(--mv-teal)', bg: 'rgba(39,110,147,0.12)',    icon: Package },
-  collected:           { label: 'Collected',                   color: '#2196F3', bg: 'rgba(33,150,243,0.12)',   icon: Package },
-  at_depot:            { label: 'At Hub',                      color: '#5C6BC0', bg: 'rgba(92,107,192,0.12)',   icon: Package },
-  in_transit:          { label: 'In Transit',                  color: 'var(--mv-purple)', bg: 'rgba(15,122,70,0.12)',   icon: Truck },
-  out_for_delivery:    { label: 'Out for Delivery',            color: '#D97706', bg: 'rgba(255,193,7,0.12)',    icon: Truck },
-  failed_delivery:     { label: 'Failed Attempt',              color: '#F44336', bg: 'rgba(244,67,54,0.12)',    icon: AlertTriangle },
-  delivered:           { label: 'Delivered',                   color: 'var(--mv-green)', bg: 'rgba(15,122,70,0.12)',     icon: PackageCheck },
-  on_hold:             { label: 'On Hold',                     color: '#FF9800', bg: 'rgba(255,152,0,0.12)',    icon: Clock },
-  exception:           { label: 'Address Issue',               color: '#F44336', bg: 'rgba(244,67,54,0.12)',    icon: AlertTriangle },
-  returned:            { label: 'Return to Sender',            color: '#607D8B', bg: 'rgba(96,125,139,0.12)',   icon: RotateCcw },
-  tracking_expired:    { label: 'Tracking Expired',            color: '#757575', bg: 'rgba(117,117,117,0.12)',  icon: Clock },
-  cancelled:           { label: 'Cancelled',                   color: '#757575', bg: 'rgba(117,117,117,0.12)',  icon: AlertTriangle },
-  awaiting_collection: { label: 'Awaiting Customer Collection',color: '#FF6F00', bg: 'rgba(255,111,0,0.12)',    icon: Store },
-  damaged:             { label: 'Damaged',                     color: 'var(--mv-magenta)', bg: 'rgba(205,29,105,0.12)',   icon: PackageX },
-  customs_hold:        { label: 'Customs Hold',                color: '#9C27B0', bg: 'rgba(156,39,176,0.12)',   icon: ShieldAlert },
-  unknown:             { label: 'Unknown',                     color: '#555555', bg: 'rgba(0,0,0,0.04)',  icon: Package },
+  booked:              { label: 'Booked',                      color: 'var(--mv-teal)', bg: 'var(--mv-teal-100)',    icon: Package },
+  collected:           { label: 'Collected',                   color: 'var(--mv-teal)', bg: 'var(--mv-teal-100)',   icon: Package },
+  at_depot:            { label: 'At Hub',                      color: 'var(--mv-teal)', bg: 'var(--mv-teal-100)',   icon: Package },
+  in_transit:          { label: 'In Transit',                  color: 'var(--mv-purple)', bg: 'var(--mv-purple-100)',   icon: Truck },
+  out_for_delivery:    { label: 'Out for Delivery',            color: 'var(--mv-amber)', bg: 'var(--mv-amber-100)',    icon: Truck },
+  failed_delivery:     { label: 'Failed Attempt',              color: 'var(--mv-magenta)', bg: 'var(--mv-magenta-100)',    icon: AlertTriangle },
+  delivered:           { label: 'Delivered',                   color: 'var(--mv-green)', bg: 'var(--mv-purple-100)',     icon: PackageCheck },
+  on_hold:             { label: 'On Hold',                     color: 'var(--mv-amber)', bg: 'var(--mv-amber-100)',    icon: Clock },
+  exception:           { label: 'Address Issue',               color: 'var(--mv-magenta)', bg: 'var(--mv-magenta-100)',    icon: AlertTriangle },
+  returned:            { label: 'Return to Sender',            color: 'var(--mv-ink-45)', bg: 'var(--mv-hairline-2)',   icon: RotateCcw },
+  tracking_expired:    { label: 'Tracking Expired',            color: 'var(--mv-ink-45)', bg: 'var(--mv-hairline-2)',  icon: Clock },
+  cancelled:           { label: 'Cancelled',                   color: 'var(--mv-ink-45)', bg: 'var(--mv-hairline-2)',  icon: AlertTriangle },
+  awaiting_collection: { label: 'Awaiting Customer Collection',color: 'var(--mv-amber)', bg: 'var(--mv-amber-100)',    icon: Store },
+  damaged:             { label: 'Damaged',                     color: 'var(--mv-magenta)', bg: 'var(--mv-magenta-100)',   icon: PackageX },
+  customs_hold:        { label: 'Customs Hold',                color: 'var(--mv-purple)', bg: 'var(--mv-purple-200)',   icon: ShieldAlert },
+  unknown:             { label: 'Unknown',                     color: 'var(--mv-ink-45)', bg: mix('var(--mv-ink)', 4),  icon: Package },
 };
 
 function StatusBadge({ status, label, size = 'sm' }) {
@@ -72,7 +76,7 @@ function StatusBadge({ status, label, size = 'sm' }) {
       padding: isLg ? '5px 12px' : '3px 9px',
       borderRadius: 9999,
       background: cfg.bg,
-      border: `1px solid ${cfg.color}44`,
+      border: `1px solid ${mix(cfg.color, 27)}`,
       color: cfg.color,
       fontSize: isLg ? 13 : 11,
       fontWeight: 700,
@@ -111,18 +115,18 @@ function KpiCard({ label, value, color, icon: Icon, active, onClick }) {
       style={{
         padding: '16px 18px',
         background: active
-          ? `linear-gradient(135deg, ${color}30 0%, ${color}14 100%)`
+          ? `linear-gradient(135deg, ${mix(color, 19)} 0%, ${mix(color, 8)} 100%)`
           : hasValue
-            ? `linear-gradient(135deg, ${color}18 0%, ${color}08 100%)`
-            : 'rgba(0,0,0,0.02)',
-        border: `2px solid ${active ? color + 'AA' : hasValue ? color + '44' : color + '1A'}`,
+            ? `linear-gradient(135deg, ${mix(color, 9)} 0%, ${mix(color, 3)} 100%)`
+            : mix('var(--mv-ink)', 2),
+        border: `2px solid ${active ? mix(color, 67) : hasValue ? mix(color, 27) : mix(color, 10)}`,
         borderRadius: 12,
         cursor: 'pointer',
         textAlign: 'left',
         transition: 'all 0.2s',
         boxShadow: active
-          ? `0 0 24px ${color}44, inset 0 0 20px ${color}10`
-          : hasValue ? `0 0 12px ${color}22` : 'none',
+          ? `0 0 24px ${mix(color, 27)}, inset 0 0 20px ${mix(color, 6)}`
+          : hasValue ? `0 0 12px ${mix(color, 13)}` : 'none',
         position: 'relative',
         overflow: 'hidden',
         width: '100%',
@@ -132,18 +136,18 @@ function KpiCard({ label, value, color, icon: Icon, active, onClick }) {
       <div style={{
         position: 'absolute', right: -10, top: -10,
         width: 80, height: 80, borderRadius: '50%',
-        background: `radial-gradient(circle, ${color}${hasValue ? '22' : '0A'} 0%, transparent 70%)`,
+        background: `radial-gradient(circle, ${mix(color, hasValue ? 13 : 4)} 0%, transparent 70%)`,
         pointerEvents: 'none',
       }} />
 
       {/* Icon box */}
       <div style={{
         width: 40, height: 40, borderRadius: 10,
-        background: `${color}22`,
-        border: `1.5px solid ${color}${hasValue ? '55' : '22'}`,
+        background: mix(color, 13),
+        border: `1.5px solid ${mix(color, hasValue ? 33 : 13)}`,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         marginBottom: 12,
-        boxShadow: hasValue ? `0 0 12px ${color}33` : 'none',
+        boxShadow: hasValue ? `0 0 12px ${mix(color, 20)}` : 'none',
       }}>
         <Icon size={20} color={color} strokeWidth={2.2} />
       </div>
@@ -151,8 +155,8 @@ function KpiCard({ label, value, color, icon: Icon, active, onClick }) {
       {/* Number */}
       <div style={{
         fontSize: 30, fontWeight: 900, lineHeight: 1, marginBottom: 5,
-        color: hasValue ? color : '#333',
-        textShadow: hasValue && active ? `0 0 16px ${color}88` : 'none',
+        color: hasValue ? color : 'var(--mv-ink-45)',
+        textShadow: hasValue && active ? `0 0 16px ${mix(color, 53)}` : 'none',
       }}>
         {(value || 0).toLocaleString()}
       </div>
@@ -161,7 +165,7 @@ function KpiCard({ label, value, color, icon: Icon, active, onClick }) {
       <div style={{
         fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
         letterSpacing: '0.06em',
-        color: hasValue ? color + 'CC' : '#333',
+        color: hasValue ? mix(color, 80) : 'var(--mv-ink-45)',
         lineHeight: 1.3,
       }}>
         {label}
@@ -178,7 +182,7 @@ const BoldStatCard = KpiCard;
 // Events arrive newest-first from the API (ORDER BY event_at DESC).
 // The vertical line runs downward from each dot to the next older event.
 function EventTimeline({ events }) {
-  if (!events?.length) return <p style={{ color: '#64748B', fontSize: 13, fontStyle: 'italic' }}>No events yet</p>;
+  if (!events?.length) return <p style={{ color: 'var(--mv-ink-52)', fontSize: 13, fontStyle: 'italic' }}>No events yet</p>;
   return (
     <div style={{ position: 'relative' }}>
       {events.map((ev, i) => {
@@ -197,21 +201,21 @@ function EventTimeline({ events }) {
               {/* Line going down to next (older) event */}
               {!isLast && (
                 <div style={{ width: 2, flex: 1, minHeight: 16,
-                  background: 'linear-gradient(to bottom, rgba(0,0,0,0.10), rgba(0,0,0,0.03))' }} />
+                  background: `linear-gradient(to bottom, ${mix('var(--mv-ink)', 10)}, ${mix('var(--mv-ink)', 3)})` }} />
               )}
             </div>
             <div style={{ flex: 1, paddingTop: 2, paddingBottom: isLast ? 0 : 4 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 3 }}>
                 <StatusBadge status={ev.status} />
-                <span style={{ fontSize: 11, color: '#64748B' }}>{timeAgo(ev.event_at)}</span>
+                <span style={{ fontSize: 11, color: 'var(--mv-ink-52)' }}>{timeAgo(ev.event_at)}</span>
               </div>
-              {ev.description && <p style={{ fontSize: 13, color: '#334155', margin: '3px 0' }}>{ev.description}</p>}
+              {ev.description && <p style={{ fontSize: 13, color: 'var(--mv-ink-78)', margin: '3px 0' }}>{ev.description}</p>}
               {ev.location && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: '#64748B' }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 12, color: 'var(--mv-ink-52)' }}>
                   <MapPin size={11} /> {ev.location}
                 </span>
               )}
-              <div style={{ fontSize: 11, color: '#475569', marginTop: 3 }}>
+              <div style={{ fontSize: 11, color: 'var(--mv-ink-62)', marginTop: 3 }}>
                 {new Date(ev.event_at).toLocaleString('en-GB')}
               </div>
             </div>
@@ -260,29 +264,36 @@ function getClaimInfo(parcel, consignmentNumber) {
 
 function ClaimsTab({ data, consignment }) {
   const info = getClaimInfo(data, consignment);
-  const borderCol = '#1E293B';
+  const borderCol = 'var(--mv-divider)';
 
   if (!info) {
     return (
       <div style={{ padding: '32px 24px', textAlign: 'center' }}>
         <div style={{ fontSize: 32, marginBottom: 12 }}>📦</div>
-        <div style={{ fontSize: 14, fontWeight: 700, color: '#334155', marginBottom: 6 }}>No claims window data</div>
-        <div style={{ fontSize: 13, color: '#64748B', lineHeight: 1.6 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--mv-ink-78)', marginBottom: 6 }}>No claims window data</div>
+        <div style={{ fontSize: 13, color: 'var(--mv-ink-52)', lineHeight: 1.6 }}>
           Claims window rules are not configured for this carrier.<br />Check directly with {data?.courier_name || 'the carrier'}.
         </div>
       </div>
     );
   }
 
-  // Status band colours
-  const statusColor = info.expired  ? '#EF4444'
-                    : info.urgent   ? '#F97316'
-                    : info.warning  ? '#D97706'
-                    : 'var(--mv-green)';
-  const statusBg    = info.expired  ? 'rgba(239,68,68,0.12)'
-                    : info.urgent   ? 'rgba(249,115,22,0.12)'
-                    : info.warning  ? 'rgba(217,119,6,0.12)'
-                    : 'rgba(15,122,70,0.10)';
+  // Status band colours — `statusColor` is the dot/fill/border variant, used for
+  // solid fills (the action button) and borders; `statusTextColor` is the
+  // legible-as-text variant, used only where the colour sits directly on the
+  // page as text.
+  const statusColor = info.expired  ? 'var(--mv-magenta)'
+                    : info.urgent   ? 'var(--mv-amber)'
+                    : info.warning  ? 'var(--mv-amber)'
+                    : 'var(--mv-purple)';
+  const statusTextColor = info.expired  ? 'var(--mv-magenta-deep)'
+                    : info.urgent   ? 'var(--mv-amber-deep)'
+                    : info.warning  ? 'var(--mv-amber-deep)'
+                    : 'var(--mv-green-deep)';
+  const statusBg    = info.expired  ? 'var(--mv-magenta-100)'
+                    : info.urgent   ? 'var(--mv-amber-100)'
+                    : info.warning  ? 'var(--mv-amber-100)'
+                    : 'var(--mv-purple-100)';
   const statusLabel = info.expired
     ? `Window closed ${Math.abs(info.daysRemaining)} day${Math.abs(info.daysRemaining) !== 1 ? 's' : ''} ago`
     : info.urgent
@@ -317,7 +328,7 @@ function ClaimsTab({ data, consignment }) {
       {/* Status banner */}
       <div style={{
         background: statusBg,
-        border: `1px solid ${statusColor}55`,
+        border: `1px solid ${mix(statusColor, 33)}`,
         borderRadius: 10,
         padding: '14px 16px',
         marginBottom: 20,
@@ -327,10 +338,10 @@ function ClaimsTab({ data, consignment }) {
           {info.expired ? '🔴' : info.urgent ? '🟠' : info.warning ? '🟡' : '🟢'}
         </div>
         <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 15, fontWeight: 800, color: statusColor, marginBottom: 2 }}>
+          <div style={{ fontSize: 15, fontWeight: 800, color: statusTextColor, marginBottom: 2 }}>
             {statusLabel}
           </div>
-          <div style={{ fontSize: 12, color: '#64748B' }}>
+          <div style={{ fontSize: 12, color: 'var(--mv-ink-52)' }}>
             Deadline: {info.deadline.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })}
           </div>
         </div>
@@ -338,7 +349,7 @@ function ClaimsTab({ data, consignment }) {
 
       {/* Window rules */}
       <div style={{ marginBottom: 20 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--mv-ink-52)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
           Claims Window Rules
         </div>
         {[
@@ -348,21 +359,21 @@ function ClaimsTab({ data, consignment }) {
           ['Deadline',      info.deadline.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })],
         ].map(([label, value]) => (
           <div key={label} style={{ display: 'flex', padding: '7px 0', borderBottom: `1px solid ${borderCol}` }}>
-            <span style={{ fontSize: 12, color: '#64748B', width: 120, flexShrink: 0 }}>{label}</span>
-            <span style={{ fontSize: 13, color: '#0F172A', fontWeight: 500 }}>{value}</span>
+            <span style={{ fontSize: 12, color: 'var(--mv-ink-52)', width: 120, flexShrink: 0 }}>{label}</span>
+            <span style={{ fontSize: 13, color: 'var(--mv-ink)', fontWeight: 500 }}>{value}</span>
           </div>
         ))}
       </div>
 
       {/* Process note */}
       <div style={{
-        background: 'rgba(30,64,175,0.07)',
-        border: '1px solid rgba(30,64,175,0.18)',
+        background: mix('var(--mv-teal)', 7),
+        border: `1px solid var(--mv-teal-200)`,
         borderRadius: 8,
         padding: '12px 14px',
         marginBottom: 20,
         fontSize: 13,
-        color: '#1E293B',
+        color: 'var(--mv-ink)',
         lineHeight: 1.6,
       }}>
         {info.note}
@@ -378,7 +389,7 @@ function ClaimsTab({ data, consignment }) {
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
             width: '100%', padding: '12px 20px',
             background: statusColor,
-            color: '#FFFFFF',
+            color: statusColor === 'var(--mv-purple)' ? 'var(--mv-on-brand)' : '#FFFFFF',
             borderRadius: 8,
             fontSize: 14, fontWeight: 700,
             textDecoration: 'none',
@@ -406,8 +417,8 @@ function ClaimsTab({ data, consignment }) {
       {info.expired && (
         <div style={{
           padding: '12px 16px', borderRadius: 8,
-          background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)',
-          fontSize: 13, color: '#991B1B', textAlign: 'center', lineHeight: 1.5,
+          background: mix('var(--mv-magenta)', 8), border: '1px solid var(--mv-magenta-200)',
+          fontSize: 13, color: 'var(--mv-magenta-deep)', textAlign: 'center', lineHeight: 1.5,
         }}>
           The standard claims window has closed. Contact {data?.courier_name || 'the carrier'} directly — some carriers may accept late claims in exceptional circumstances.
         </div>
@@ -433,9 +444,9 @@ function ParcelDrawer({ consignment, onClose }) {
 
   // Compute claim status for tab badge
   const claimInfo = data ? getClaimInfo(data, consignment) : null;
-  const claimBadgeColor = claimInfo?.expired  ? '#EF4444'
-                        : claimInfo?.urgent   ? '#F97316'
-                        : claimInfo?.warning  ? '#D97706'
+  const claimBadgeColor = claimInfo?.expired  ? 'var(--mv-magenta)'
+                        : claimInfo?.urgent   ? 'var(--mv-amber)'
+                        : claimInfo?.warning  ? 'var(--mv-amber)'
                         : claimInfo           ? 'var(--mv-green)'
                         : null;
 
@@ -447,15 +458,15 @@ function ParcelDrawer({ consignment, onClose }) {
       {/* Drawer */}
       <div style={{
         position: 'fixed', top: 0, right: 0, bottom: 0,
-        width: 480, background: '#FFFFFF',
-        borderLeft: '1px solid rgba(0,0,0,0.10)',
+        width: 480, background: 'var(--mv-surface)',
+        borderLeft: '1px solid var(--mv-hairline)',
         zIndex: 401, display: 'flex', flexDirection: 'column',
         boxShadow: '-8px 0 40px rgba(0,0,0,0.12)',
       }}>
         {/* Drawer header */}
-        <div style={{ padding: '18px 24px', borderBottom: '1px solid rgba(0,0,0,0.08)', display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--mv-hairline)', display: 'flex', alignItems: 'center', gap: 12 }}>
           <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 10, color: '#94A3B8', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Consignment</div>
+            <div style={{ fontSize: 10, color: 'var(--mv-ink-45)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Consignment</div>
             {(() => {
               const stored = data?.tracking_url;
               const code = (data?.courier_code || '').toLowerCase();
@@ -475,25 +486,25 @@ function ParcelDrawer({ consignment, onClose }) {
               const url = stored || fallback;
               return url ? (
                 <a href={url} target="_blank" rel="noopener noreferrer" style={{
-                  fontSize: 17, fontWeight: 900, color: '#0F172A', fontFamily: 'monospace',
+                  fontSize: 17, fontWeight: 900, color: 'var(--mv-ink)', fontFamily: 'monospace',
                   textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 7,
-                  borderBottom: '2px solid rgba(26,115,232,0.4)', paddingBottom: 1,
+                  borderBottom: `2px solid ${mix('var(--mv-teal)', 40)}`, paddingBottom: 1,
                 }}>
                   {consignment}
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1a73e8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--mv-teal)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
                   </svg>
                 </a>
               ) : (
-                <div style={{ fontSize: 17, fontWeight: 900, color: '#0F172A', fontFamily: 'monospace' }}>{consignment}</div>
+                <div style={{ fontSize: 17, fontWeight: 900, color: 'var(--mv-ink)', fontFamily: 'monospace' }}>{consignment}</div>
               );
             })()}
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', padding: 4 }}><X size={18} /></button>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--mv-ink-45)', cursor: 'pointer', padding: 4 }}><X size={18} /></button>
         </div>
 
         {/* Tab bar */}
-        <div style={{ display: 'flex', borderBottom: '1px solid rgba(0,0,0,0.08)', background: '#F8FAFC' }}>
+        <div style={{ display: 'flex', borderBottom: '1px solid var(--mv-hairline)', background: 'var(--mv-bg)' }}>
           {[
             { key: 'events', label: `Events${data ? ` (${data.events?.length || 0})` : ''}` },
             { key: 'claims', label: 'Claims Window', badgeColor: claimBadgeColor },
@@ -505,8 +516,8 @@ function ParcelDrawer({ consignment, onClose }) {
                 flex: 1, padding: '11px 14px',
                 background: 'none', border: 'none', cursor: 'pointer',
                 fontSize: 12, fontWeight: 700,
-                color: activeTab === tab.key ? '#1E40AF' : '#64748B',
-                borderBottom: activeTab === tab.key ? '2px solid #1E40AF' : '2px solid transparent',
+                color: activeTab === tab.key ? 'var(--mv-teal)' : 'var(--mv-ink-52)',
+                borderBottom: activeTab === tab.key ? '2px solid var(--mv-teal)' : '2px solid transparent',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
                 transition: 'color 0.1s',
               }}
@@ -524,7 +535,7 @@ function ParcelDrawer({ consignment, onClose }) {
         </div>
 
         {isLoading ? (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94A3B8' }}>Loading…</div>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--mv-ink-45)' }}>Loading…</div>
         ) : data ? (
           <div style={{ flex: 1, overflowY: 'auto' }}>
 
@@ -532,22 +543,22 @@ function ParcelDrawer({ consignment, onClose }) {
               <div style={{ padding: '20px 24px' }}>
                 {/* Delivery address */}
                 {(data.recipient_name || data.recipient_address || data.recipient_postcode) && (
-                  <div style={{ marginBottom: 20, padding: 14, background: 'rgba(39,110,147,0.05)', borderRadius: 10, border: '1px solid rgba(39,110,147,0.2)' }}>
-                    <div style={{ fontSize: 11, color: '#0891B2', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div style={{ marginBottom: 20, padding: 14, background: mix('var(--mv-teal)', 5), borderRadius: 10, border: '1px solid var(--mv-teal-200)' }}>
+                    <div style={{ fontSize: 11, color: 'var(--mv-teal)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
                       <MapPin size={11} /> Delivery Address
                     </div>
-                    {data.recipient_name && <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A', marginBottom: 4 }}>{data.recipient_name}</div>}
-                    {data.recipient_address && <div style={{ fontSize: 13, color: '#334155', lineHeight: 1.6, whiteSpace: 'pre-line' }}>{data.recipient_address}</div>}
-                    {data.recipient_postcode && <div style={{ fontSize: 13, fontWeight: 700, color: '#334155', marginTop: data.recipient_address ? 2 : 0 }}>{data.recipient_postcode}</div>}
+                    {data.recipient_name && <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--mv-ink)', marginBottom: 4 }}>{data.recipient_name}</div>}
+                    {data.recipient_address && <div style={{ fontSize: 13, color: 'var(--mv-ink-78)', lineHeight: 1.6, whiteSpace: 'pre-line' }}>{data.recipient_address}</div>}
+                    {data.recipient_postcode && <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--mv-ink-78)', marginTop: data.recipient_address ? 2 : 0 }}>{data.recipient_postcode}</div>}
                     {data.estimated_delivery && (
-                      <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid rgba(0,0,0,0.06)', display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ fontSize: 11, color: '#64748B' }}>Estimated delivery</span>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: '#D97706' }}>{fmtDate(data.estimated_delivery)}</span>
+                      <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--mv-hairline)', display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ fontSize: 11, color: 'var(--mv-ink-52)' }}>Estimated delivery</span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--mv-amber-deep)' }}>{fmtDate(data.estimated_delivery)}</span>
                       </div>
                     )}
                     {data.delivered_at && (
                       <div style={{ marginTop: 6, display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ fontSize: 11, color: '#64748B' }}>Delivered</span>
+                        <span style={{ fontSize: 11, color: 'var(--mv-ink-52)' }}>Delivered</span>
                         <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--mv-green)' }}>{new Date(data.delivered_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                       </div>
                     )}
@@ -555,13 +566,13 @@ function ParcelDrawer({ consignment, onClose }) {
                 )}
 
                 {/* Event timeline */}
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--mv-ink-45)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>
                   Event History ({data.events?.length || 0})
                 </div>
                 <EventTimeline events={data.events} />
 
                 {/* Parcel meta */}
-                <div style={{ marginTop: 24, paddingTop: 20, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
+                <div style={{ marginTop: 24, paddingTop: 20, borderTop: '1px solid var(--mv-hairline)' }}>
                   {[
                     ['Courier',   data.courier_name ? <CourierBadge name={data.courier_name} code={data.courier_code} /> : null],
                     ['Service',   data.service_name || null],
@@ -569,9 +580,9 @@ function ParcelDrawer({ consignment, onClose }) {
                     ['Account',   data.customer_account || null],
                     ['Weight',    data.weight_kg ? `${parseFloat(data.weight_kg).toFixed(2)} kg` : null],
                   ].filter(([, v]) => v).map(([label, value]) => (
-                    <div key={label} style={{ display: 'flex', padding: '7px 0', borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
-                      <span style={{ fontSize: 12, color: '#94A3B8', width: 120, flexShrink: 0 }}>{label}</span>
-                      <span style={{ fontSize: 13, color: '#0F172A', fontWeight: 500 }}>{value}</span>
+                    <div key={label} style={{ display: 'flex', padding: '7px 0', borderBottom: '1px solid var(--mv-hairline)' }}>
+                      <span style={{ fontSize: 12, color: 'var(--mv-ink-45)', width: 120, flexShrink: 0 }}>{label}</span>
+                      <span style={{ fontSize: 13, color: 'var(--mv-ink)', fontWeight: 500 }}>{value}</span>
                     </div>
                   ))}
                 </div>
@@ -584,7 +595,7 @@ function ParcelDrawer({ consignment, onClose }) {
 
           </div>
         ) : (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94A3B8' }}>Not found</div>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--mv-ink-45)' }}>Not found</div>
         )}
       </div>
     </>
@@ -605,10 +616,10 @@ const DATE_PRESETS = [
 
 // ─── Shared dark select style ─────────────────────────────────
 const darkSelect = {
-  background: '#FFFFFF',
-  border: '1px solid rgba(0,0,0,0.10)',
+  background: 'var(--mv-surface)',
+  border: '1px solid var(--mv-hairline)',
   borderRadius: 8,
-  color: '#0F172A',
+  color: 'var(--mv-ink)',
   fontSize: 13,
   padding: '8px 12px',
   outline: 'none',
@@ -757,8 +768,8 @@ export default function TrackingPage() {
       {/* Page header */}
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 24, gap: 12 }}>
         <div style={{ flex: 1 }}>
-          <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0F172A', margin: 0 }}>Tracking</h1>
-          <p style={{ fontSize: 13, color: '#64748B', margin: '4px 0 0' }}>
+          <h1 style={{ fontSize: 24, fontWeight: 800, color: 'var(--mv-ink)', margin: 0 }}>Tracking</h1>
+          <p style={{ fontSize: 13, color: 'var(--mv-ink-52)', margin: '4px 0 0' }}>
             {stats ? `${(stats.total_active || 0).toLocaleString()} active parcels` : 'Loading…'}
           </p>
         </div>
@@ -766,15 +777,15 @@ export default function TrackingPage() {
           onClick={handlePurgePriorToday}
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 6,
-            background: 'rgba(244,67,54,0.06)', border: '1px solid rgba(244,67,54,0.25)',
-            borderRadius: 7, color: '#F44336', fontSize: 12, fontWeight: 600,
+            background: mix('var(--mv-magenta)', 6), border: '1px solid var(--mv-magenta-200)',
+            borderRadius: 7, color: 'var(--mv-magenta)', fontSize: 12, fontWeight: 600,
             padding: '7px 14px', cursor: 'pointer'
           }}
           title="Delete all tracking events from before today"
         >
           Purge Prior to Today
         </button>
-        <button onClick={refresh} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: '1px solid rgba(0,0,0,0.10)', borderRadius: 7, color: '#64748B', fontSize: 12, padding: '7px 14px', cursor: 'pointer' }}>
+        <button onClick={refresh} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'none', border: '1px solid var(--mv-hairline)', borderRadius: 7, color: 'var(--mv-ink-52)', fontSize: 12, padding: '7px 14px', cursor: 'pointer' }}>
           <RefreshCw size={13} /> Refresh
         </button>
         <button
@@ -783,8 +794,8 @@ export default function TrackingPage() {
           title="Re-fetch tracking for parcels with no update in 7+ days"
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 6,
-            background: staleRunning ? 'rgba(15,122,70,0.08)' : 'rgba(15,122,70,0.06)',
-            border: '1px solid rgba(15,122,70,0.25)',
+            background: staleRunning ? mix('var(--mv-purple)', 8) : mix('var(--mv-purple)', 6),
+            border: '1px solid var(--mv-purple-200)',
             borderRadius: 7, color: 'var(--mv-purple)', fontSize: 12, fontWeight: 600,
             padding: '7px 14px', cursor: staleRunning ? 'not-allowed' : 'pointer',
             opacity: staleRunning ? 0.7 : 1,
@@ -796,9 +807,9 @@ export default function TrackingPage() {
         {staleResult && (
           <span style={{
             fontSize: 12, padding: '5px 11px', borderRadius: 7,
-            background: staleResult.ok ? 'rgba(15,122,70,0.08)' : 'rgba(244,67,54,0.08)',
-            border: `1px solid ${staleResult.ok ? 'rgba(15,122,70,0.3)' : 'rgba(244,67,54,0.3)'}`,
-            color: staleResult.ok ? 'var(--mv-green)' : '#F44336',
+            background: staleResult.ok ? mix('var(--mv-purple)', 8) : mix('var(--mv-magenta)', 8),
+            border: `1px solid ${staleResult.ok ? 'var(--mv-purple-200)' : 'var(--mv-magenta-200)'}`,
+            color: staleResult.ok ? 'var(--mv-green)' : 'var(--mv-magenta)',
           }}>
             {staleResult.msg}
           </span>
@@ -807,36 +818,36 @@ export default function TrackingPage() {
 
       {/* ── KPI cards ──────────────────────────────────────────── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10, marginBottom: 24 }}>
-        <KpiCard label="In Transit"                  value={bs.in_transit}           color="#FF9800" icon={Truck}         active={statusFilter==='in_transit'}          onClick={() => toggleStatus('in_transit')} />
-        <KpiCard label="At Hub"                      value={bs.at_depot}             color="#1976D2" icon={Warehouse}     active={statusFilter==='at_depot'}            onClick={() => toggleStatus('at_depot')} />
-        <KpiCard label="Out for Delivery"            value={bs.out_for_delivery}     color="#D97706" icon={Navigation}    active={statusFilter==='out_for_delivery'}    onClick={() => toggleStatus('out_for_delivery')} />
-        <KpiCard label="On Hold"                     value={bs.on_hold}              color="#F44336" icon={OctagonX}      active={statusFilter==='on_hold'}             onClick={() => toggleStatus('on_hold')} />
-        <KpiCard label="Awaiting Collection"         value={bs.awaiting_collection}  color="#FF9800" icon={Store}         active={statusFilter==='awaiting_collection'} onClick={() => toggleStatus('awaiting_collection')} />
+        <KpiCard label="In Transit"                  value={bs.in_transit}           color="var(--mv-amber)" icon={Truck}         active={statusFilter==='in_transit'}          onClick={() => toggleStatus('in_transit')} />
+        <KpiCard label="At Hub"                      value={bs.at_depot}             color="var(--mv-teal)" icon={Warehouse}     active={statusFilter==='at_depot'}            onClick={() => toggleStatus('at_depot')} />
+        <KpiCard label="Out for Delivery"            value={bs.out_for_delivery}     color="var(--mv-amber)" icon={Navigation}    active={statusFilter==='out_for_delivery'}    onClick={() => toggleStatus('out_for_delivery')} />
+        <KpiCard label="On Hold"                     value={bs.on_hold}              color="var(--mv-magenta)" icon={OctagonX}      active={statusFilter==='on_hold'}             onClick={() => toggleStatus('on_hold')} />
+        <KpiCard label="Awaiting Collection"         value={bs.awaiting_collection}  color="var(--mv-amber)" icon={Store}         active={statusFilter==='awaiting_collection'} onClick={() => toggleStatus('awaiting_collection')} />
         <KpiCard label="Delivered Today"             value={stats?.delivered_today}  color="var(--mv-green)" icon={PackageCheck}  active={statusFilter==='delivered'}           onClick={toggleDeliveredToday} />
-        <KpiCard label="Address Issue"               value={(bs.exception||0)}       color="#F44336" icon={AlertTriangle} active={statusFilter==='exception'}           onClick={() => toggleStatus('exception')} />
-        <KpiCard label="Failed Attempt"              value={(bs.failed_delivery||0)} color="#F44336" icon={AlertTriangle} active={statusFilter==='failed_delivery'}     onClick={() => toggleStatus('failed_delivery')} />
-        <KpiCard label="Customs Hold"                value={bs.customs_hold}         color="#9C27B0" icon={Plane}         active={statusFilter==='customs_hold'}        onClick={() => toggleStatus('customs_hold')} />
-        <KpiCard label="Return to Sender"            value={bs.returned}             color="#F44336" icon={RotateCcw}     active={statusFilter==='returned'}            onClick={() => toggleStatus('returned')} />
-        <KpiCard label="Damaged"                     value={(bs.damaged||0)}         color="#9C27B0" icon={PackageX}      active={statusFilter==='damaged'}             onClick={() => toggleStatus('damaged')} />
+        <KpiCard label="Address Issue"               value={(bs.exception||0)}       color="var(--mv-magenta)" icon={AlertTriangle} active={statusFilter==='exception'}           onClick={() => toggleStatus('exception')} />
+        <KpiCard label="Failed Attempt"              value={(bs.failed_delivery||0)} color="var(--mv-magenta)" icon={AlertTriangle} active={statusFilter==='failed_delivery'}     onClick={() => toggleStatus('failed_delivery')} />
+        <KpiCard label="Customs Hold"                value={bs.customs_hold}         color="var(--mv-purple)" icon={Plane}         active={statusFilter==='customs_hold'}        onClick={() => toggleStatus('customs_hold')} />
+        <KpiCard label="Return to Sender"            value={bs.returned}             color="var(--mv-magenta)" icon={RotateCcw}     active={statusFilter==='returned'}            onClick={() => toggleStatus('returned')} />
+        <KpiCard label="Damaged"                     value={(bs.damaged||0)}         color="var(--mv-purple)" icon={PackageX}      active={statusFilter==='damaged'}             onClick={() => toggleStatus('damaged')} />
       </div>
 
       {/* ── Date range ──────────────────────────────────────────── */}
       <div style={{ display: 'flex', gap: 8, marginBottom: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-        <Calendar size={14} color="#64748B" />
+        <Calendar size={14} color="var(--mv-ink-52)" />
         {DATE_PRESETS.map(p => (
           <button key={p.label} onClick={() => applyPreset(p)} style={{
             padding: '6px 13px', borderRadius: 20, fontSize: 12, fontWeight: 600,
             border: '1px solid',
-            borderColor: datePreset === p.label ? 'var(--mv-green)' : 'rgba(0,0,0,0.08)',
-            background: datePreset === p.label ? 'rgba(15,122,70,0.12)' : 'transparent',
-            color: datePreset === p.label ? 'var(--mv-green)' : '#64748B',
+            borderColor: datePreset === p.label ? 'var(--mv-green)' : 'var(--mv-hairline)',
+            background: datePreset === p.label ? 'var(--mv-purple-100)' : 'transparent',
+            color: datePreset === p.label ? 'var(--mv-green)' : 'var(--mv-ink-52)',
             cursor: 'pointer',
           }}>
             {p.label}
           </button>
         ))}
         {datePreset && (
-          <button onClick={clearDateRange} style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', fontSize: 12, padding: '0 4px' }}>
+          <button onClick={clearDateRange} style={{ background: 'none', border: 'none', color: 'var(--mv-ink-52)', cursor: 'pointer', fontSize: 12, padding: '0 4px' }}>
             <X size={12} />
           </button>
         )}
@@ -845,7 +856,7 @@ export default function TrackingPage() {
           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
             <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
               style={{ ...darkSelect, width: 140 }} />
-            <span style={{ color: '#475569', fontSize: 12 }}>–</span>
+            <span style={{ color: 'var(--mv-ink-62)', fontSize: 12 }}>–</span>
             <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
               style={{ ...darkSelect, width: 140 }} />
           </div>
@@ -856,16 +867,16 @@ export default function TrackingPage() {
       <div style={{ display: 'flex', gap: 10, marginBottom: 16, alignItems: 'center', flexWrap: 'wrap' }}>
         {/* Search */}
         <div style={{ position: 'relative', flex: 1, minWidth: 240, maxWidth: 380 }}>
-          <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#64748B', pointerEvents: 'none' }} />
+          <Search size={14} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--mv-ink-52)', pointerEvents: 'none' }} />
           <input
             ref={searchRef}
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Consignment, postcode, recipient…"
-            style={{ width: '100%', boxSizing: 'border-box', background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.10)', borderRadius: 8, padding: '9px 36px', color: '#0F172A', fontSize: 13, outline: 'none' }}
+            style={{ width: '100%', boxSizing: 'border-box', background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline)', borderRadius: 8, padding: '9px 36px', color: 'var(--mv-ink)', fontSize: 13, outline: 'none' }}
           />
           {search && (
-            <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', padding: 0, display: 'flex' }}>
+            <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--mv-ink-52)', cursor: 'pointer', padding: 0, display: 'flex' }}>
               <X size={14} />
             </button>
           )}
@@ -880,7 +891,7 @@ export default function TrackingPage() {
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
             </select>
-            <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: '#64748B', pointerEvents: 'none', fontSize: 10 }}>▾</span>
+            <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--mv-ink-52)', pointerEvents: 'none', fontSize: 10 }}>▾</span>
           </div>
         )}
 
@@ -892,7 +903,7 @@ export default function TrackingPage() {
               <option key={s} value={s}>{STATUS[s]?.label || s}</option>
             ))}
           </select>
-          <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: '#64748B', pointerEvents: 'none', fontSize: 10 }}>▾</span>
+          <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--mv-ink-52)', pointerEvents: 'none', fontSize: 10 }}>▾</span>
         </div>
 
         {/* Courier — only shows couriers that exist in the table */}
@@ -906,18 +917,18 @@ export default function TrackingPage() {
                 </option>
               ))}
             </select>
-            <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: '#64748B', pointerEvents: 'none', fontSize: 10 }}>▾</span>
+            <span style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--mv-ink-52)', pointerEvents: 'none', fontSize: 10 }}>▾</span>
           </div>
         )}
 
         {/* Clear all */}
         {hasFilters && (
-          <button onClick={clearAll} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'rgba(205,29,105,0.1)', border: '1px solid rgba(205,29,105,0.3)', borderRadius: 7, color: 'var(--mv-magenta)', fontSize: 12, fontWeight: 700, padding: '7px 14px', cursor: 'pointer' }}>
+          <button onClick={clearAll} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, background: 'var(--mv-magenta-100)', border: '1px solid var(--mv-magenta-200)', borderRadius: 7, color: 'var(--mv-magenta)', fontSize: 12, fontWeight: 700, padding: '7px 14px', cursor: 'pointer' }}>
             <X size={12} /> Clear
           </button>
         )}
 
-        <span style={{ fontSize: 12, color: '#64748B', marginLeft: 'auto' }}>
+        <span style={{ fontSize: 12, color: 'var(--mv-ink-52)', marginLeft: 'auto' }}>
           {total.toLocaleString()} parcel{total !== 1 ? 's' : ''}
         </span>
       </div>
@@ -925,15 +936,15 @@ export default function TrackingPage() {
       {/* ── Parcel table ─────────────────────────────────────────── */}
       <div className="moov-card" style={{ overflow: 'hidden' }}>
         {isLoading ? (
-          <div style={{ padding: 48, textAlign: 'center', color: '#64748B' }}>Loading…</div>
+          <div style={{ padding: 48, textAlign: 'center', color: 'var(--mv-ink-52)' }}>Loading…</div>
         ) : parcels.length === 0 ? (
           <div style={{ padding: 64, textAlign: 'center' }}>
             <div style={{ fontSize: 36, marginBottom: 12 }}>📦</div>
-            <div style={{ fontSize: 16, color: '#64748B', fontWeight: 600 }}>
+            <div style={{ fontSize: 16, color: 'var(--mv-ink-52)', fontWeight: 600 }}>
               {debouncedSearch || statusFilter || courierFilter ? 'No parcels match your filters' : 'No tracking data yet'}
             </div>
             {!debouncedSearch && !statusFilter && (
-              <div style={{ fontSize: 13, color: '#475569', marginTop: 8 }}>
+              <div style={{ fontSize: 13, color: 'var(--mv-ink-62)', marginTop: 8 }}>
                 Tracking events will appear here as webhooks arrive
               </div>
             )}
@@ -958,7 +969,7 @@ export default function TrackingPage() {
                   key={p.id}
                   onClick={() => setSelected(p.consignment_number)}
                   style={{ cursor: 'pointer' }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.03)'}
+                  onMouseEnter={e => e.currentTarget.style.background = mix('var(--mv-ink)', 3)}
                   onMouseLeave={e => e.currentTarget.style.background = 'none'}
                 >
                   <td>
@@ -967,34 +978,34 @@ export default function TrackingPage() {
                     </span>
                   </td>
                   <td>
-                    <div style={{ fontSize: 13, color: '#0F172A', fontWeight: 500 }}>{p.customer_name || '—'}</div>
-                    {p.customer_account && <div style={{ fontSize: 11, color: '#64748B' }}>{p.customer_account}</div>}
+                    <div style={{ fontSize: 13, color: 'var(--mv-ink)', fontWeight: 500 }}>{p.customer_name || '—'}</div>
+                    {p.customer_account && <div style={{ fontSize: 11, color: 'var(--mv-ink-52)' }}>{p.customer_account}</div>}
                   </td>
                   <td>
-                    <div style={{ fontSize: 13, color: '#334155' }}>
+                    <div style={{ fontSize: 13, color: 'var(--mv-ink-78)' }}>
                       <CourierBadge name={p.courier_name} code={p.courier_code} />
                     </div>
-                    {p.service_name && <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>{p.service_name}</div>}
+                    {p.service_name && <div style={{ fontSize: 11, color: 'var(--mv-ink-52)', marginTop: 2 }}>{p.service_name}</div>}
                   </td>
                   <td>
-                    <div style={{ fontSize: 13, color: '#334155' }}>{p.recipient_name || '—'}</div>
+                    <div style={{ fontSize: 13, color: 'var(--mv-ink-78)' }}>{p.recipient_name || '—'}</div>
                     {p.recipient_postcode && (
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11, color: '#64748B' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11, color: 'var(--mv-ink-52)' }}>
                         <MapPin size={10} /> {p.recipient_postcode}
                       </span>
                     )}
                   </td>
                   <td><StatusBadge status={p.status} /></td>
                   <td>
-                    <div style={{ fontSize: 12, color: '#334155' }}>{p.status_description?.slice(0, 40) || p.last_location || '—'}</div>
-                    <div style={{ fontSize: 11, color: '#64748B' }}>{timeAgo(p.last_event_at)}</div>
+                    <div style={{ fontSize: 12, color: 'var(--mv-ink-78)' }}>{p.status_description?.slice(0, 40) || p.last_location || '—'}</div>
+                    <div style={{ fontSize: 11, color: 'var(--mv-ink-52)' }}>{timeAgo(p.last_event_at)}</div>
                   </td>
-                  <td style={{ textAlign: 'center', fontSize: 12, color: '#64748B' }}>
+                  <td style={{ textAlign: 'center', fontSize: 12, color: 'var(--mv-ink-52)' }}>
                     {p.status === 'delivered'
                       ? <span style={{ color: 'var(--mv-green)', fontWeight: 700 }}>✓ Done</span>
                       : fmtDate(p.estimated_delivery)}
                   </td>
-                  <td><ChevronRight size={14} color="#333" /></td>
+                  <td><ChevronRight size={14} color="var(--mv-ink-45)" /></td>
                 </tr>
               ))}
             </tbody>
@@ -1007,7 +1018,7 @@ export default function TrackingPage() {
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8, marginTop: 16 }}>
           <button onClick={() => setPage(p => Math.max(0, p - 1))} disabled={page === 0}
             className="btn-ghost" style={{ height: 32, padding: '0 14px', fontSize: 12 }}>← Prev</button>
-          <span style={{ fontSize: 13, color: '#64748B' }}>Page {page + 1} of {pages}</span>
+          <span style={{ fontSize: 13, color: 'var(--mv-ink-52)' }}>Page {page + 1} of {pages}</span>
           <button onClick={() => setPage(p => Math.min(pages - 1, p + 1))} disabled={page >= pages - 1}
             className="btn-ghost" style={{ height: 32, padding: '0 14px', fontSize: 12 }}>Next →</button>
         </div>

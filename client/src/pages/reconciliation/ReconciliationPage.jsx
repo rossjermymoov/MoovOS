@@ -24,30 +24,30 @@ const api = axios.create({ baseURL: '/api' });
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const card = {
-  background: 'rgba(0,0,0,0.03)',
-  border: '1px solid rgba(0,0,0,0.08)',
+  background: 'color-mix(in srgb, var(--mv-ink) 3%, transparent)',
+  border: '1px solid color-mix(in srgb, var(--mv-ink) 8%, transparent)',
   borderRadius: 10, padding: '18px 20px',
 };
 const btnGreen = {
-  background: 'rgba(15,122,70,0.15)', border: '1px solid rgba(15,122,70,0.4)',
+  background: 'var(--mv-purple-100)', border: '1px solid var(--mv-purple-200)',
   borderRadius: 7, color: 'var(--mv-green)', padding: '9px 16px', cursor: 'pointer',
   fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6,
 };
 const btnGhost = {
-  background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.08)',
-  borderRadius: 7, color: '#64748B', padding: '9px 16px', cursor: 'pointer',
+  background: 'color-mix(in srgb, var(--mv-ink) 4%, transparent)', border: '1px solid color-mix(in srgb, var(--mv-ink) 8%, transparent)',
+  borderRadius: 7, color: 'var(--mv-ink-52)', padding: '9px 16px', cursor: 'pointer',
   fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6,
 };
 const btnRed = {
-  background: 'rgba(213,0,0,0.08)', border: '1px solid rgba(213,0,0,0.25)',
-  borderRadius: 7, color: '#FF5252', padding: '5px 10px', cursor: 'pointer',
+  background: 'var(--mv-magenta-100)', border: '1px solid var(--mv-magenta-200)',
+  borderRadius: 7, color: 'var(--mv-magenta)', padding: '5px 10px', cursor: 'pointer',
   fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5,
 };
 const inputSt = {
   width: '100%', boxSizing: 'border-box',
-  background: 'rgba(0,0,0,0.06)',
-  border: '1px solid rgba(0,0,0,0.10)',
-  borderRadius: 7, color: '#0F172A', fontSize: 13,
+  background: 'color-mix(in srgb, var(--mv-ink) 6%, transparent)',
+  border: '1px solid color-mix(in srgb, var(--mv-ink) 10%, transparent)',
+  borderRadius: 7, color: 'var(--mv-ink)', fontSize: 13,
   padding: '8px 12px', outline: 'none',
 };
 
@@ -84,8 +84,8 @@ function CarrierTile({ courier, selected, onSelect }) {
         display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
         padding: '12px 8px', borderRadius: 10,
         cursor: ready ? 'pointer' : 'not-allowed',
-        background: selected ? 'rgba(15,122,70,0.08)' : 'rgba(0,0,0,0.03)',
-        border: `2px solid ${selected ? 'var(--mv-green)' : 'rgba(0,0,0,0.08)'}`,
+        background: selected ? 'var(--mv-purple-100)' : 'color-mix(in srgb, var(--mv-ink) 3%, transparent)',
+        border: `2px solid ${selected ? 'var(--mv-green)' : 'color-mix(in srgb, var(--mv-ink) 8%, transparent)'}`,
         transition: 'border-color 0.15s, background 0.15s',
         minWidth: 0, position: 'relative',
         opacity: ready ? 1 : 0.35,
@@ -95,7 +95,7 @@ function CarrierTile({ courier, selected, onSelect }) {
       {/* Logo or fallback initials badge */}
       <div style={{
         width: 56, height: 40, borderRadius: 8, flexShrink: 0, overflow: 'hidden',
-        background: logoUrl ? '#FFFFFF' : 'rgba(0,0,0,0.08)',
+        background: logoUrl ? 'var(--mv-surface)' : 'color-mix(in srgb, var(--mv-ink) 8%, transparent)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         boxShadow: selected ? '0 0 0 2px var(--mv-green)' : 'none',
         transition: 'box-shadow 0.15s',
@@ -112,7 +112,7 @@ function CarrierTile({ courier, selected, onSelect }) {
           display: logoUrl ? 'none' : 'flex',
           alignItems: 'center', justifyContent: 'center',
           width: '100%', height: '100%',
-          fontWeight: 800, fontSize: 13, color: '#64748B', letterSpacing: 0.5,
+          fontWeight: 800, fontSize: 13, color: 'var(--mv-ink-52)', letterSpacing: 0.5,
         }}>
           {initials}
         </span>
@@ -120,7 +120,7 @@ function CarrierTile({ courier, selected, onSelect }) {
       {/* Name */}
       <span style={{
         fontSize: 11, fontWeight: 600, textAlign: 'center', lineHeight: 1.2,
-        color: selected ? 'var(--mv-green)' : '#CCCCCC',
+        color: selected ? 'var(--mv-green)' : 'var(--mv-ink-45)',
         wordBreak: 'break-word', maxWidth: 72,
       }}>
         {courier.name}
@@ -130,7 +130,7 @@ function CarrierTile({ courier, selected, onSelect }) {
         <span style={{
           position: 'absolute', bottom: 6, left: '50%', transform: 'translateX(-50%)',
           fontSize: 9, fontWeight: 700, letterSpacing: '0.05em',
-          background: 'rgba(0,0,0,0.08)', color: '#64748B',
+          background: 'color-mix(in srgb, var(--mv-ink) 8%, transparent)', color: 'var(--mv-ink-52)',
           borderRadius: 4, padding: '2px 5px', whiteSpace: 'nowrap',
         }}>
           SOON
@@ -155,11 +155,11 @@ function CarrierTile({ courier, selected, onSelect }) {
 // ─── Status badge ─────────────────────────────────────────────────────────────
 function StatusBadge({ status }) {
   const cfg = {
-    complete:     { color: 'var(--mv-green)', bg: 'rgba(15,122,70,0.12)',  border: 'rgba(15,122,70,0.3)',  label: 'Complete' },
-    needs_review: { color: '#FFB300', bg: 'rgba(255,160,0,0.12)', border: 'rgba(255,160,0,0.3)', label: 'Needs Review' },
-    processing:   { color: '#79AAFF', bg: 'rgba(30,100,200,0.15)',border: 'rgba(30,100,200,0.4)', label: 'Processing' },
-    failed:       { color: '#FF5252', bg: 'rgba(213,0,0,0.12)',   border: 'rgba(213,0,0,0.3)',   label: 'Failed' },
-  }[status] || { color: '#64748B', bg: 'rgba(0,0,0,0.04)', border: 'rgba(0,0,0,0.08)', label: status };
+    complete:     { color: 'var(--mv-green)', bg: 'var(--mv-purple-100)',  border: 'var(--mv-purple-200)',  label: 'Complete' },
+    needs_review: { color: 'var(--mv-amber)', bg: 'var(--mv-amber-100)', border: 'var(--mv-amber-200)', label: 'Needs Review' },
+    processing:   { color: 'var(--mv-teal)', bg: 'var(--mv-teal-100)',border: 'var(--mv-teal-200)', label: 'Processing' },
+    failed:       { color: 'var(--mv-magenta)', bg: 'var(--mv-magenta-100)',   border: 'var(--mv-magenta-200)',   label: 'Failed' },
+  }[status] || { color: 'var(--mv-ink-52)', bg: 'color-mix(in srgb, var(--mv-ink) 4%, transparent)', border: 'color-mix(in srgb, var(--mv-ink) 8%, transparent)', label: status };
 
   return (
     <span style={{
@@ -175,10 +175,10 @@ function StatusBadge({ status }) {
 // ─── Automation rate bar ──────────────────────────────────────────────────────
 function AutoBar({ rate }) {
   const pct = parseFloat(rate) || 0;
-  const color = pct >= 80 ? 'var(--mv-green)' : pct >= 50 ? '#FFB300' : '#FF5252';
+  const color = pct >= 80 ? 'var(--mv-green)' : pct >= 50 ? 'var(--mv-amber)' : 'var(--mv-magenta)';
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <div style={{ flex: 1, height: 4, background: 'rgba(0,0,0,0.08)', borderRadius: 99 }}>
+      <div style={{ flex: 1, height: 4, background: 'color-mix(in srgb, var(--mv-ink) 8%, transparent)', borderRadius: 99 }}>
         <div style={{ width: `${pct}%`, height: '100%', background: color, borderRadius: 99 }} />
       </div>
       <span style={{ fontSize: 11, color, fontWeight: 700, minWidth: 36 }}>{pct}%</span>
@@ -503,15 +503,15 @@ function ProfileManagerModal({ couriers, onClose }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
       <div style={{
-        background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.10)',
+        background: 'var(--mv-surface)', border: '1px solid color-mix(in srgb, var(--mv-ink) 10%, transparent)',
         borderRadius: 12, width: 660, maxHeight: '80vh', overflow: 'auto', padding: 28,
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <div>
-            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#0F172A', margin: 0 }}>Column Profiles</h2>
-            <p style={{ fontSize: 12, color: '#64748B', marginTop: 4, margin: 0 }}>Saved CSV column mappings per carrier</p>
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--mv-ink)', margin: 0 }}>Column Profiles</h2>
+            <p style={{ fontSize: 12, color: 'var(--mv-ink-52)', marginTop: 4, margin: 0 }}>Saved CSV column mappings per carrier</p>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer' }}>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--mv-ink-52)', cursor: 'pointer' }}>
             <X size={20} />
           </button>
         </div>
@@ -526,7 +526,7 @@ function ProfileManagerModal({ couriers, onClose }) {
 
         {/* Profile list */}
         {profiles.length === 0 ? (
-          <div style={{ textAlign: 'center', color: '#64748B', fontSize: 13, padding: '30px 0' }}>
+          <div style={{ textAlign: 'center', color: 'var(--mv-ink-52)', fontSize: 13, padding: '30px 0' }}>
             No saved profiles for this carrier yet. Upload a CSV and save the column mapping to create one.
           </div>
         ) : (
@@ -534,7 +534,7 @@ function ProfileManagerModal({ couriers, onClose }) {
             {profiles.map(p => (
               <div key={p.id} style={{
                 ...card,
-                border: p.is_default ? '1px solid rgba(15,122,70,0.3)' : '1px solid rgba(0,0,0,0.08)',
+                border: p.is_default ? '1px solid var(--mv-purple-200)' : '1px solid color-mix(in srgb, var(--mv-ink) 8%, transparent)',
                 padding: '14px 16px',
               }}>
                 {/* Header row */}
@@ -548,10 +548,10 @@ function ProfileManagerModal({ couriers, onClose }) {
                       autoFocus
                     />
                   ) : (
-                    <div style={{ flex: 1, fontSize: 14, fontWeight: 700, color: '#0F172A' }}>
+                    <div style={{ flex: 1, fontSize: 14, fontWeight: 700, color: 'var(--mv-ink)' }}>
                       {p.profile_name}
                       {p.is_default && (
-                        <span style={{ marginLeft: 8, fontSize: 10, color: 'var(--mv-green)', background: 'rgba(15,122,70,0.12)', border: '1px solid rgba(15,122,70,0.3)', borderRadius: 9999, padding: '1px 7px', fontWeight: 700 }}>
+                        <span style={{ marginLeft: 8, fontSize: 10, color: 'var(--mv-green)', background: 'var(--mv-purple-100)', border: '1px solid var(--mv-purple-200)', borderRadius: 9999, padding: '1px 7px', fontWeight: 700 }}>
                           Default
                         </span>
                       )}
@@ -611,15 +611,15 @@ function ProfileManagerModal({ couriers, onClose }) {
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                   {Object.entries(p.column_map || {}).filter(([, v]) => v).map(([field, col]) => (
                     <span key={field} style={{
-                      fontSize: 10, color: '#64748B', background: 'rgba(0,0,0,0.04)',
-                      border: '1px solid rgba(0,0,0,0.08)', borderRadius: 5, padding: '2px 7px',
+                      fontSize: 10, color: 'var(--mv-ink-52)', background: 'color-mix(in srgb, var(--mv-ink) 4%, transparent)',
+                      border: '1px solid color-mix(in srgb, var(--mv-ink) 8%, transparent)', borderRadius: 5, padding: '2px 7px',
                     }}>
-                      <span style={{ color: '#64748B' }}>{FIELD_LABELS[field] || field}:</span>{' '}
-                      <span style={{ color: '#64748B' }}>{col}</span>
+                      <span style={{ color: 'var(--mv-ink-52)' }}>{FIELD_LABELS[field] || field}:</span>{' '}
+                      <span style={{ color: 'var(--mv-ink-52)' }}>{col}</span>
                     </span>
                   ))}
                 </div>
-                <div style={{ fontSize: 10, color: '#475569', marginTop: 8 }}>
+                <div style={{ fontSize: 10, color: 'var(--mv-ink-62)', marginTop: 8 }}>
                   Updated {new Date(p.updated_at).toLocaleDateString('en-GB')}
                 </div>
               </div>
@@ -913,22 +913,22 @@ function UploadModal({ couriers, onClose, onSuccess }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center',
     }}>
       <div style={{
-        background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.10)',
+        background: 'var(--mv-surface)', border: '1px solid color-mix(in srgb, var(--mv-ink) 10%, transparent)',
         borderRadius: 12, width: 640, maxHeight: '88vh', overflow: 'auto', padding: 28,
       }}>
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
           <div>
-            <h2 style={{ fontSize: 18, fontWeight: 700, color: '#0F172A', margin: 0 }}>New Reconciliation Run</h2>
-            <div style={{ fontSize: 12, color: '#64748B', marginTop: 4 }}>Step {step} of 3</div>
+            <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--mv-ink)', margin: 0 }}>New Reconciliation Run</h2>
+            <div style={{ fontSize: 12, color: 'var(--mv-ink-52)', marginTop: 4 }}>Step {step} of 3</div>
           </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer' }}>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--mv-ink-52)', cursor: 'pointer' }}>
             <X size={20} />
           </button>
         </div>
 
         {error && (
-          <div style={{ background: 'rgba(213,0,0,0.1)', border: '1px solid rgba(213,0,0,0.3)', borderRadius: 7, padding: '10px 14px', marginBottom: 16, color: '#FF5252', fontSize: 12 }}>
+          <div style={{ background: 'var(--mv-magenta-100)', border: '1px solid var(--mv-magenta-200)', borderRadius: 7, padding: '10px 14px', marginBottom: 16, color: 'var(--mv-magenta)', fontSize: 12 }}>
             {error}
           </div>
         )}
@@ -937,11 +937,11 @@ function UploadModal({ couriers, onClose, onSuccess }) {
         {step === 1 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div>
-              <label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 10 }}>
-                Select Carrier <span style={{ color: '#FF5252' }}>*</span>
+              <label style={{ fontSize: 11, color: 'var(--mv-ink-52)', display: 'block', marginBottom: 10 }}>
+                Select Carrier <span style={{ color: 'var(--mv-magenta)' }}>*</span>
               </label>
               {couriers.length === 0 ? (
-                <p style={{ fontSize: 12, color: '#64748B' }}>No carriers configured — contact your administrator.</p>
+                <p style={{ fontSize: 12, color: 'var(--mv-ink-52)' }}>No carriers configured — contact your administrator.</p>
               ) : (
                 <div style={{
                   display: 'grid',
@@ -963,7 +963,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
             {/* Saved profiles for this carrier */}
             {carrierId && profiles.length > 0 && (
               <div>
-                <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600, marginBottom: 8 }}>SAVED COLUMN PROFILES</div>
+                <div style={{ fontSize: 11, color: 'var(--mv-ink-52)', fontWeight: 600, marginBottom: 8 }}>SAVED COLUMN PROFILES</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {profiles.map(p => (
                     <button
@@ -971,28 +971,28 @@ function UploadModal({ couriers, onClose, onSuccess }) {
                       onClick={() => applyProfile(p)}
                       style={{
                         padding: '10px 14px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
-                        background: loadedProfileId === p.id ? 'rgba(15,122,70,0.1)' : 'rgba(0,0,0,0.03)',
-                        border: `1px solid ${loadedProfileId === p.id ? 'rgba(15,122,70,0.35)' : 'rgba(0,0,0,0.08)'}`,
+                        background: loadedProfileId === p.id ? 'var(--mv-purple-100)' : 'color-mix(in srgb, var(--mv-ink) 3%, transparent)',
+                        border: `1px solid ${loadedProfileId === p.id ? 'var(--mv-purple-200)' : 'color-mix(in srgb, var(--mv-ink) 8%, transparent)'}`,
                         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                       }}
                     >
                       <div>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: loadedProfileId === p.id ? 'var(--mv-green)' : '#0F172A' }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: loadedProfileId === p.id ? 'var(--mv-green)' : 'var(--mv-ink)' }}>
                           {p.profile_name}
                           {p.is_default && (
-                            <span style={{ marginLeft: 8, fontSize: 10, color: '#64748B' }}>Default</span>
+                            <span style={{ marginLeft: 8, fontSize: 10, color: 'var(--mv-ink-52)' }}>Default</span>
                           )}
                         </div>
-                        <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
+                        <div style={{ fontSize: 11, color: 'var(--mv-ink-52)', marginTop: 2 }}>
                           {Object.entries(p.column_map || {}).filter(([k, v]) => !['surcharge_columns','header_row_skip','parcel_pricing','preamble_fields'].includes(k) && v).length} columns mapped
                           {(p.column_map?.surcharge_columns?.length > 0) && (
-                            <span style={{ marginLeft: 6, color: '#64748B' }}>· {p.column_map.surcharge_columns.length} surcharge col{p.column_map.surcharge_columns.length > 1 ? 's' : ''}</span>
+                            <span style={{ marginLeft: 6, color: 'var(--mv-ink-52)' }}>· {p.column_map.surcharge_columns.length} surcharge col{p.column_map.surcharge_columns.length > 1 ? 's' : ''}</span>
                           )}
                           {p.column_map?.header_row_skip > 0 && (
-                            <span style={{ marginLeft: 6, color: '#64748B' }}>· {p.column_map.header_row_skip} preamble rows</span>
+                            <span style={{ marginLeft: 6, color: 'var(--mv-ink-52)' }}>· {p.column_map.header_row_skip} preamble rows</span>
                           )}
                           {p.column_map?.parcel_pricing === 'all_sub' && (
-                            <span style={{ marginLeft: 6, color: '#64748B' }}>· all-sub pricing</span>
+                            <span style={{ marginLeft: 6, color: 'var(--mv-ink-52)' }}>· all-sub pricing</span>
                           )}
                         </div>
                       </div>
@@ -1004,8 +1004,8 @@ function UploadModal({ couriers, onClose, onSuccess }) {
             )}
 
             <div>
-              <label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 5 }}>
-                Upload Carrier Invoice CSV <span style={{ color: '#FF5252' }}>*</span>
+              <label style={{ fontSize: 11, color: 'var(--mv-ink-52)', display: 'block', marginBottom: 5 }}>
+                Upload Carrier Invoice CSV <span style={{ color: 'var(--mv-magenta)' }}>*</span>
                 {loadedProfileId && <span style={{ color: 'var(--mv-green)', marginLeft: 8 }}>· Profile loaded — columns will be auto-applied</span>}
               </label>
               <input ref={fileRef} type='file' accept='.csv,.txt' style={{ display: 'none' }} onChange={handleFile} />
@@ -1016,7 +1016,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
                 <Upload size={16} />
                 {csvRows.length > 0 ? `✓ ${csvRows.length} rows loaded — click to replace` : 'Click to upload carrier invoice CSV'}
               </button>
-              <p style={{ fontSize: 11, color: '#64748B', marginTop: 6 }}>
+              <p style={{ fontSize: 11, color: 'var(--mv-ink-52)', marginTop: 6 }}>
                 Invoice reference and date will be read from the CSV in the next step.
               </p>
             </div>
@@ -1026,18 +1026,18 @@ function UploadModal({ couriers, onClose, onSuccess }) {
         {/* ── Step 2 — Map columns ──────────────────────────────────────────── */}
         {step === 2 && (
           <div>
-            <p style={{ fontSize: 12, color: '#64748B', marginBottom: 16 }}>
-              We found <strong style={{ color: '#0F172A' }}>{csvRows.length} rows</strong> and <strong style={{ color: '#0F172A' }}>{headers.length} columns</strong>. Map the columns below.
+            <p style={{ fontSize: 12, color: 'var(--mv-ink-52)', marginBottom: 16 }}>
+              We found <strong style={{ color: 'var(--mv-ink)' }}>{csvRows.length} rows</strong> and <strong style={{ color: 'var(--mv-ink)' }}>{headers.length} columns</strong>. Map the columns below.
               {loadedProfileId && <span style={{ color: 'var(--mv-green)', marginLeft: 8 }}>Profile applied — check mappings are correct for this file.</span>}
             </p>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {FIELDS.map(f => (
                 <div key={f.key} style={{ display: 'grid', gridTemplateColumns: '170px 1fr', gap: 10, alignItems: 'center' }}>
-                  <label style={{ fontSize: 12, color: f.required ? '#0F172A' : '#64748B', fontWeight: f.required ? 600 : 400 }}>
+                  <label style={{ fontSize: 12, color: f.required ? 'var(--mv-ink)' : 'var(--mv-ink-52)', fontWeight: f.required ? 600 : 400 }}>
                     {f.label}
-                    {f.required && <span style={{ color: '#FF5252' }}> *</span>}
-                    {f.hint && <span style={{ color: '#64748B', fontSize: 10, display: 'block' }}>{f.hint}</span>}
+                    {f.required && <span style={{ color: 'var(--mv-magenta)' }}> *</span>}
+                    {f.hint && <span style={{ color: 'var(--mv-ink-52)', fontSize: 10, display: 'block' }}>{f.hint}</span>}
                   </label>
                   <select
                     style={inputSt}
@@ -1054,21 +1054,21 @@ function UploadModal({ couriers, onClose, onSuccess }) {
             {/* ── Carrier-format options ─────────────────────────────────────────── */}
             <div style={{
               marginTop: 20, padding: '12px 16px', borderRadius: 8,
-              background: 'rgba(0,0,0,0.02)',
-              border: '1px solid rgba(0,0,0,0.06)',
+              background: 'color-mix(in srgb, var(--mv-ink) 2%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--mv-ink) 6%, transparent)',
             }}>
               <div style={{
-                fontSize: 11, color: '#64748B', fontWeight: 600, marginBottom: 10,
-                paddingBottom: 8, borderBottom: '1px solid rgba(0,0,0,0.06)',
+                fontSize: 11, color: 'var(--mv-ink-52)', fontWeight: 600, marginBottom: 10,
+                paddingBottom: 8, borderBottom: '1px solid color-mix(in srgb, var(--mv-ink) 6%, transparent)',
               }}>
                 CARRIER FORMAT OPTIONS
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {/* header_row_skip */}
                 <div style={{ display: 'grid', gridTemplateColumns: '170px 1fr', gap: 10, alignItems: 'center' }}>
-                  <label style={{ fontSize: 12, color: '#64748B' }}>
+                  <label style={{ fontSize: 12, color: 'var(--mv-ink-52)' }}>
                     Preamble rows to skip
-                    <span style={{ color: '#64748B', fontSize: 10, display: 'block' }}>DPD = 4, DHL = 0</span>
+                    <span style={{ color: 'var(--mv-ink-52)', fontSize: 10, display: 'block' }}>DPD = 4, DHL = 0</span>
                   </label>
                   <input
                     type='number' min='0' max='20'
@@ -1079,9 +1079,9 @@ function UploadModal({ couriers, onClose, onSuccess }) {
                 </div>
                 {/* parcel_pricing */}
                 <div style={{ display: 'grid', gridTemplateColumns: '170px 1fr', gap: 10, alignItems: 'center' }}>
-                  <label style={{ fontSize: 12, color: '#64748B' }}>
+                  <label style={{ fontSize: 12, color: 'var(--mv-ink-52)' }}>
                     Multi-parcel pricing
-                    <span style={{ color: '#64748B', fontSize: 10, display: 'block' }}>How carrier bills multi-parcel</span>
+                    <span style={{ color: 'var(--mv-ink-52)', fontSize: 10, display: 'block' }}>How carrier bills multi-parcel</span>
                   </label>
                   <select
                     style={inputSt}
@@ -1098,12 +1098,12 @@ function UploadModal({ couriers, onClose, onSuccess }) {
             {/* Surcharge column mappings */}
             <div style={{ marginTop: 20 }}>
               <div style={{
-                fontSize: 11, color: '#64748B', fontWeight: 600, marginBottom: 10,
+                fontSize: 11, color: 'var(--mv-ink-52)', fontWeight: 600, marginBottom: 10,
                 display: 'flex', alignItems: 'center', gap: 8,
-                paddingBottom: 8, borderBottom: '1px solid rgba(0,0,0,0.06)',
+                paddingBottom: 8, borderBottom: '1px solid color-mix(in srgb, var(--mv-ink) 6%, transparent)',
               }}>
                 SURCHARGE COLUMN MAPPINGS
-                <span style={{ fontWeight: 400, fontSize: 10, color: '#64748B' }}>
+                <span style={{ fontWeight: 400, fontSize: 10, color: 'var(--mv-ink-52)' }}>
                   — columns in this carrier&#x2019;s CSV that carry named surcharge amounts
                 </span>
               </div>
@@ -1116,13 +1116,13 @@ function UploadModal({ couriers, onClose, onSuccess }) {
                     return (
                       <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         <span style={{
-                          fontSize: 11, color: '#0F172A',
-                          background: 'rgba(0,0,0,0.06)', border: '1px solid rgba(0,0,0,0.08)',
+                          fontSize: 11, color: 'var(--mv-ink)',
+                          background: 'color-mix(in srgb, var(--mv-ink) 6%, transparent)', border: '1px solid color-mix(in srgb, var(--mv-ink) 8%, transparent)',
                           borderRadius: 5, padding: '4px 10px', minWidth: 120, textAlign: 'center',
                         }}>
                           {sc.col}
                         </span>
-                        <span style={{ fontSize: 11, color: '#64748B' }}>→</span>
+                        <span style={{ fontSize: 11, color: 'var(--mv-ink-52)' }}>→</span>
                         <span style={{ fontSize: 12, color: 'var(--mv-green)', flex: 1, fontWeight: 500 }}>
                           {sur?.name || sc.surcharge_id}
                         </span>
@@ -1146,7 +1146,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
                     <option value=''>— CSV column —</option>
                     {headers.map(h => <option key={h} value={h}>{h}</option>)}
                   </select>
-                  <span style={{ fontSize: 11, color: '#64748B', flexShrink: 0 }}>→</span>
+                  <span style={{ fontSize: 11, color: 'var(--mv-ink-52)', flexShrink: 0 }}>→</span>
                   <select
                     style={{ ...inputSt, flex: 1 }}
                     value={newSurchargeId}
@@ -1167,18 +1167,18 @@ function UploadModal({ couriers, onClose, onSuccess }) {
                   </button>
                 </div>
               ) : carrierId ? (
-                <p style={{ fontSize: 11, color: '#64748B', margin: 0 }}>No surcharges configured for this carrier.</p>
+                <p style={{ fontSize: 11, color: 'var(--mv-ink-52)', margin: 0 }}>No surcharges configured for this carrier.</p>
               ) : (
-                <p style={{ fontSize: 11, color: '#64748B', margin: 0 }}>Select a carrier first.</p>
+                <p style={{ fontSize: 11, color: 'var(--mv-ink-52)', margin: 0 }}>Select a carrier first.</p>
               )}
             </div>
 
             {/* Invoice ref manual override */}
             {!colMap.invoice_ref && (
               <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: '170px 1fr', gap: 10, alignItems: 'center' }}>
-                <label style={{ fontSize: 12, color: '#64748B' }}>
+                <label style={{ fontSize: 12, color: 'var(--mv-ink-52)' }}>
                   Invoice Ref (manual)
-                  <span style={{ color: '#64748B', fontSize: 10, display: 'block' }}>If not in CSV</span>
+                  <span style={{ color: 'var(--mv-ink-52)', fontSize: 10, display: 'block' }}>If not in CSV</span>
                 </label>
                 <input
                   style={inputSt}
@@ -1191,29 +1191,29 @@ function UploadModal({ couriers, onClose, onSuccess }) {
 
             {/* Preview */}
             {csvRows[0] && colMap.tracking_number && (
-              <div style={{ marginTop: 14, ...card, fontSize: 11, color: '#64748B' }}>
+              <div style={{ marginTop: 14, ...card, fontSize: 11, color: 'var(--mv-ink-52)' }}>
                 <div style={{ color: 'var(--mv-green)', fontWeight: 700, marginBottom: 8 }}>Preview — first row</div>
-                <div>Tracking: <span style={{ color: '#0F172A' }}>{csvRows[0][colMap.tracking_number]}</span></div>
-                {colMap.service_code   && <div>Service code: <span style={{ color: '#0F172A' }}>{csvRows[0][colMap.service_code]}</span></div>}
-                {colMap.carrier_amount && <div>Amount: <span style={{ color: '#0F172A' }}>£{parseFloat(csvRows[0][colMap.carrier_amount] || 0).toFixed(2)}</span></div>}
-                {inferredRef           && <div>Invoice ref: <span style={{ color: '#0F172A' }}>{inferredRef}</span></div>}
-                {inferredDate          && <div>Invoice date: <span style={{ color: '#0F172A' }}>{inferredDate}</span></div>}
+                <div>Tracking: <span style={{ color: 'var(--mv-ink)' }}>{csvRows[0][colMap.tracking_number]}</span></div>
+                {colMap.service_code   && <div>Service code: <span style={{ color: 'var(--mv-ink)' }}>{csvRows[0][colMap.service_code]}</span></div>}
+                {colMap.carrier_amount && <div>Amount: <span style={{ color: 'var(--mv-ink)' }}>£{parseFloat(csvRows[0][colMap.carrier_amount] || 0).toFixed(2)}</span></div>}
+                {inferredRef           && <div>Invoice ref: <span style={{ color: 'var(--mv-ink)' }}>{inferredRef}</span></div>}
+                {inferredDate          && <div>Invoice date: <span style={{ color: 'var(--mv-ink)' }}>{inferredDate}</span></div>}
               </div>
             )}
 
             {/* Save profile section */}
             <div style={{
               marginTop: 20, padding: '14px 16px', borderRadius: 8,
-              background: showSaveSection ? 'rgba(15,122,70,0.06)' : 'rgba(0,0,0,0.02)',
-              border: `1px solid ${showSaveSection ? 'rgba(15,122,70,0.25)' : 'rgba(0,0,0,0.06)'}`,
+              background: showSaveSection ? 'var(--mv-purple-100)' : 'color-mix(in srgb, var(--mv-ink) 2%, transparent)',
+              border: `1px solid ${showSaveSection ? 'var(--mv-purple-200)' : 'color-mix(in srgb, var(--mv-ink) 6%, transparent)'}`,
             }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <BookOpen size={14} color={showSaveSection ? 'var(--mv-green)' : '#666'} />
-                  <span style={{ fontSize: 13, fontWeight: 600, color: showSaveSection ? 'var(--mv-green)' : '#64748B' }}>
+                  <BookOpen size={14} color={showSaveSection ? 'var(--mv-green)' : 'var(--mv-ink-52)'} />
+                  <span style={{ fontSize: 13, fontWeight: 600, color: showSaveSection ? 'var(--mv-green)' : 'var(--mv-ink-52)' }}>
                     {loadedProfileId ? 'Update saved profile' : 'Save as column profile'}
                   </span>
-                  <span style={{ fontSize: 11, color: '#64748B' }}>
+                  <span style={{ fontSize: 11, color: 'var(--mv-ink-52)' }}>
                     — reuse this mapping on future runs
                   </span>
                 </div>
@@ -1243,7 +1243,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
                       {loadedProfileId ? 'Update' : 'Save'}
                     </button>
                   </div>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, color: '#64748B' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, color: 'var(--mv-ink-52)' }}>
                     <input
                       type='checkbox'
                       checked={saveAsDefault}
@@ -1251,7 +1251,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
                       style={{ accentColor: 'var(--mv-green)' }}
                     />
                     Set as default profile for {couriers.find(c => String(c.id) === String(carrierId))?.name || 'this carrier'}
-                    <span style={{ fontSize: 11, color: '#64748B' }}>(auto-applies on future uploads)</span>
+                    <span style={{ fontSize: 11, color: 'var(--mv-ink-52)' }}>(auto-applies on future uploads)</span>
                   </label>
                 </div>
               )}
@@ -1285,10 +1285,10 @@ function UploadModal({ couriers, onClose, onSuccess }) {
             <div>
               <div style={{ ...card, marginBottom: 16 }}>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, fontSize: 12 }}>
-                  <div><span style={{ color: '#64748B' }}>Carrier:</span> <span style={{ color: '#0F172A' }}>{couriers.find(c => String(c.id) === String(carrierId))?.name}</span></div>
-                  <div><span style={{ color: '#64748B' }}>Invoice Ref:</span> <span style={{ color: '#0F172A' }}>{effectiveRef || <em style={{ color: '#64748B' }}>None</em>}</span></div>
-                  <div><span style={{ color: '#64748B' }}>Invoice Date:</span> <span style={{ color: '#0F172A' }}>{effectiveDate || '—'}</span></div>
-                  <div><span style={{ color: '#64748B' }}>Total lines:</span> <span style={{ color: 'var(--mv-green)', fontWeight: 700 }}>{lines.length}</span></div>
+                  <div><span style={{ color: 'var(--mv-ink-52)' }}>Carrier:</span> <span style={{ color: 'var(--mv-ink)' }}>{couriers.find(c => String(c.id) === String(carrierId))?.name}</span></div>
+                  <div><span style={{ color: 'var(--mv-ink-52)' }}>Invoice Ref:</span> <span style={{ color: 'var(--mv-ink)' }}>{effectiveRef || <em style={{ color: 'var(--mv-ink-52)' }}>None</em>}</span></div>
+                  <div><span style={{ color: 'var(--mv-ink-52)' }}>Invoice Date:</span> <span style={{ color: 'var(--mv-ink)' }}>{effectiveDate || '—'}</span></div>
+                  <div><span style={{ color: 'var(--mv-ink-52)' }}>Total lines:</span> <span style={{ color: 'var(--mv-green)', fontWeight: 700 }}>{lines.length}</span></div>
                 </div>
               </div>
 
@@ -1298,9 +1298,9 @@ function UploadModal({ couriers, onClose, onSuccess }) {
                   ...card,
                   marginBottom: 16,
                   borderColor: unmatchedSurchargeCols.length > 0
-                    ? 'rgba(255,170,0,0.4)' : 'rgba(15,122,70,0.25)',
+                    ? 'var(--mv-amber-200)' : 'var(--mv-purple-200)',
                 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#64748B', marginBottom: 8, letterSpacing: '0.05em' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--mv-ink-52)', marginBottom: 8, letterSpacing: '0.05em' }}>
                     SURCHARGE COLUMN CHECK
                   </div>
                   {surchargeColDiag.map(d => (
@@ -1308,13 +1308,13 @@ function UploadModal({ couriers, onClose, onSuccess }) {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
                         <span style={{
                           width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
-                          background: d.matched ? 'var(--mv-green)' : '#FF5252',
+                          background: d.matched ? 'var(--mv-green)' : 'var(--mv-magenta)',
                         }} />
-                        <span style={{ color: d.matched ? '#334155' : '#FF5252', fontFamily: 'monospace' }}>
-                          {d.col || <em style={{ color: '#64748B' }}>no column</em>}
+                        <span style={{ color: d.matched ? 'var(--mv-ink-78)' : 'var(--mv-magenta)', fontFamily: 'monospace' }}>
+                          {d.col || <em style={{ color: 'var(--mv-ink-52)' }}>no column</em>}
                         </span>
                         {d.matched && d.actualHeader && d.actualHeader !== d.col.toLowerCase().trim() && (
-                          <span style={{ color: '#64748B', fontSize: 11 }}>
+                          <span style={{ color: 'var(--mv-ink-52)', fontSize: 11 }}>
                             → matched as <span style={{ fontFamily: 'monospace', color: 'var(--mv-green)' }}>{d.actualHeader}</span>
                           </span>
                         )}
@@ -1322,7 +1322,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
                           <span style={{ color: 'var(--mv-green)', fontSize: 11 }}>✓</span>
                         )}
                         {!d.matched && d.col && (
-                          <span style={{ color: '#64748B', fontSize: 11 }}>— not found in this CSV</span>
+                          <span style={{ color: 'var(--mv-ink-52)', fontSize: 11 }}>— not found in this CSV</span>
                         )}
                       </div>
                     </div>
@@ -1330,9 +1330,9 @@ function UploadModal({ couriers, onClose, onSuccess }) {
                   {unmatchedSurchargeCols.length > 0 && (
                     <div style={{
                       marginTop: 10, padding: '8px 10px',
-                      background: 'rgba(213,0,0,0.08)',
-                      border: '1px solid rgba(213,0,0,0.25)',
-                      borderRadius: 6, fontSize: 11, color: '#FF5252',
+                      background: 'var(--mv-magenta-100)',
+                      border: '1px solid var(--mv-magenta-200)',
+                      borderRadius: 6, fontSize: 11, color: 'var(--mv-magenta)',
                     }}>
                       ✗ {unmatchedSurchargeCols.length} surcharge column{unmatchedSurchargeCols.length > 1 ? 's' : ''} not found.
                       Go back to Step 2, remove the broken entry, and re-add it by selecting the correct column name from the dropdown.
@@ -1346,7 +1346,7 @@ function UploadModal({ couriers, onClose, onSuccess }) {
                 </div>
               )}
 
-              <p style={{ fontSize: 12, color: '#64748B' }}>
+              <p style={{ fontSize: 12, color: 'var(--mv-ink-52)' }}>
                 The engine will process all {lines.length} lines automatically. Lines that can't be resolved will be flagged for your review.
               </p>
             </div>
@@ -1412,19 +1412,19 @@ function StartRunButton({ carrierId, invoiceRef, invoiceDate, lines, onSuccess, 
     const exDate = ex.invoice_date ? new Date(ex.invoice_date).toLocaleDateString('en-GB') : null;
     return (
       <div style={{
-        background: 'rgba(255,143,0,0.10)', border: '1px solid rgba(255,143,0,0.35)',
+        background: 'var(--mv-amber-100)', border: '1px solid var(--mv-amber-200)',
         borderRadius: 8, padding: '14px 16px', fontSize: 12,
       }}>
-        <div style={{ color: '#FF8F00', fontWeight: 700, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ color: 'var(--mv-amber)', fontWeight: 700, marginBottom: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
           <AlertTriangle size={14} /> Duplicate invoice detected
         </div>
-        <div style={{ color: '#334155', lineHeight: 1.6 }}>
-          Invoice <span style={{ color: '#0F172A', fontWeight: 600 }}>{invoiceRef}</span> was
+        <div style={{ color: 'var(--mv-ink-78)', lineHeight: 1.6 }}>
+          Invoice <span style={{ color: 'var(--mv-ink)', fontWeight: 600 }}>{invoiceRef}</span> was
           already imported as{' '}
-          <span style={{ color: '#0F172A', fontWeight: 600 }}>Run #{ex.id}</span>
+          <span style={{ color: 'var(--mv-ink)', fontWeight: 600 }}>Run #{ex.id}</span>
           {exDate && <> ({exDate})</>}
           {' '}— {ex.total_lines?.toLocaleString()} lines, status:{' '}
-          <span style={{ color: ex.status === 'completed' ? 'var(--mv-green)' : '#FF8F00', fontWeight: 600 }}>{ex.status}</span>.
+          <span style={{ color: ex.status === 'completed' ? 'var(--mv-green)' : 'var(--mv-amber)', fontWeight: 600 }}>{ex.status}</span>.
         </div>
         <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
           <button
@@ -1436,7 +1436,7 @@ function StartRunButton({ carrierId, invoiceRef, invoiceDate, lines, onSuccess, 
             {loading ? 'Starting…' : 'Import anyway'}
           </button>
           <button
-            style={{ ...btnGhost, color: '#64748B' }}
+            style={{ ...btnGhost, color: 'var(--mv-ink-52)' }}
             onClick={() => setDupWarn(null)}
             disabled={loading}
           >
@@ -1593,28 +1593,28 @@ export default function ReconciliationPage() {
           `}</style>
           <div style={{
             width: 56, height: 56, borderRadius: '50%',
-            border: '4px solid rgba(0,0,0,0.08)',
-            borderTopColor: '#3FB950',
+            border: '4px solid color-mix(in srgb, var(--mv-ink) 8%, transparent)',
+            borderTopColor: 'var(--mv-green)',
             animation: 'recon-spin 0.9s linear infinite',
           }} />
-          <div style={{ color: '#0F172A', fontSize: 16, fontWeight: 600 }}>Processing invoice…</div>
-          <div style={{ color: '#64748B', fontSize: 13 }}>Matching {' '}lines against your verified shipments</div>
+          <div style={{ color: 'var(--mv-ink)', fontSize: 16, fontWeight: 600 }}>Processing invoice…</div>
+          <div style={{ color: 'var(--mv-ink-52)', fontSize: 13 }}>Matching {' '}lines against your verified shipments</div>
         </div>
       )}
 
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 28 }}>
         <div>
-          <h1 style={{ fontSize: 24, fontWeight: 700, color: '#0F172A', margin: 0 }}>Invoice Reconciliation</h1>
-          <p style={{ fontSize: 13, color: '#64748B', marginTop: 4 }}>Automated courier invoice matching engine</p>
+          <h1 style={{ fontSize: 24, fontWeight: 700, color: 'var(--mv-ink)', margin: 0 }}>Invoice Reconciliation</h1>
+          <p style={{ fontSize: 13, color: 'var(--mv-ink-52)', marginTop: 4 }}>Automated courier invoice matching engine</p>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           <button
             style={{
               ...btnGhost,
-              background: showArchived ? 'rgba(121,170,255,0.12)' : btnGhost.background,
-              borderColor: showArchived ? 'rgba(121,170,255,0.4)' : btnGhost.borderColor,
-              color: showArchived ? '#79AAFF' : btnGhost.color,
+              background: showArchived ? 'var(--mv-teal-100)' : btnGhost.background,
+              borderColor: showArchived ? 'var(--mv-teal-200)' : btnGhost.borderColor,
+              color: showArchived ? 'var(--mv-teal)' : btnGhost.color,
             }}
             onClick={() => setShowArchived(v => !v)}
             title={showArchived ? 'Hide archived runs' : 'Show archived runs'}
@@ -1644,9 +1644,9 @@ export default function ReconciliationPage() {
           {finalizableCount > 0 && (
             <button
               style={{
-                background: finalizingAll ? 'rgba(121,170,255,0.10)' : 'rgba(121,170,255,0.15)',
-                border: '1px solid rgba(121,170,255,0.4)',
-                borderRadius: 7, color: '#79AAFF', padding: '9px 16px', cursor: finalizingAll ? 'not-allowed' : 'pointer',
+                background: finalizingAll ? 'var(--mv-teal-100)' : 'var(--mv-teal-100)',
+                border: '1px solid var(--mv-teal-200)',
+                borderRadius: 7, color: 'var(--mv-teal)', padding: '9px 16px', cursor: finalizingAll ? 'not-allowed' : 'pointer',
                 fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6,
                 opacity: finalizingAll ? 0.7 : 1,
               }}
@@ -1667,18 +1667,18 @@ export default function ReconciliationPage() {
       {/* KPI strip */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 28 }}>
         {[
-          { label: 'Total Runs',     value: totalRuns,     color: '#79AAFF', icon: FileText },
+          { label: 'Total Runs',     value: totalRuns,     color: 'var(--mv-teal)', icon: FileText },
           { label: 'Avg. Automation', value: `${avgAutomation}%`, color: 'var(--mv-green)', icon: TrendingUp },
-          { label: 'Open Unmatched', value: openItems,     color: openItems > 0 ? '#FFB300' : 'var(--mv-green)', icon: AlertTriangle },
-          { label: 'Needs Review',   value: needsReview,   color: needsReview > 0 ? '#FF5252' : 'var(--mv-green)', icon: CheckCircle2 },
+          { label: 'Open Unmatched', value: openItems,     color: openItems > 0 ? 'var(--mv-amber)' : 'var(--mv-green)', icon: AlertTriangle },
+          { label: 'Needs Review',   value: needsReview,   color: needsReview > 0 ? 'var(--mv-magenta)' : 'var(--mv-green)', icon: CheckCircle2 },
         ].map(({ label, value, color, icon: Icon }) => (
           <div key={label} style={{ ...card }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
               <div>
-                <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>{label}</div>
+                <div style={{ fontSize: 11, color: 'var(--mv-ink-52)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>{label}</div>
                 <div style={{ fontSize: 26, fontWeight: 800, color }}>{value}</div>
               </div>
-              <Icon size={18} color='#333' />
+              <Icon size={18} color='var(--mv-ink-78)' />
             </div>
           </div>
         ))}
@@ -1690,48 +1690,48 @@ export default function ReconciliationPage() {
           {
             label: 'Total Revenue',
             value: fmtGBP(totalsData?.total_revenue),
-            color: '#79AAFF',
+            color: 'var(--mv-teal)',
             sub: 'across all runs',
           },
           {
             label: 'Total Carrier Cost',
             value: fmtGBP(totalsData?.total_carrier_cost),
-            color: '#FFB300',
+            color: 'var(--mv-amber)',
             sub: 'carrier invoice amounts',
           },
           {
             label: 'Total Margin',
             value: fmtGBP(totalsData?.total_margin),
-            color: (totalsData?.total_margin ?? 0) >= 0 ? 'var(--mv-green)' : '#FF5252',
+            color: (totalsData?.total_margin ?? 0) >= 0 ? 'var(--mv-green)' : 'var(--mv-magenta)',
             sub: totalsData?.total_revenue
               ? `${Math.round(((totalsData.total_margin ?? 0) / totalsData.total_revenue) * 100)}% margin`
               : 'revenue – carrier cost',
           },
         ].map(({ label, value, color, sub }) => (
           <div key={label} style={{ ...card }}>
-            <div style={{ fontSize: 11, color: '#64748B', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{label}</div>
+            <div style={{ fontSize: 11, color: 'var(--mv-ink-52)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>{label}</div>
             <div style={{ fontSize: 26, fontWeight: 800, color, marginBottom: 4 }}>{value}</div>
-            <div style={{ fontSize: 11, color: '#94A3B8' }}>{sub}</div>
+            <div style={{ fontSize: 11, color: 'var(--mv-ink-45)' }}>{sub}</div>
           </div>
         ))}
       </div>
 
       {/* Runs table */}
       <div style={card}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', marginBottom: 16 }}>All Runs</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--mv-ink)', marginBottom: 16 }}>All Runs</div>
 
         {runsLoading ? (
-          <div style={{ color: '#64748B', fontSize: 13, padding: '20px 0' }}>Loading…</div>
+          <div style={{ color: 'var(--mv-ink-52)', fontSize: 13, padding: '20px 0' }}>Loading…</div>
         ) : runs.length === 0 ? (
-          <div style={{ textAlign: 'center', color: '#64748B', fontSize: 13, padding: '40px 0' }}>
+          <div style={{ textAlign: 'center', color: 'var(--mv-ink-52)', fontSize: 13, padding: '40px 0' }}>
             No reconciliation runs yet. Upload a carrier invoice CSV to get started.
           </div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
             <thead>
-              <tr style={{ borderBottom: '1px solid rgba(0,0,0,0.08)' }}>
+              <tr style={{ borderBottom: '1px solid color-mix(in srgb, var(--mv-ink) 8%, transparent)' }}>
                 {['Carrier', 'Customer Name', 'Invoice Ref', 'Finalized', 'Lines', 'Matched', 'Corrected', 'Unmatched', 'Automation', 'Status', ''].map(h => (
-                  <th key={h} style={{ padding: '8px 10px', textAlign: 'left', color: '#64748B', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
+                  <th key={h} style={{ padding: '8px 10px', textAlign: 'left', color: 'var(--mv-ink-52)', fontWeight: 700, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -1744,49 +1744,49 @@ export default function ReconciliationPage() {
                     ? new Date(run.invoice_date).toLocaleDateString('en-GB')
                     : '—';
                 const rowBg = run.archived
-                  ? 'rgba(0,0,0,0.015)'
+                  ? 'color-mix(in srgb, var(--mv-ink) 1.5%, transparent)'
                   : isFinalized
-                    ? 'rgba(15,122,70,0.04)'
+                    ? 'var(--mv-purple-100)'
                     : 'transparent';
                 return (
                   <tr
                     key={run.id}
                     onClick={() => navigate(`/reconciliation/${run.id}`)}
-                    style={{ borderBottom: '1px solid rgba(0,0,0,0.03)', cursor: 'pointer', background: rowBg }}
-                    onMouseEnter={e => e.currentTarget.style.background = isFinalized ? 'rgba(15,122,70,0.08)' : 'rgba(0,0,0,0.02)'}
+                    style={{ borderBottom: '1px solid color-mix(in srgb, var(--mv-ink) 3%, transparent)', cursor: 'pointer', background: rowBg }}
+                    onMouseEnter={e => e.currentTarget.style.background = isFinalized ? 'var(--mv-purple-100)' : 'color-mix(in srgb, var(--mv-ink) 2%, transparent)'}
                     onMouseLeave={e => e.currentTarget.style.background = rowBg}
                   >
-                    <td style={{ padding: '10px 10px', color: run.archived ? '#94A3B8' : '#0F172A', fontWeight: 600 }}>{run.carrier_name || '—'}</td>
-                    <td style={{ padding: '10px 10px', color: run.customer_display === 'Mixed' ? '#79AAFF' : (run.archived ? '#94A3B8' : '#0F172A'), fontStyle: run.customer_display === 'Mixed' ? 'italic' : 'normal' }}>{run.customer_display || '—'}</td>
-                    <td style={{ padding: '10px 10px', color: run.archived ? '#94A3B8' : '#64748B' }}>{run.invoice_ref || '—'}</td>
+                    <td style={{ padding: '10px 10px', color: run.archived ? 'var(--mv-ink-45)' : 'var(--mv-ink)', fontWeight: 600 }}>{run.carrier_name || '—'}</td>
+                    <td style={{ padding: '10px 10px', color: run.customer_display === 'Mixed' ? 'var(--mv-teal)' : (run.archived ? 'var(--mv-ink-45)' : 'var(--mv-ink)'), fontStyle: run.customer_display === 'Mixed' ? 'italic' : 'normal' }}>{run.customer_display || '—'}</td>
+                    <td style={{ padding: '10px 10px', color: run.archived ? 'var(--mv-ink-45)' : 'var(--mv-ink-52)' }}>{run.invoice_ref || '—'}</td>
                     <td style={{ padding: '10px 10px' }}>
                       {isFinalized ? (
                         <span style={{ color: 'var(--mv-green)', fontWeight: 600, fontSize: 11 }}>{displayDate}</span>
                       ) : (
-                        <span style={{ color: '#94A3B8', fontSize: 11 }}>—</span>
+                        <span style={{ color: 'var(--mv-ink-45)', fontSize: 11 }}>—</span>
                       )}
                     </td>
-                    <td style={{ padding: '10px 10px', color: run.archived ? '#94A3B8' : '#0F172A' }}>{(run.total_lines || 0).toLocaleString()}</td>
-                    <td style={{ padding: '10px 10px', color: run.archived ? '#94A3B8' : 'var(--mv-green)' }}>{run.matched_count || 0}</td>
-                    <td style={{ padding: '10px 10px', color: run.archived ? '#94A3B8' : '#79AAFF' }}>{run.corrected_count || 0}</td>
-                    <td style={{ padding: '10px 10px', color: (run.unmatched_count || 0) > 0 ? '#FFB300' : (run.archived ? '#94A3B8' : '#475569') }}>
+                    <td style={{ padding: '10px 10px', color: run.archived ? 'var(--mv-ink-45)' : 'var(--mv-ink)' }}>{(run.total_lines || 0).toLocaleString()}</td>
+                    <td style={{ padding: '10px 10px', color: run.archived ? 'var(--mv-ink-45)' : 'var(--mv-green)' }}>{run.matched_count || 0}</td>
+                    <td style={{ padding: '10px 10px', color: run.archived ? 'var(--mv-ink-45)' : 'var(--mv-teal)' }}>{run.corrected_count || 0}</td>
+                    <td style={{ padding: '10px 10px', color: (run.unmatched_count || 0) > 0 ? 'var(--mv-amber)' : (run.archived ? 'var(--mv-ink-45)' : 'var(--mv-ink-62)') }}>
                       {run.unmatched_count || 0}
                     </td>
                     <td style={{ padding: '10px 10px', minWidth: 100 }}>
-                      {run.automation_rate != null ? <AutoBar rate={run.automation_rate} /> : <span style={{ color: '#64748B' }}>—</span>}
+                      {run.automation_rate != null ? <AutoBar rate={run.automation_rate} /> : <span style={{ color: 'var(--mv-ink-52)' }}>—</span>}
                     </td>
                     <td style={{ padding: '10px 10px' }}><StatusBadge status={run.status} /></td>
                     <td style={{ padding: '10px 10px' }} onClick={e => e.stopPropagation()}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <ChevronRight size={14} color='#475569' />
+                        <ChevronRight size={14} color='var(--mv-ink-62)' />
                         {isFinalized && (
                           <button
-                            style={{ background: 'none', border: 'none', cursor: archivingRunId === run.id ? 'not-allowed' : 'pointer', padding: '2px 4px', borderRadius: 4, color: run.archived ? '#79AAFF' : '#94A3B8', opacity: archivingRunId === run.id ? 0.5 : 1 }}
+                            style={{ background: 'none', border: 'none', cursor: archivingRunId === run.id ? 'not-allowed' : 'pointer', padding: '2px 4px', borderRadius: 4, color: run.archived ? 'var(--mv-teal)' : 'var(--mv-ink-45)', opacity: archivingRunId === run.id ? 0.5 : 1 }}
                             title={run.archived ? 'Unarchive this run' : 'Archive this run'}
                             onClick={e => handleArchiveRun(e, run.id, run.archived)}
                             disabled={archivingRunId === run.id}
-                            onMouseEnter={e => e.currentTarget.style.color = run.archived ? '#3B82F6' : '#64748B'}
-                            onMouseLeave={e => e.currentTarget.style.color = run.archived ? '#79AAFF' : '#94A3B8'}
+                            onMouseEnter={e => e.currentTarget.style.color = run.archived ? 'var(--mv-teal)' : 'var(--mv-ink-52)'}
+                            onMouseLeave={e => e.currentTarget.style.color = run.archived ? 'var(--mv-teal)' : 'var(--mv-ink-45)'}
                           >
                             {run.archived ? <ArchiveRestore size={13} /> : <Archive size={13} />}
                           </button>
@@ -1808,11 +1808,11 @@ export default function ReconciliationPage() {
                           </div>
                         ) : (
                           <button
-                            style={{ background: 'none', border: 'none', color: '#475569', cursor: 'pointer', padding: '2px 4px', borderRadius: 4 }}
+                            style={{ background: 'none', border: 'none', color: 'var(--mv-ink-62)', cursor: 'pointer', padding: '2px 4px', borderRadius: 4 }}
                             title='Delete this run'
                             onClick={e => handleDeleteRun(e, run.id)}
-                            onMouseEnter={e => e.currentTarget.style.color = '#FF5252'}
-                            onMouseLeave={e => e.currentTarget.style.color = '#444'}
+                            onMouseEnter={e => e.currentTarget.style.color = 'var(--mv-magenta)'}
+                            onMouseLeave={e => e.currentTarget.style.color = 'var(--mv-ink-62)'}
                           >
                             <Trash2 size={13} />
                           </button>

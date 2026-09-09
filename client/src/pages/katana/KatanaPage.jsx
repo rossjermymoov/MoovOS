@@ -20,10 +20,10 @@ const C = {
   surface:  '#10122A',
   card:     '#141628',
   border:   'rgba(0,0,0,0.07)',
-  amber:    '#F59E0B',
-  amberDim: 'rgba(245,158,11,0.10)',
+  amber:    'var(--mv-amber)',
+  amberDim: 'var(--mv-amber-100)',
   green:    'var(--mv-green)',
-  red:      '#EF4444',
+  red:      'var(--mv-magenta)',
   text:     '#F0F0FF',
   muted:    '#8888AA',
   cyan:     'var(--mv-teal)',
@@ -331,7 +331,7 @@ function AddSourceForm({ onClose, onCreate }) {
             onClick={submit}
             disabled={saving}
             style={{
-              background: saving ? C.amberDim : `linear-gradient(135deg, ${C.amber}, #D97706)`,
+              background: saving ? C.amberDim : `linear-gradient(135deg, ${C.amber}, var(--mv-amber-deep))`,
               border: 'none', borderRadius: 8, padding: '8px 20px',
               fontSize: 13, fontWeight: 600, color: saving ? C.amber : '#0D0E24',
               cursor: saving ? 'default' : 'pointer',
@@ -385,7 +385,7 @@ export default function KatanaPage() {
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 28 }}>
         <div style={{
           width: 44, height: 44, borderRadius: 12,
-          background: `linear-gradient(135deg, ${C.amber}, #D97706)`,
+          background: `linear-gradient(135deg, ${C.amber}, var(--mv-amber-deep))`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           boxShadow: `0 0 20px rgba(245,158,11,0.3)`,
         }}>
@@ -402,7 +402,7 @@ export default function KatanaPage() {
           onClick={() => setShowForm(x => !x)}
           style={{
             display: 'flex', alignItems: 'center', gap: 7,
-            background: showForm ? C.amberDim : `linear-gradient(135deg, ${C.amber}, #D97706)`,
+            background: showForm ? C.amberDim : `linear-gradient(135deg, ${C.amber}, var(--mv-amber-deep))`,
             border: showForm ? `1px solid rgba(245,158,11,0.3)` : 'none',
             borderRadius: 9, padding: '9px 16px',
             fontSize: 13, fontWeight: 600,

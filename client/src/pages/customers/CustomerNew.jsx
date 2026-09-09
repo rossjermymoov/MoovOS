@@ -103,7 +103,7 @@ function validate(step, form) {
 function Field({ label, error, required, children }) {
   return (
     <div>
-      <label style={{ display: 'block', fontSize: 12, color: '#64748B', marginBottom: 6 }}>
+      <label style={{ display: 'block', fontSize: 12, color: 'var(--ds-muted)', marginBottom: 6 }}>
         {label}{required && <span style={{ color: 'var(--mv-magenta)', marginLeft: 3 }}>*</span>}
       </label>
       {children}
@@ -112,17 +112,8 @@ function Field({ label, error, required, children }) {
   );
 }
 
-const inputStyle = (error) => ({
-  width: '100%', boxSizing: 'border-box',
-  background: '#FFFFFF', border: `1px solid ${error ? 'var(--mv-magenta)' : 'rgba(0,0,0,0.08)'}`,
-  borderRadius: 9999, padding: '10px 18px', color: '#0F172A', fontSize: 14, outline: 'none',
-});
-
-const selectStyle = {
-  width: '100%', boxSizing: 'border-box',
-  background: '#FFFFFF', border: '1px solid rgba(0,0,0,0.08)',
-  borderRadius: 9999, padding: '10px 18px', color: '#0F172A', fontSize: 14, outline: 'none',
-};
+// Underline-style field (.ds-field), red bottom border on error
+const fieldErrorStyle = (error) => (error ? { borderBottomColor: 'var(--mv-magenta)' } : undefined);
 
 const grid2 = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 };
 const grid3 = { display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 };
@@ -136,11 +127,11 @@ function StepBusiness({ form, set, errors }) {
 
       <div style={grid2}>
         <Field label="Business / Company Name" required error={errors.business_name}>
-          <input style={inputStyle(errors.business_name)} value={form.business_name}
+          <input className="ds-field" style={fieldErrorStyle(errors.business_name)} value={form.business_name}
             onChange={e => set('business_name', e.target.value)} placeholder="Acme Ltd" />
         </Field>
         <Field label="Company Type">
-          <select style={selectStyle} value={form.company_type} onChange={e => set('company_type', e.target.value)}>
+          <select className="ds-field" value={form.company_type} onChange={e => set('company_type', e.target.value)}>
             {COMPANY_TYPES.map(ct => <option key={ct.value} value={ct.value}>{ct.label}</option>)}
           </select>
         </Field>
@@ -148,77 +139,77 @@ function StepBusiness({ form, set, errors }) {
 
       <div style={grid2}>
         <Field label="Company Registration Number">
-          <input style={inputStyle()} value={form.company_reg_number}
+          <input className="ds-field" value={form.company_reg_number}
             onChange={e => set('company_reg_number', e.target.value)} placeholder="12345678" />
         </Field>
         <Field label="VAT Number">
-          <input style={inputStyle()} value={form.vat_number}
+          <input className="ds-field" value={form.vat_number}
             onChange={e => set('vat_number', e.target.value)} placeholder="GB123456789" />
         </Field>
       </div>
 
-      <div style={{ borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: 16 }}>
+      <div style={{ borderTop: 'var(--ds-hairline)', paddingTop: 16 }}>
         <p style={sectionHeading}>Address</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <Field label="Address Line 1">
-            <input style={inputStyle()} value={form.address_line_1}
+            <input className="ds-field" value={form.address_line_1}
               onChange={e => set('address_line_1', e.target.value)} placeholder="Unit 4, Business Park" />
           </Field>
           <Field label="Address Line 2">
-            <input style={inputStyle()} value={form.address_line_2}
+            <input className="ds-field" value={form.address_line_2}
               onChange={e => set('address_line_2', e.target.value)} placeholder="Optional" />
           </Field>
           <div style={grid3}>
             <Field label="City / Town">
-              <input style={inputStyle()} value={form.city}
+              <input className="ds-field" value={form.city}
                 onChange={e => set('city', e.target.value)} placeholder="Manchester" />
             </Field>
             <Field label="County">
-              <input style={inputStyle()} value={form.county}
+              <input className="ds-field" value={form.county}
                 onChange={e => set('county', e.target.value)} placeholder="Greater Manchester" />
             </Field>
             <Field label="Postcode" required error={errors.postcode}>
-              <input style={inputStyle(errors.postcode)} value={form.postcode}
+              <input className="ds-field" style={fieldErrorStyle(errors.postcode)} value={form.postcode}
                 onChange={e => set('postcode', e.target.value.toUpperCase())} placeholder="M1 1AB" />
             </Field>
           </div>
           <Field label="Country">
-            <input style={inputStyle()} value={form.country}
+            <input className="ds-field" value={form.country}
               onChange={e => set('country', e.target.value)} />
           </Field>
         </div>
       </div>
 
-      <div style={{ borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: 16 }}>
+      <div style={{ borderTop: 'var(--ds-hairline)', paddingTop: 16 }}>
         <p style={sectionHeading}>Contact Details</p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={grid2}>
             <Field label="Main Phone Number" required error={errors.phone_number}>
-              <input style={inputStyle(errors.phone_number)} value={form.phone_number}
+              <input className="ds-field" style={fieldErrorStyle(errors.phone_number)} value={form.phone_number}
                 onChange={e => set('phone_number', e.target.value)} placeholder="+44 7700 900000" />
             </Field>
             <Field label="Main Email Address" required error={errors.primary_email}>
-              <input style={inputStyle(errors.primary_email)} value={form.primary_email}
+              <input className="ds-field" style={fieldErrorStyle(errors.primary_email)} value={form.primary_email}
                 onChange={e => set('primary_email', e.target.value)} placeholder="info@company.co.uk" />
             </Field>
           </div>
           <Field label="Accounts / Billing Email" error={errors.accounts_email}>
-            <input style={inputStyle(errors.accounts_email)} value={form.accounts_email}
+            <input className="ds-field" style={fieldErrorStyle(errors.accounts_email)} value={form.accounts_email}
               onChange={e => set('accounts_email', e.target.value)}
               placeholder="accounts@company.co.uk — leave blank if same as above" />
           </Field>
         </div>
       </div>
 
-      <div style={{ borderTop: '1px solid rgba(0,0,0,0.06)', paddingTop: 16 }}>
+      <div style={{ borderTop: 'var(--ds-hairline)', paddingTop: 16 }}>
         <p style={sectionHeading}>International Trade</p>
         <div style={grid2}>
           <Field label="EORI Number">
-            <input style={inputStyle()} value={form.eori_number}
+            <input className="ds-field" value={form.eori_number}
               onChange={e => set('eori_number', e.target.value)} placeholder="GB123456789000" />
           </Field>
           <Field label="IOSS Number">
-            <input style={inputStyle()} value={form.ioss_number}
+            <input className="ds-field" value={form.ioss_number}
               onChange={e => set('ioss_number', e.target.value)} placeholder="IM1234567890" />
           </Field>
         </div>
@@ -230,7 +221,7 @@ function StepBusiness({ form, set, errors }) {
 // ─── Step 2: Assign Staff ─────────────────────────────────────
 function StepStaff({ form, set, salespeople, accountManagers, onboarders }) {
   const staffSelect = (field, options, placeholder) => (
-    <select style={selectStyle} value={form[field]} onChange={e => set(field, e.target.value)}>
+    <select className="ds-field" value={form[field]} onChange={e => set(field, e.target.value)}>
       <option value="">{placeholder}</option>
       {options.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
     </select>
@@ -250,36 +241,36 @@ function StepAccount({ form, set, errors }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
 
       <div>
-        <label style={{ display: 'block', fontSize: 12, color: '#64748B', marginBottom: 10 }}>Account Tier</label>
+        <label style={{ display: 'block', fontSize: 12, color: 'var(--ds-muted)', marginBottom: 10 }}>Account Tier</label>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           {TIERS.map(t => (
             <button key={t.value} onClick={() => set('tier', t.value)} style={{
-              padding: '12px 16px', borderRadius: 8, cursor: 'pointer', textAlign: 'left',
-              background: form.tier === t.value ? 'rgba(15,122,70,0.2)' : 'rgba(0,0,0,0.03)',
-              border: form.tier === t.value ? '1px solid var(--mv-purple)' : '1px solid rgba(0,0,0,0.08)',
-              color: '#0F172A',
+              padding: '12px 16px', cursor: 'pointer', textAlign: 'left',
+              background: form.tier === t.value ? 'var(--color-accent-100)' : 'var(--color-bg)',
+              border: form.tier === t.value ? '1px solid var(--mv-purple)' : '1px solid var(--color-divider)',
+              color: 'var(--color-text)',
             }}>
               <div style={{ fontSize: 13, fontWeight: 600 }}>{t.label}</div>
-              <div style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>{t.desc}</div>
+              <div style={{ fontSize: 11, color: 'var(--ds-muted)', marginTop: 2 }}>{t.desc}</div>
             </button>
           ))}
         </div>
       </div>
 
       <Field label="Credit Limit (£)" required error={errors.credit_limit}>
-        <input style={inputStyle(errors.credit_limit)} value={form.credit_limit} type="number" min="0"
+        <input className="ds-field" style={fieldErrorStyle(errors.credit_limit)} value={form.credit_limit} type="number" min="0"
           onChange={e => set('credit_limit', e.target.value)} placeholder="0.00" />
       </Field>
 
       <div>
-        <label style={{ display: 'block', fontSize: 12, color: '#64748B', marginBottom: 10 }}>Billing Period</label>
+        <label style={{ display: 'block', fontSize: 12, color: 'var(--ds-muted)', marginBottom: 10 }}>Billing Period</label>
         <div style={{ display: 'flex', gap: 10 }}>
           {BILLING_PERIODS.map(bp => (
             <button key={bp.value} onClick={() => set('billing_cycle', bp.value)} style={{
-              flex: 1, padding: '10px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600,
-              background: form.billing_cycle === bp.value ? 'rgba(15,122,70,0.15)' : 'rgba(0,0,0,0.03)',
-              border: form.billing_cycle === bp.value ? '1px solid var(--mv-green)' : '1px solid rgba(0,0,0,0.08)',
-              color: form.billing_cycle === bp.value ? 'var(--mv-green)' : '#64748B',
+              flex: 1, padding: '10px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+              background: form.billing_cycle === bp.value ? 'var(--color-accent-100)' : 'var(--color-bg)',
+              border: form.billing_cycle === bp.value ? '1px solid var(--mv-green)' : '1px solid var(--color-divider)',
+              color: form.billing_cycle === bp.value ? 'var(--mv-green)' : 'var(--ds-muted)',
             }}>
               {bp.label}
             </button>
@@ -288,14 +279,14 @@ function StepAccount({ form, set, errors }) {
       </div>
 
       <div>
-        <label style={{ display: 'block', fontSize: 12, color: '#64748B', marginBottom: 10 }}>Billing Terms</label>
+        <label style={{ display: 'block', fontSize: 12, color: 'var(--ds-muted)', marginBottom: 10 }}>Billing Terms</label>
         <div style={{ display: 'flex', gap: 10 }}>
           {PAYMENT_TERMS.map(pt => (
             <button key={pt.value} onClick={() => set('payment_terms_days', pt.value)} style={{
-              flex: 1, padding: '10px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 13, fontWeight: 600,
-              background: form.payment_terms_days === pt.value ? 'rgba(15,122,70,0.15)' : 'rgba(0,0,0,0.03)',
-              border: form.payment_terms_days === pt.value ? '1px solid var(--mv-green)' : '1px solid rgba(0,0,0,0.08)',
-              color: form.payment_terms_days === pt.value ? 'var(--mv-green)' : '#64748B',
+              flex: 1, padding: '10px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+              background: form.payment_terms_days === pt.value ? 'var(--color-accent-100)' : 'var(--color-bg)',
+              border: form.payment_terms_days === pt.value ? '1px solid var(--mv-green)' : '1px solid var(--color-divider)',
+              color: form.payment_terms_days === pt.value ? 'var(--mv-green)' : 'var(--ds-muted)',
             }}>
               <div>{pt.label}</div>
               {pt.note && <div style={{ fontSize: 10, marginTop: 2, opacity: 0.7 }}>{pt.note}</div>}
@@ -313,31 +304,31 @@ function StepContact({ form, set, errors }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={grid2}>
         <Field label="Full Name" required error={errors.contact_full_name}>
-          <input style={inputStyle(errors.contact_full_name)} value={form.contact_full_name}
+          <input className="ds-field" style={fieldErrorStyle(errors.contact_full_name)} value={form.contact_full_name}
             onChange={e => set('contact_full_name', e.target.value)} placeholder="Jane Smith" />
         </Field>
         <Field label="Job Title">
-          <input style={inputStyle()} value={form.contact_job_title}
+          <input className="ds-field" value={form.contact_job_title}
             onChange={e => set('contact_job_title', e.target.value)} placeholder="Operations Manager" />
         </Field>
       </div>
       <div style={grid2}>
         <Field label="Email Address" required error={errors.contact_email}>
-          <input style={inputStyle(errors.contact_email)} value={form.contact_email}
+          <input className="ds-field" style={fieldErrorStyle(errors.contact_email)} value={form.contact_email}
             onChange={e => set('contact_email', e.target.value)} placeholder="jane@company.co.uk" />
         </Field>
         <Field label="Phone Number">
-          <input style={inputStyle()} value={form.contact_phone}
+          <input className="ds-field" value={form.contact_phone}
             onChange={e => set('contact_phone', e.target.value)} placeholder="+44 7700 900000" />
         </Field>
       </div>
       <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: '#64748B' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: 'var(--ds-muted)' }}>
           <input type="checkbox" checked={form.contact_is_main}
             onChange={e => set('contact_is_main', e.target.checked)} style={{ accentColor: 'var(--mv-purple)' }} />
           Main contact
         </label>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: '#64748B' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 13, color: 'var(--ds-muted)' }}>
           <input type="checkbox" checked={form.contact_is_finance}
             onChange={e => set('contact_is_finance', e.target.checked)} style={{ accentColor: 'var(--mv-purple)' }} />
           Finance contact
@@ -359,17 +350,17 @@ function StepIndicator({ steps, current }) {
           <div key={s.key} style={{ display: 'flex', alignItems: 'center', flex: i < steps.length - 1 ? 1 : 'none' }}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
               <div style={{
-                width: 36, height: 36, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: done ? 'var(--mv-green)' : active ? 'var(--mv-purple)' : 'rgba(0,0,0,0.04)',
-                border: `2px solid ${done ? 'var(--mv-green)' : active ? 'var(--mv-purple)' : 'rgba(0,0,0,0.08)'}`,
-                color: done || active ? '#fff' : '#666',
+                width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                background: done ? 'var(--mv-green)' : active ? 'var(--mv-purple)' : 'var(--color-bg)',
+                border: `2px solid ${done ? 'var(--mv-green)' : active ? 'var(--mv-purple)' : 'var(--color-divider)'}`,
+                color: done || active ? 'var(--color-on-accent)' : 'var(--ds-muted)',
               }}>
                 {done ? <Check size={16} /> : <Icon size={16} />}
               </div>
-              <span style={{ fontSize: 11, color: active ? '#fff' : '#666', whiteSpace: 'nowrap' }}>{s.label}</span>
+              <span style={{ fontSize: 11, color: active ? 'var(--color-text)' : 'var(--ds-muted)', whiteSpace: 'nowrap' }}>{s.label}</span>
             </div>
             {i < steps.length - 1 && (
-              <div style={{ flex: 1, height: 2, background: done ? 'var(--mv-green)' : 'rgba(0,0,0,0.08)', margin: '0 8px', marginBottom: 20 }} />
+              <div style={{ flex: 1, height: 2, background: done ? 'var(--mv-green)' : 'var(--color-divider)', margin: '0 8px', marginBottom: 20 }} />
             )}
           </div>
         );
@@ -391,15 +382,15 @@ function stepSubtitle(step) {
 function SuccessScreen({ customer, navigate }) {
   return (
     <div style={{ maxWidth: 480, margin: '80px auto', textAlign: 'center' }}>
-      <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(15,122,70,0.15)', border: '2px solid var(--mv-green)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+      <div style={{ width: 64, height: 64, background: 'var(--color-accent-100)', border: '2px solid var(--mv-green)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
         <Check size={28} color="var(--mv-green)" />
       </div>
-      <h2 style={{ fontSize: 22, fontWeight: 700, color: '#0F172A', marginBottom: 8 }}>Customer Created</h2>
-      <p style={{ color: '#64748B', marginBottom: 4 }}>{customer.business_name}</p>
+      <h2 style={{ fontSize: 22, fontWeight: 700, color: 'var(--color-text)', marginBottom: 8 }}>Customer Created</h2>
+      <p style={{ color: 'var(--ds-muted)', marginBottom: 4 }}>{customer.business_name}</p>
       <p style={{ color: 'var(--mv-green)', fontWeight: 600, marginBottom: 28 }}>{customer.account_number}</p>
       <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
-        <button className="btn-primary" onClick={() => navigate(`/customers/${customer.id}`)}>View Customer</button>
-        <button className="btn-ghost" onClick={() => navigate('/customers/new')}>Add Another</button>
+        <button className="ds-btn ds-btn-primary" onClick={() => navigate(`/customers/${customer.id}`)}>View Customer</button>
+        <button className="ds-btn ds-btn-secondary" onClick={() => navigate('/customers/new')}>Add Another</button>
       </div>
     </div>
   );
@@ -483,22 +474,22 @@ export default function CustomerNew() {
     <div className="moov-ds" style={{ padding: '8px 0 48px', maxWidth: 760, margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
         <button onClick={() => navigate('/customers')}
-          style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+          style={{ background: 'none', border: 'none', color: 'var(--ds-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
           <ArrowLeft size={14} /> Customers
         </button>
-        <span style={{ color: '#475569' }}>/</span>
-        <span style={{ fontSize: 13, color: '#0F172A' }}>Add Customer</span>
+        <span style={{ color: 'var(--ds-muted)' }}>/</span>
+        <span style={{ fontSize: 13, color: 'var(--color-text)' }}>Add Customer</span>
       </div>
 
       <h1 style={{ fontSize: 24, fontWeight: 700, color: 'var(--mv-green)', marginBottom: 24 }}>Add Customer</h1>
 
       <StepIndicator steps={STEPS} current={step} />
 
-      <div className="moov-card" style={{ padding: 32, marginTop: 24 }}>
+      <div style={{ marginTop: 24, paddingTop: 28, paddingBottom: 8, borderTop: '2px solid var(--color-divider)' }}>
         <h2 style={{ fontSize: 18, fontWeight: 600, color: 'var(--mv-purple)', marginBottom: 4 }}>
           {STEPS[step].label}
         </h2>
-        <p style={{ fontSize: 13, color: '#64748B', marginBottom: 28 }}>
+        <p style={{ fontSize: 13, color: 'var(--ds-muted)', marginBottom: 28 }}>
           {stepSubtitle(step)}
         </p>
 
@@ -508,16 +499,16 @@ export default function CustomerNew() {
         {step === 3 && <StepContact    form={form} set={set} errors={errors} />}
 
         {createCustomer.isError && (
-          <div style={{ marginTop: 16, padding: 12, background: 'rgba(205,29,105,0.1)', border: '1px solid var(--mv-magenta)', borderRadius: 8, fontSize: 13, color: 'var(--mv-magenta)' }}>
+          <div style={{ marginTop: 16, padding: 12, background: 'color-mix(in srgb, var(--mv-magenta) 12%, transparent)', border: '1px solid var(--mv-magenta)', fontSize: 13, color: 'var(--mv-magenta)' }}>
             Something went wrong. Please try again.
           </div>
         )}
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 32, paddingTop: 24, borderTop: '1px solid rgba(0,0,0,0.06)' }}>
-          <button className="btn-ghost" onClick={step === 0 ? () => navigate('/customers') : back}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 32, paddingTop: 24, borderTop: 'var(--ds-hairline)' }}>
+          <button className="ds-btn ds-btn-secondary" onClick={step === 0 ? () => navigate('/customers') : back}>
             <ArrowLeft size={14} /> {step === 0 ? 'Cancel' : 'Back'}
           </button>
-          <button className="btn-primary" onClick={next} disabled={createCustomer.isPending}>
+          <button className="ds-btn ds-btn-primary" onClick={next} disabled={createCustomer.isPending}>
             {createCustomer.isPending
               ? 'Saving…'
               : step === STEPS.length - 1

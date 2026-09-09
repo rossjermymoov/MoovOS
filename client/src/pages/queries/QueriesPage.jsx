@@ -24,41 +24,41 @@ const api = axios.create({ baseURL: '/api' });
 const _BUILD = '2026-05-23-filter-fixes'; // cache bust — fix claim deadline filter + sla breached clickable
 
 const C = {
-  bg:       '#F8FAFC',
-  surface:  '#F8FAFC',
-  card:     '#FFFFFF',
-  hover:    '#F4F6FA',
-  selected: '#EFF6FF',
-  border:   'rgba(0,0,0,0.06)',
-  green:    '#166534',
-  amber:    '#92400E',
-  red:      '#991B1B',
-  blue:     '#1E40AF',
-  text:     '#0F172A',
-  sub:      '#334155',
-  muted:    '#94A3B8',
-  greenDim: '#DCFCE7',
-  amberDim: '#FEF3C7',
-  redDim:   '#FEE2E2',
-  blueDim:  '#EFF6FF',
+  bg:       'var(--mv-bg)',
+  surface:  'var(--mv-bg)',
+  card:     'var(--mv-surface)',
+  hover:    'var(--mv-bg)',
+  selected: 'var(--mv-teal-100)',
+  border:   'var(--mv-hairline)',
+  green:    'var(--mv-green-deep)',
+  amber:    'var(--mv-amber-deep)',
+  red:      'var(--mv-magenta-deep)',
+  blue:     'var(--mv-teal-deep)',
+  text:     'var(--mv-ink)',
+  sub:      'var(--mv-ink-78)',
+  muted:    'var(--mv-ink-52)',
+  greenDim: 'var(--mv-purple-100)',
+  amberDim: 'var(--mv-amber-100)',
+  redDim:   'var(--mv-magenta-100)',
+  blueDim:  'var(--mv-teal-100)',
 };
 
 const STATUS_CFG = {
-  open:                    { label: 'Open',              color: '#1D4ED8', bg: '#EFF6FF', border: '#BFDBFE' },
-  awaiting_customer_info:  { label: 'Awaiting customer', color: '#92400E', bg: '#FFFBEB', border: '#FDE68A' },
-  info_received:           { label: 'Info received',     color: '#166534', bg: '#F0FDF4', border: '#BBF7D0' },
-  drafting:                { label: 'Drafting',          color: '#166534', bg: '#F0FDF4', border: '#BBF7D0' },
-  awaiting_courier:        { label: 'Awaiting courier',  color: '#92400E', bg: '#FFFBEB', border: '#FDE68A' },
-  courier_replied:         { label: 'Courier replied',   color: '#166534', bg: '#F0FDF4', border: '#BBF7D0' },
-  courier_investigating:   { label: 'Investigating',     color: '#1E40AF', bg: '#EFF6FF', border: '#BFDBFE' },
-  awaiting_customer:       { label: 'Awaiting customer', color: '#92400E', bg: '#FFFBEB', border: '#FDE68A' },
-  claim_raised:            { label: 'Claim raised',      color: '#991B1B', bg: '#FEF2F2', border: '#FECACA' },
-  awaiting_claim_docs:     { label: 'Awaiting docs',     color: '#991B1B', bg: '#FEF2F2', border: '#FECACA' },
-  claim_submitted:         { label: 'Claim submitted',   color: '#92400E', bg: '#FFFBEB', border: '#FDE68A' },
-  resolved:                { label: 'Resolved',          color: '#166534', bg: '#F0FDF4', border: '#BBF7D0' },
-  resolved_claim_approved: { label: 'Claim approved',    color: '#166534', bg: '#F0FDF4', border: '#BBF7D0' },
-  resolved_claim_rejected: { label: 'Claim rejected',    color: '#991B1B', bg: '#FEF2F2', border: '#FECACA' },
-  escalated:               { label: 'Escalated',         color: '#991B1B', bg: '#FEF2F2', border: '#FECACA' },
+  open:                    { label: 'Open',              color: 'var(--mv-teal-deep)', bg: 'var(--mv-teal-100)', border: 'var(--mv-teal-200)' },
+  awaiting_customer_info:  { label: 'Awaiting customer', color: 'var(--mv-amber-deep)', bg: 'var(--mv-amber-100)', border: 'var(--mv-amber-200)' },
+  info_received:           { label: 'Info received',     color: 'var(--mv-green-deep)', bg: 'var(--mv-purple-100)', border: 'var(--mv-purple-200)' },
+  drafting:                { label: 'Drafting',          color: 'var(--mv-green-deep)', bg: 'var(--mv-purple-100)', border: 'var(--mv-purple-200)' },
+  awaiting_courier:        { label: 'Awaiting courier',  color: 'var(--mv-amber-deep)', bg: 'var(--mv-amber-100)', border: 'var(--mv-amber-200)' },
+  courier_replied:         { label: 'Courier replied',   color: 'var(--mv-green-deep)', bg: 'var(--mv-purple-100)', border: 'var(--mv-purple-200)' },
+  courier_investigating:   { label: 'Investigating',     color: 'var(--mv-teal-deep)', bg: 'var(--mv-teal-100)', border: 'var(--mv-teal-200)' },
+  awaiting_customer:       { label: 'Awaiting customer', color: 'var(--mv-amber-deep)', bg: 'var(--mv-amber-100)', border: 'var(--mv-amber-200)' },
+  claim_raised:            { label: 'Claim raised',      color: 'var(--mv-magenta-deep)', bg: 'var(--mv-magenta-100)', border: 'var(--mv-magenta-200)' },
+  awaiting_claim_docs:     { label: 'Awaiting docs',     color: 'var(--mv-magenta-deep)', bg: 'var(--mv-magenta-100)', border: 'var(--mv-magenta-200)' },
+  claim_submitted:         { label: 'Claim submitted',   color: 'var(--mv-amber-deep)', bg: 'var(--mv-amber-100)', border: 'var(--mv-amber-200)' },
+  resolved:                { label: 'Resolved',          color: 'var(--mv-green-deep)', bg: 'var(--mv-purple-100)', border: 'var(--mv-purple-200)' },
+  resolved_claim_approved: { label: 'Claim approved',    color: 'var(--mv-green-deep)', bg: 'var(--mv-purple-100)', border: 'var(--mv-purple-200)' },
+  resolved_claim_rejected: { label: 'Claim rejected',    color: 'var(--mv-magenta-deep)', bg: 'var(--mv-magenta-100)', border: 'var(--mv-magenta-200)' },
+  escalated:               { label: 'Escalated',         color: 'var(--mv-magenta-deep)', bg: 'var(--mv-magenta-100)', border: 'var(--mv-magenta-200)' },
 };
 
 const TYPE_CFG = {
@@ -83,16 +83,16 @@ function Badge({ label, color, bg, small }) {
       borderRadius: 4,
       fontSize: small ? 10 : 11,
       fontWeight: 600,
-      background: bg || `${color}22`,
+      background: bg || `color-mix(in srgb, ${color} 13%, transparent)`,
       color,
       whiteSpace: 'nowrap',
-      border: `1px solid ${color}33`,
+      border: `1px solid color-mix(in srgb, ${color} 20%, transparent)`,
     }}>{label}</span>
   );
 }
 
 function StatusBadge({ status, small }) {
-  const cfg = STATUS_CFG[status] || { label: status, color: '#64748B', bg: '#F8FAFC', border: '#E2E8F0' };
+  const cfg = STATUS_CFG[status] || { label: status, color: 'var(--mv-ink-52)', bg: 'var(--mv-bg)', border: 'var(--mv-hairline)' };
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 4,
@@ -116,15 +116,15 @@ function TypeBadge({ type, small }) {
 }
 
 const GROUP_BADGE_CFG = {
-  'Claims':    { bg: '#FFFBEB', color: '#92400E', border: '#FDE68A' },
-  'Billing':   { bg: '#ECFDF5', color: '#065F46', border: '#A7F3D0' },
-  'Technical': { bg: '#F5F3FF', color: '#4C1D95', border: '#DDD6FE' },
-  'Queries':   { bg: '#EFF6FF', color: '#1E3A8A', border: '#BFDBFE' },
+  'Claims':    { bg: 'var(--mv-amber-100)', color: 'var(--mv-amber-deep)', border: 'var(--mv-amber-200)' },
+  'Billing':   { bg: 'var(--mv-purple-100)', color: 'var(--mv-green-deep)', border: 'var(--mv-purple-200)' },
+  'Technical': { bg: 'var(--mv-purple-100)', color: 'var(--mv-purple-700)', border: 'var(--mv-purple-200)' },
+  'Queries':   { bg: 'var(--mv-teal-100)', color: 'var(--mv-teal-deep)', border: 'var(--mv-teal-200)' },
 };
 
 function GroupBadge({ group }) {
   if (!group) return null;
-  const cfg = GROUP_BADGE_CFG[group] || { bg: '#F8FAFC', color: '#475569', border: '#E2E8F0' };
+  const cfg = GROUP_BADGE_CFG[group] || { bg: 'var(--mv-bg)', color: 'var(--mv-ink-62)', border: 'var(--mv-hairline)' };
   return (
     <span style={{
       display: 'inline-block',
@@ -156,22 +156,22 @@ function fmtDate(ts) {
 // ─── Tracking timeline — carbon copy of TrackingPage STATUS + EventTimeline ───
 
 const TRACK_STATUS = {
-  booked:              { label: 'Booked',                       color: 'var(--mv-teal)', bg: 'rgba(39,110,147,0.12)',    icon: Package },
-  collected:           { label: 'Collected',                    color: '#2196F3', bg: 'rgba(33,150,243,0.12)',   icon: Package },
-  at_depot:            { label: 'At Hub',                       color: '#5C6BC0', bg: 'rgba(92,107,192,0.12)',   icon: Package },
-  in_transit:          { label: 'In Transit',                   color: 'var(--mv-purple)', bg: 'rgba(15,122,70,0.12)',   icon: Truck },
-  out_for_delivery:    { label: 'Out for Delivery',             color: '#D97706', bg: 'rgba(255,193,7,0.12)',    icon: Truck },
-  failed_delivery:     { label: 'Failed Attempt',               color: '#F44336', bg: 'rgba(244,67,54,0.12)',    icon: AlertTriangle },
-  delivered:           { label: 'Delivered',                    color: 'var(--mv-green)', bg: 'rgba(15,122,70,0.12)',     icon: PackageCheck },
-  on_hold:             { label: 'On Hold',                      color: '#FF9800', bg: 'rgba(255,152,0,0.12)',    icon: Clock },
-  exception:           { label: 'Address Issue',                color: '#F44336', bg: 'rgba(244,67,54,0.12)',    icon: AlertTriangle },
-  returned:            { label: 'Return to Sender',             color: '#607D8B', bg: 'rgba(96,125,139,0.12)',   icon: RotateCcw },
-  tracking_expired:    { label: 'Tracking Expired',             color: '#757575', bg: 'rgba(117,117,117,0.12)',  icon: Clock },
-  cancelled:           { label: 'Cancelled',                    color: '#757575', bg: 'rgba(117,117,117,0.12)',  icon: AlertTriangle },
-  awaiting_collection: { label: 'Awaiting Customer Collection', color: '#FF6F00', bg: 'rgba(255,111,0,0.12)',    icon: Store },
-  damaged:             { label: 'Damaged',                      color: 'var(--mv-magenta)', bg: 'rgba(205,29,105,0.12)',   icon: PackageX },
-  customs_hold:        { label: 'Customs Hold',                 color: '#9C27B0', bg: 'rgba(156,39,176,0.12)',   icon: ShieldAlert },
-  unknown:             { label: 'Unknown',                      color: '#64748B', bg: 'rgba(0,0,0,0.05)',       icon: Package },
+  booked:              { label: 'Booked',                       color: 'var(--mv-teal)', bg: 'color-mix(in srgb, var(--mv-teal) 12%, transparent)',    icon: Package },
+  collected:           { label: 'Collected',                    color: 'var(--mv-teal)', bg: 'color-mix(in srgb, var(--mv-teal) 12%, transparent)',   icon: Package },
+  at_depot:            { label: 'At Hub',                       color: 'var(--mv-purple)', bg: 'color-mix(in srgb, var(--mv-purple) 12%, transparent)',   icon: Package },
+  in_transit:          { label: 'In Transit',                   color: 'var(--mv-purple)', bg: 'color-mix(in srgb, var(--mv-purple) 12%, transparent)',   icon: Truck },
+  out_for_delivery:    { label: 'Out for Delivery',             color: 'var(--mv-amber)', bg: 'color-mix(in srgb, var(--mv-amber) 12%, transparent)',    icon: Truck },
+  failed_delivery:     { label: 'Failed Attempt',               color: 'var(--mv-magenta)', bg: 'color-mix(in srgb, var(--mv-magenta) 12%, transparent)', icon: AlertTriangle },
+  delivered:           { label: 'Delivered',                    color: 'var(--mv-green)', bg: 'color-mix(in srgb, var(--mv-green) 12%, transparent)',     icon: PackageCheck },
+  on_hold:             { label: 'On Hold',                      color: 'var(--mv-amber)', bg: 'color-mix(in srgb, var(--mv-amber) 12%, transparent)',    icon: Clock },
+  exception:           { label: 'Address Issue',                color: 'var(--mv-magenta)', bg: 'color-mix(in srgb, var(--mv-magenta) 12%, transparent)', icon: AlertTriangle },
+  returned:            { label: 'Return to Sender',             color: 'var(--mv-ink-52)', bg: 'color-mix(in srgb, var(--mv-ink-52) 12%, transparent)',   icon: RotateCcw },
+  tracking_expired:    { label: 'Tracking Expired',             color: 'var(--mv-ink-52)', bg: 'color-mix(in srgb, var(--mv-ink-52) 12%, transparent)',  icon: Clock },
+  cancelled:           { label: 'Cancelled',                    color: 'var(--mv-ink-52)', bg: 'color-mix(in srgb, var(--mv-ink-52) 12%, transparent)',  icon: AlertTriangle },
+  awaiting_collection: { label: 'Awaiting Customer Collection', color: 'var(--mv-amber)', bg: 'color-mix(in srgb, var(--mv-amber) 12%, transparent)',    icon: Store },
+  damaged:             { label: 'Damaged',                      color: 'var(--mv-magenta)', bg: 'color-mix(in srgb, var(--mv-magenta) 12%, transparent)',   icon: PackageX },
+  customs_hold:        { label: 'Customs Hold',                 color: 'var(--mv-purple)', bg: 'color-mix(in srgb, var(--mv-purple) 12%, transparent)',   icon: ShieldAlert },
+  unknown:             { label: 'Unknown',                      color: 'var(--mv-ink-52)', bg: 'color-mix(in srgb, var(--mv-ink) 5%, transparent)',       icon: Package },
 };
 
 function TrackingStatusBadge({ status }) {
@@ -183,7 +183,7 @@ function TrackingStatusBadge({ status }) {
       padding: '3px 9px',
       borderRadius: 9999,
       background: cfg.bg,
-      border: `1px solid ${cfg.color}44`,
+      border: `1px solid color-mix(in srgb, ${cfg.color} 27%, transparent)`,
       color: cfg.color,
       fontSize: 11,
       fontWeight: 700,
@@ -216,7 +216,7 @@ function TrackingTimeline({ events }) {
               </div>
               {!isLast && (
                 <div style={{ width: 2, flex: 1, minHeight: 16,
-                  background: 'linear-gradient(to bottom, rgba(0,0,0,0.12), rgba(0,0,0,0.03))' }} />
+                  background: 'linear-gradient(to bottom, color-mix(in srgb, var(--mv-ink) 12%, transparent), color-mix(in srgb, var(--mv-ink) 3%, transparent))' }} />
               )}
             </div>
             <div style={{ flex: 1, paddingTop: 2, paddingBottom: isLast ? 0 : 4 }}>
@@ -232,7 +232,7 @@ function TrackingTimeline({ events }) {
                   <MapPin size={11} /> {ev.location}
                 </span>
               )}
-              <div style={{ fontSize: 11, color: '#64748B', marginTop: 3 }}>
+              <div style={{ fontSize: 11, color: 'var(--mv-ink-52)', marginTop: 3 }}>
                 {new Date(ev.event_at).toLocaleString('en-GB')}
               </div>
             </div>
@@ -250,8 +250,8 @@ function KpiCard({ label, value, color, sub, onClick, active, icon: Icon, warn }
   return (
     <button onClick={onClick} style={{
       flex: '1 1 110px', minWidth: 90,
-      background: active ? `${color}14` : C.card,
-      border: `1px solid ${active ? color : value > 0 && warn ? `${color}40` : C.border}`,
+      background: active ? `color-mix(in srgb, ${color} 8%, transparent)` : C.card,
+      border: `1px solid ${active ? color : value > 0 && warn ? `color-mix(in srgb, ${color} 25%, transparent)` : C.border}`,
       borderRadius: 8, padding: '12px 14px',
       cursor: onClick ? 'pointer' : 'default',
       textAlign: 'left', transition: 'all 0.15s', outline: 'none',
@@ -290,14 +290,14 @@ function SlaChip({ mins, policyName }) {
 
   // Colour bands: green > 25% time unused, amber < 25% or < 4h, red breached
   const color = info.breached ? C.red : mins < 240 ? C.amber : C.green;
-  const bg    = info.breached ? C.redDim : mins < 240 ? C.amberDim : 'rgba(15,122,70,0.1)';
+  const bg    = info.breached ? C.redDim : mins < 240 ? C.amberDim : 'color-mix(in srgb, var(--mv-green) 10%, transparent)';
 
   return (
     <span title={policyName || 'SLA'} style={{
       display: 'inline-flex', alignItems: 'center', gap: 3,
       fontSize: 9, fontWeight: 700, color,
       background: bg, padding: '1px 6px',
-      borderRadius: 3, border: `1px solid ${color}33`,
+      borderRadius: 3, border: `1px solid color-mix(in srgb, ${color} 20%, transparent)`,
       whiteSpace: 'nowrap',
     }}>
       ⏱ {info.breached ? '−' : ''}{info.label}
@@ -313,7 +313,7 @@ const PRIORITY_BAR = {
   urgent: C.red,
   high:   C.amber,
   medium: C.blue,
-  low:    'rgba(125,133,144,0.4)',
+  low:    'var(--mv-ink-45)',
 };
 
 const PRIORITY_LABEL = { urgent: 'Urgent', high: 'High', medium: 'Medium', low: 'Low' };
@@ -333,8 +333,8 @@ function TicketPopup({ q, pos, logoUrl, assigneeName }) {
     <div style={{
       position: 'fixed', left, top,
       width: 355,
-      background: '#FFFFFF',
-      border: '1px solid rgba(0,0,0,0.12)',
+      background: 'var(--mv-surface)',
+      border: '1px solid var(--mv-hairline-2)',
       borderRadius: 10,
       boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.06)',
       padding: '14px 16px',
@@ -352,8 +352,8 @@ function TicketPopup({ q, pos, logoUrl, assigneeName }) {
         {q.query_type && <TypeBadge type={q.query_type} />}
         <StatusBadge status={q.status} />
         {q.priority && q.priority !== 'medium' && (
-          <span style={{ fontSize: 10, fontWeight: 700, color: priColor, background: `${priColor}18`,
-            padding: '2px 8px', borderRadius: 4, border: `1px solid ${priColor}33`, textTransform: 'capitalize' }}>
+          <span style={{ fontSize: 10, fontWeight: 700, color: priColor, background: `color-mix(in srgb, ${priColor} 9%, transparent)`,
+            padding: '2px 8px', borderRadius: 4, border: `1px solid color-mix(in srgb, ${priColor} 20%, transparent)`, textTransform: 'capitalize' }}>
             {PRIORITY_LABEL[q.priority]}
           </span>
         )}
@@ -362,11 +362,11 @@ function TicketPopup({ q, pos, logoUrl, assigneeName }) {
       {/* Consignment strip */}
       {q.consignment_number && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10,
-          padding: '7px 10px', background: '#F1F5F9',
+          padding: '7px 10px', background: 'var(--mv-bg)',
           borderRadius: 6, border: `1px solid ${C.border}` }}>
           {logoUrl && (
             <div style={{ width: 22, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: '#fff', borderRadius: 3, flexShrink: 0, padding: 2 }}>
+              background: 'var(--mv-surface)', borderRadius: 3, flexShrink: 0, padding: 2 }}>
               <img src={logoUrl} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
             </div>
           )}
@@ -386,7 +386,7 @@ function TicketPopup({ q, pos, logoUrl, assigneeName }) {
 
       {/* Preview — up to 4 lines */}
       {q.latest_email_preview && (
-        <div style={{ fontSize: 12, color: '#64748B', lineHeight: 1.6, marginBottom: 10,
+        <div style={{ fontSize: 12, color: 'var(--mv-ink-52)', lineHeight: 1.6, marginBottom: 10,
           display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
           {q.latest_email_preview}
         </div>
@@ -394,7 +394,7 @@ function TicketPopup({ q, pos, logoUrl, assigneeName }) {
 
       {/* Footer */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 10,
-        borderTop: '1px solid rgba(0,0,0,0.08)' }}>
+        borderTop: '1px solid var(--mv-hairline)' }}>
         <User size={11} color={C.muted} />
         <span style={{ fontSize: 11, color: C.muted, flex: 1 }}>{assigneeName || 'Unassigned'}</span>
         <Clock size={10} color={C.muted} />
@@ -428,15 +428,15 @@ function getAiSummary(q) {
 
 // ─── Type icon well ───────────────────────────────────────────────────────────
 const TYPE_ICON_CFG = {
-  whereabouts:    { Icon: Package,       bg: '#EFF6FF', color: '#2563EB' },
-  not_delivered:  { Icon: PackageX,      bg: '#FEF2F2', color: '#DC2626' },
-  wrong_address:  { Icon: MapPin,        bg: '#FFFBEB', color: '#D97706' },
-  damaged:        { Icon: AlertTriangle, bg: '#FEF2F2', color: '#DC2626' },
-  missing_items:  { Icon: PackageCheck,  bg: '#FFFBEB', color: '#D97706' },
-  failed_delivery:{ Icon: Truck,         bg: '#FEF2F2', color: '#DC2626' },
-  returned:       { Icon: RotateCcw,     bg: '#FFFBEB', color: '#D97706' },
-  delay:          { Icon: Clock,         bg: '#EFF6FF', color: '#2563EB' },
-  other:          { Icon: MessageSquare, bg: '#F8FAFC', color: '#94A3B8' },
+  whereabouts:    { Icon: Package,       bg: 'var(--mv-teal-100)', color: 'var(--mv-teal)' },
+  not_delivered:  { Icon: PackageX,      bg: 'var(--mv-magenta-100)', color: 'var(--mv-magenta)' },
+  wrong_address:  { Icon: MapPin,        bg: 'var(--mv-amber-100)', color: 'var(--mv-amber)' },
+  damaged:        { Icon: AlertTriangle, bg: 'var(--mv-magenta-100)', color: 'var(--mv-magenta)' },
+  missing_items:  { Icon: PackageCheck,  bg: 'var(--mv-amber-100)', color: 'var(--mv-amber)' },
+  failed_delivery:{ Icon: Truck,         bg: 'var(--mv-magenta-100)', color: 'var(--mv-magenta)' },
+  returned:       { Icon: RotateCcw,     bg: 'var(--mv-amber-100)', color: 'var(--mv-amber)' },
+  delay:          { Icon: Clock,         bg: 'var(--mv-teal-100)', color: 'var(--mv-teal)' },
+  other:          { Icon: MessageSquare, bg: 'var(--mv-bg)', color: 'var(--mv-ink-52)' },
 };
 
 function TypeIconWell({ type }) {
@@ -450,15 +450,15 @@ function TypeIconWell({ type }) {
 }
 
 function rowAccentColor(q) {
-  if (q.requires_attention) return '#EF4444';
-  if (['claim_raised','awaiting_claim_docs','escalated','resolved_claim_rejected'].includes(q.status)) return '#EF4444';
-  if (['awaiting_courier','courier_investigating','claim_submitted'].includes(q.status)) return '#F59E0B';
+  if (q.requires_attention) return 'var(--mv-magenta)';
+  if (['claim_raised','awaiting_claim_docs','escalated','resolved_claim_rejected'].includes(q.status)) return 'var(--mv-magenta)';
+  if (['awaiting_courier','courier_investigating','claim_submitted'].includes(q.status)) return 'var(--mv-amber)';
   if (['resolved','resolved_claim_approved'].includes(q.status)) return 'var(--mv-green)';
   const d = (q.description || '').toLowerCase();
-  if (/very angry|furious|outrageous|unacceptable/.test(d)) return '#EF4444';
-  if (/frustrated|angry/.test(d)) return '#F59E0B';
-  if (q.has_new_reply) return '#3B82F6';
-  return 'rgba(0,0,0,0.10)';
+  if (/very angry|furious|outrageous|unacceptable/.test(d)) return 'var(--mv-magenta)';
+  if (/frustrated|angry/.test(d)) return 'var(--mv-amber)';
+  if (q.has_new_reply) return 'var(--mv-teal)';
+  return 'var(--mv-hairline-2)';
 }
 
 // Render light markdown (**bold**) as clean JSX — strips the raw asterisks and
@@ -470,7 +470,7 @@ function mdLite(text) {
     .filter(Boolean)
     .map((part, i) =>
       /^\*\*[^*]+\*\*$/.test(part)
-        ? <strong key={i} className="font-semibold text-slate-900">{part.slice(2, -2)}</strong>
+        ? <strong key={i} className="font-semibold" style={{ color: 'var(--mv-ink)' }}>{part.slice(2, -2)}</strong>
         : <span key={i}>{part.replace(/\*\*/g, '')}</span>
     );
 }
@@ -498,40 +498,42 @@ function cleanIncoming(raw) {
 // left-hand indicator strip), with completed tickets overriding to green.
 // Nothing tied to group_name / assigned_to / operational state.
 //   Closed/Resolved → green · Urgent → red · High → amber · Medium → yellow · Low → blue
+// Colour styles (token-driven) keyed by status/priority — used as inline `style`
+// alongside the static structural Tailwind classes at each call site.
 function rowBadgeClasses(q) {
   const s = (q.status || '').toLowerCase();
   const p = (q.priority || '').toLowerCase();
 
   if (['resolved', 'resolved_claim_approved', 'resolved_claim_rejected', 'closed'].includes(s))
-    return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-  if (p === 'urgent') return 'bg-red-50 text-red-700 border-red-200 font-bold';
-  if (p === 'high')   return 'bg-amber-50 text-amber-700 border-amber-200 font-bold';
-  if (p === 'medium') return 'bg-yellow-50 text-yellow-700 border-yellow-200 font-bold';
-  if (p === 'low')    return 'bg-blue-50 text-blue-700 border-blue-200';
-  return 'bg-blue-50 text-blue-700 border-blue-200';
+    return { background: 'var(--mv-purple-100)', color: 'var(--mv-green-deep)', borderColor: 'var(--mv-purple-200)' };
+  if (p === 'urgent') return { background: 'var(--mv-magenta-100)', color: 'var(--mv-magenta-deep)', borderColor: 'var(--mv-magenta-200)' };
+  if (p === 'high')   return { background: 'var(--mv-amber-100)', color: 'var(--mv-amber-deep)', borderColor: 'var(--mv-amber-200)' };
+  if (p === 'medium') return { background: 'var(--mv-amber-100)', color: 'var(--mv-amber-deep)', borderColor: 'var(--mv-amber-200)' };
+  if (p === 'low')    return { background: 'var(--mv-teal-100)', color: 'var(--mv-teal)', borderColor: 'var(--mv-teal-200)' };
+  return { background: 'var(--mv-teal-100)', color: 'var(--mv-teal)', borderColor: 'var(--mv-teal-200)' };
 }
 
-// Compact priority chip (label + tailwind classes), same spectrum as the badge.
+// Compact priority chip (label + colour style), same spectrum as the badge.
 function priorityChip(q) {
   const p = (q.priority || '').toLowerCase();
   const map = {
-    urgent: ['Urgent', 'bg-red-50 text-red-700 border-red-200'],
-    high:   ['High',   'bg-amber-50 text-amber-700 border-amber-200'],
-    medium: ['Medium', 'bg-yellow-50 text-yellow-700 border-yellow-200'],
-    low:    ['Low',    'bg-blue-50 text-blue-700 border-blue-200'],
+    urgent: ['Urgent', { background: 'var(--mv-magenta-100)', color: 'var(--mv-magenta-deep)', borderColor: 'var(--mv-magenta-200)' }],
+    high:   ['High',   { background: 'var(--mv-amber-100)', color: 'var(--mv-amber-deep)', borderColor: 'var(--mv-amber-200)' }],
+    medium: ['Medium', { background: 'var(--mv-amber-100)', color: 'var(--mv-amber-deep)', borderColor: 'var(--mv-amber-200)' }],
+    low:    ['Low',    { background: 'var(--mv-teal-100)', color: 'var(--mv-teal)', borderColor: 'var(--mv-teal-200)' }],
   };
   return map[p] || null;
 }
 
-// Left-edge indicator strip — same spectrum, returned as a hex colour.
+// Left-edge indicator strip — same spectrum, returned as a token colour.
 function priorityStripColor(q) {
   const s = (q.status || '').toLowerCase();
   const p = (q.priority || '').toLowerCase();
-  if (['resolved', 'resolved_claim_approved', 'resolved_claim_rejected', 'closed'].includes(s)) return '#10B981';
-  if (p === 'urgent') return '#EF4444';
-  if (p === 'high')   return '#F59E0B';
-  if (p === 'medium') return '#EAB308';
-  return '#3B82F6'; // low / default
+  if (['resolved', 'resolved_claim_approved', 'resolved_claim_rejected', 'closed'].includes(s)) return 'var(--mv-green)';
+  if (p === 'urgent') return 'var(--mv-magenta)';
+  if (p === 'high')   return 'var(--mv-amber)';
+  if (p === 'medium') return 'var(--mv-amber)';
+  return 'var(--mv-teal)'; // low / default
 }
 
 function InboxRow({ q, onClick, staffList = [], onUpdate }) {
@@ -554,7 +556,7 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
   }
 
   const logoUrl      = q.courier_code ? getCourierLogo(q.courier_code) : null;
-  const statusCfg    = STATUS_CFG[q.status] || { label: q.status, color: C.muted, bg: 'rgba(148,163,184,0.1)' };
+  const statusCfg    = STATUS_CFG[q.status] || { label: q.status, color: C.muted, bg: 'color-mix(in srgb, var(--mv-ink-52) 10%, transparent)' };
   const humanName    = staffList.find(s => s.id === q.assigned_to)?.full_name;
   // No human owner + a staged AI draft → owned by the AI agent "Katana" (never "Unassigned").
   const isKatana     = !humanName && (parseInt(q.pending_drafts) || 0) > 0;
@@ -577,10 +579,10 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
   // Dynamic colour scheme for the hover card — red urgent / amber medium / blue standard.
   const cardUrgent   = isScreamer || q.sla_breached;
   const cardTone     = cardUrgent
-    ? { header: 'text-red-600',   topBorder: 'border-t-4 border-t-red-500',   footer: '🚨 URGENT: Action Required.',                 footerCls: 'font-semibold text-red-600' }
+    ? { header: { color: 'var(--mv-magenta)' },   topBorder: { borderTop: '4px solid var(--mv-magenta)' },   footer: '🚨 URGENT: Action Required.',                 footerCls: { fontWeight: 600, color: 'var(--mv-magenta)' } }
     : priority === 'medium'
-      ? { header: 'text-amber-600', topBorder: 'border-t-4 border-t-amber-500', footer: '⚠️ Medium priority, monitor closely.',         footerCls: 'text-amber-600' }
-      : { header: 'text-blue-600',  topBorder: 'border-t-4 border-t-blue-400',  footer: '✓ Standard priority, no escalation flagged.', footerCls: 'text-slate-500' };
+      ? { header: { color: 'var(--mv-amber-deep)' }, topBorder: { borderTop: '4px solid var(--mv-amber)' }, footer: '⚠️ Medium priority, monitor closely.',         footerCls: { color: 'var(--mv-amber-deep)' } }
+      : { header: { color: 'var(--mv-teal)' },  topBorder: { borderTop: '4px solid var(--mv-teal)' },  footer: '✓ Standard priority, no escalation flagged.', footerCls: { color: 'var(--mv-ink-52)' } };
 
   // SLA label
   let slaLabel = null, slaColor = C.muted, slaType = '';
@@ -610,27 +612,27 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
     <div
       onClick={onClick}
       onMouseLeave={() => { setHoverPos(null); setAssignOpen(false); }}
-      className="relative flex cursor-pointer flex-col gap-4 overflow-visible rounded-xl border border-slate-200/80 bg-white p-5 shadow-sm transition-all hover:border-slate-300 hover:shadow-md"
-      style={{ borderLeft: `4px solid ${priorityBar}` }}
+      className="relative flex cursor-pointer flex-col gap-4 overflow-visible rounded-xl border p-5 shadow-sm transition-all hover:shadow-md"
+      style={{ borderLeft: `4px solid ${priorityBar}`, borderTop: '1px solid var(--mv-hairline-2)', borderRight: '1px solid var(--mv-hairline-2)', borderBottom: '1px solid var(--mv-hairline-2)', background: 'var(--mv-surface)' }}
     >
       {/* ── Line 1: metadata shelf ────────────────────────────────────────── */}
-      <div className="flex w-full items-center justify-between border-b border-slate-100 pb-3">
+      <div className="flex w-full items-center justify-between pb-3" style={{ borderBottom: '1px solid var(--mv-hairline)' }}>
         {/* Left: priority badge (#M-ID + Urgent) · customer identity */}
         <div className="flex min-w-0 items-center gap-2">
           {(hasNewReply || unread > 0) && (
-            <span className="h-2 w-2 shrink-0 rounded-full bg-blue-500" />
+            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: 'var(--mv-teal)' }} />
           )}
           {q.ticket_number != null && (
-            <span className={`inline-flex shrink-0 items-center justify-center rounded-md border px-2.5 py-1 text-xs font-bold uppercase tracking-wide shadow-sm ${rowBadgeClasses(q)}`}>
+            <span className="inline-flex shrink-0 items-center justify-center rounded-md border px-2.5 py-1 text-xs font-bold uppercase tracking-wide shadow-sm" style={rowBadgeClasses(q)}>
               #M-{q.ticket_number}
             </span>
           )}
           {pchip && (
-            <span className={`shrink-0 rounded-md border px-2 py-1 text-xs font-bold ${pchip[1]}`}>
+            <span className="shrink-0 rounded-md border px-2 py-1 text-xs font-bold" style={pchip[1]}>
               {pchip[0]}
             </span>
           )}
-          <span className="ml-2 truncate text-base font-bold tracking-tight text-slate-800">
+          <span className="ml-2 truncate text-base font-bold tracking-tight" style={{ color: 'var(--mv-ink)' }}>
             {q.customer_name || q.sender_email || '(unknown sender)'}
           </span>
         </div>
@@ -638,18 +640,18 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
         {/* Right: status badge · time · assign */}
         <div className="flex shrink-0 items-center gap-3 pl-4">
           {q.courier_sla_breached && (
-            <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-red-300 bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-semibold" style={{ borderColor: 'var(--mv-magenta-200)', background: 'var(--mv-magenta-100)', color: 'var(--mv-magenta-deep)' }}>
               <AlertTriangle size={11} /> SLA Breached
             </span>
           )}
           <span style={{
             fontSize: 12, fontWeight: 500, borderRadius: 20, padding: '4px 11px',
             display: 'inline-block', whiteSpace: 'nowrap',
-            background: statusCfg.bg || `${statusCfg.color}18`, color: statusCfg.color,
+            background: statusCfg.bg || `color-mix(in srgb, ${statusCfg.color} 9%, transparent)`, color: statusCfg.color,
           }}>
             {statusCfg.label}
           </span>
-          <span className="whitespace-nowrap text-sm text-slate-400">{timeAgo(actTime)}</span>
+          <span className="whitespace-nowrap text-sm" style={{ color: 'var(--mv-ink-45)' }}>{timeAgo(actTime)}</span>
 
           {/* Assign avatar (kept for inline assignment) — Katana pill when AI-owned */}
           <div className="relative shrink-0">
@@ -657,8 +659,8 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
               <div
                 onClick={e => { e.stopPropagation(); setAssignOpen(v => !v); }}
                 title="Owned by Katana (AI) — draft awaiting review"
-                className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-bold text-indigo-700"
-                style={{ outline: assignOpen ? '2px solid #6366F1' : 'none' }}>
+                className="inline-flex cursor-pointer items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-bold"
+                style={{ borderColor: 'var(--mv-purple-200)', background: 'var(--mv-purple-100)', color: 'var(--mv-purple-700)', outline: assignOpen ? '2px solid var(--mv-purple)' : 'none' }}>
                 🤖 Katana
               </div>
             ) : (
@@ -667,10 +669,10 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
                 title={assigneeName ? `Assigned to ${assigneeName}` : 'Assign ticket'}
                 style={{
                   width: 28, height: 28, borderRadius: '50%',
-                  background: initials ? 'rgba(99,102,241,0.12)' : 'rgba(0,0,0,0.04)',
+                  background: initials ? 'var(--mv-purple-100)' : 'var(--mv-hairline)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 11, fontWeight: 600, color: initials ? '#4F46E5' : C.muted,
-                  cursor: 'pointer', outline: assignOpen ? '2px solid #6366F1' : 'none',
+                  fontSize: 11, fontWeight: 600, color: initials ? 'var(--mv-purple-700)' : C.muted,
+                  cursor: 'pointer', outline: assignOpen ? '2px solid var(--mv-purple)' : 'none',
                 }}>
                 {assigning ? '…' : (initials || <User size={13} color={C.muted} />)}
               </div>
@@ -678,10 +680,10 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
             {assignOpen && (
               <div
                 onClick={e => e.stopPropagation()}
-                className="absolute right-0 z-[100] mt-2 w-48 rounded-md border border-slate-200 bg-white py-1 shadow-lg"
-                style={{ top: '100%' }}
+                className="absolute right-0 z-[100] mt-2 w-48 rounded-md border py-1 shadow-lg"
+                style={{ top: '100%', borderColor: 'var(--mv-hairline)', background: 'var(--mv-surface)' }}
               >
-                <div style={{ padding: '6px 12px 4px', fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#94A3B8' }}>
+                <div style={{ padding: '6px 12px 4px', fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--mv-ink-45)' }}>
                   Assign to
                 </div>
                 {staffList.map(s => (
@@ -689,25 +691,25 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
                     key={s.id}
                     onClick={() => handleAssign(s.id)}
                     style={{
-                      padding: '7px 12px', fontSize: 13, color: s.id === q.assigned_to ? '#4F46E5' : '#0F172A',
-                      background: s.id === q.assigned_to ? 'rgba(99,102,241,0.06)' : 'transparent',
+                      padding: '7px 12px', fontSize: 13, color: s.id === q.assigned_to ? 'var(--mv-purple-700)' : 'var(--mv-ink)',
+                      background: s.id === q.assigned_to ? 'var(--mv-purple-100)' : 'transparent',
                       cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
                     }}
-                    onMouseOver={e => { if (s.id !== q.assigned_to) e.currentTarget.style.background = '#F8FAFC'; }}
+                    onMouseOver={e => { if (s.id !== q.assigned_to) e.currentTarget.style.background = 'var(--mv-bg)'; }}
                     onMouseOut={e => { if (s.id !== q.assigned_to) e.currentTarget.style.background = 'transparent'; }}
                   >
-                    <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'rgba(99,102,241,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 600, color: '#4F46E5', flexShrink: 0 }}>
+                    <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--mv-purple-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 600, color: 'var(--mv-purple-700)', flexShrink: 0 }}>
                       {s.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                     </div>
                     <span>{s.full_name}</span>
-                    {s.id === q.assigned_to && <span style={{ marginLeft: 'auto', fontSize: 11, color: '#4F46E5' }}>✓</span>}
+                    {s.id === q.assigned_to && <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--mv-purple-700)' }}>✓</span>}
                   </div>
                 ))}
                 {q.assigned_to && (
                   <div
                     onClick={() => handleAssign(null)}
-                    style={{ padding: '7px 12px', fontSize: 12, color: '#94A3B8', cursor: 'pointer', borderTop: '1px solid rgba(0,0,0,0.06)', marginTop: 2 }}
-                    onMouseOver={e => e.currentTarget.style.background = '#F8FAFC'}
+                    style={{ padding: '7px 12px', fontSize: 12, color: 'var(--mv-ink-45)', cursor: 'pointer', borderTop: '1px solid var(--mv-hairline)', marginTop: 2 }}
+                    onMouseOver={e => e.currentTarget.style.background = 'var(--mv-bg)'}
                     onMouseOut={e => e.currentTarget.style.background = 'transparent'}
                   >
                     Unassign
@@ -720,18 +722,18 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
       </div>
 
       {/* ── Line 2: subject ───────────────────────────────────────────────── */}
-      <div className="flex items-start gap-2 text-sm font-medium text-slate-700">
-        <span className={['resolved','resolved_claim_approved','resolved_claim_rejected'].includes(q.status) ? 'text-slate-400 line-through' : ''}>
-          ✉️ <strong className="font-semibold text-slate-900">Subject:</strong> {q.subject || preview || '(no subject)'}
+      <div className="flex items-start gap-2 text-sm font-medium" style={{ color: 'var(--mv-ink-78)' }}>
+        <span className={['resolved','resolved_claim_approved','resolved_claim_rejected'].includes(q.status) ? 'line-through' : ''} style={['resolved','resolved_claim_approved','resolved_claim_rejected'].includes(q.status) ? { color: 'var(--mv-ink-45)' } : undefined}>
+          ✉️ <strong className="font-semibold" style={{ color: 'var(--mv-ink)' }}>Subject:</strong> {q.subject || preview || '(no subject)'}
         </span>
       </div>
 
       {/* ── Line 3: always-visible Gemini summary box ─────────────────────── */}
-      <div className="relative mt-1 flex flex-col gap-1 rounded-lg border border-slate-100 bg-slate-50/80 p-3.5 text-xs font-medium leading-relaxed text-slate-600">
-        <div className="mb-1 flex items-center gap-1 font-bold text-slate-800">
+      <div className="relative mt-1 flex flex-col gap-1 rounded-lg border p-3.5 text-xs font-medium leading-relaxed" style={{ borderColor: 'var(--mv-hairline)', background: 'var(--mv-bg)', color: 'var(--mv-ink-62)' }}>
+        <div className="mb-1 flex items-center gap-1 font-bold" style={{ color: 'var(--mv-ink)' }}>
           <span>✨ Gemini Automation Analysis</span>
         </div>
-        <p className="text-sm text-slate-600">
+        <p className="text-sm" style={{ color: 'var(--mv-ink-62)' }}>
           {fullSummary ? mdLite(fullSummary) : 'Analyzing ticket context…'}
         </p>
       </div>
@@ -753,8 +755,8 @@ function MessageBubble({ email, onApprove, onEdit, approving, courierName, couri
 
   let bubbleBg, bubbleBorderStyle, accentColor, bubbleRadius;
   if (isNote) {
-    bubbleBg = 'rgba(210,153,34,0.08)';
-    bubbleBorderStyle = `1px dashed ${C.amber}44`;
+    bubbleBg = 'color-mix(in srgb, var(--mv-amber) 8%, transparent)';
+    bubbleBorderStyle = `1px dashed color-mix(in srgb, ${C.amber} 27%, transparent)`;
     accentColor = C.amber;
     bubbleRadius = 8;
   } else if (dir === 'inbound_customer') {
@@ -763,18 +765,18 @@ function MessageBubble({ email, onApprove, onEdit, approving, courierName, couri
     accentColor = C.blue;
     bubbleRadius = '2px 10px 10px 10px';
   } else if (dir === 'outbound_customer') {
-    bubbleBg = isDraft ? '#F0FDF4' : '#EFF6FF';
-    bubbleBorderStyle = isDraft ? `1px solid ${C.green}33` : `1px solid ${C.blue}33`;
+    bubbleBg = isDraft ? 'var(--mv-purple-100)' : 'var(--mv-teal-100)';
+    bubbleBorderStyle = isDraft ? `1px solid color-mix(in srgb, ${C.green} 20%, transparent)` : `1px solid color-mix(in srgb, ${C.blue} 20%, transparent)`;
     accentColor = isDraft ? C.green : C.blue;
     bubbleRadius = '10px 2px 10px 10px';
   } else if (dir === 'inbound_courier') {
     bubbleBg = C.card;
-    bubbleBorderStyle = `1px solid ${C.amber}33`;
+    bubbleBorderStyle = `1px solid color-mix(in srgb, ${C.amber} 20%, transparent)`;
     accentColor = C.amber;
     bubbleRadius = '2px 10px 10px 10px';
   } else {
-    bubbleBg = 'rgba(210,153,34,0.08)';
-    bubbleBorderStyle = `1px solid ${C.amber}33`;
+    bubbleBg = 'color-mix(in srgb, var(--mv-amber) 8%, transparent)';
+    bubbleBorderStyle = `1px solid color-mix(in srgb, ${C.amber} 20%, transparent)`;
     accentColor = C.amber;
     bubbleRadius = '10px 2px 10px 10px';
   }
@@ -799,7 +801,7 @@ function MessageBubble({ email, onApprove, onEdit, approving, courierName, couri
           <span style={{ fontSize: 10, fontWeight: 700, color: accentColor }}>{senderLabel}</span>
           {isDraft && (
             <span style={{ fontSize: 10, fontWeight: 700, color: C.green, background: C.greenDim,
-              padding: '1px 6px', borderRadius: 3, border: `1px solid ${C.green}33` }}>
+              padding: '1px 6px', borderRadius: 3, border: `1px solid color-mix(in srgb, ${C.green} 20%, transparent)` }}>
               AI Draft
             </span>
           )}
@@ -811,7 +813,7 @@ function MessageBubble({ email, onApprove, onEdit, approving, courierName, couri
         {/* Bubble */}
         <div style={{
           background: bubbleBg,
-          border: isNote ? `1px dashed ${C.amber}44` : bubbleBorderStyle,
+          border: isNote ? `1px dashed color-mix(in srgb, ${C.amber} 27%, transparent)` : bubbleBorderStyle,
           borderLeft: isNote ? `3px solid ${C.amber}` : bubbleBorderStyle,
           borderRadius: bubbleRadius,
           overflow: 'hidden',
@@ -826,7 +828,7 @@ function MessageBubble({ email, onApprove, onEdit, approving, courierName, couri
             {editMode ? (
               <textarea value={editBody} onChange={e => setEditBody(e.target.value)} style={{
                 width: '100%', minHeight: 120, background: C.surface,
-                border: `1px solid ${C.green}44`, borderRadius: 5,
+                border: `1px solid color-mix(in srgb, ${C.green} 27%, transparent)`, borderRadius: 5,
                 color: C.text, fontSize: 12, padding: 9, resize: 'vertical',
                 fontFamily: 'inherit', boxSizing: 'border-box', outline: 'none',
               }} />
@@ -847,7 +849,7 @@ function MessageBubble({ email, onApprove, onEdit, approving, courierName, couri
                 <>
                   <button onClick={() => { onEdit(email.id, editBody); setEditMode(false); }}
                     style={{ padding: '5px 12px', borderRadius: 5, border: 'none', background: C.green,
-                      color: '#000', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                      color: 'var(--mv-on-brand)', fontSize: 11, fontWeight: 700, cursor: 'pointer',
                       display: 'flex', alignItems: 'center', gap: 5 }}>
                     <Send size={11} /> Save & Approve
                   </button>
@@ -861,7 +863,7 @@ function MessageBubble({ email, onApprove, onEdit, approving, courierName, couri
                 <>
                   <button onClick={() => onApprove(email.id, email.body_text)} disabled={approving}
                     style={{ padding: '5px 14px', borderRadius: 5, border: 'none', background: C.green,
-                      color: '#000', fontSize: 11, fontWeight: 700, cursor: approving ? 'default' : 'pointer',
+                      color: 'var(--mv-on-brand)', fontSize: 11, fontWeight: 700, cursor: approving ? 'default' : 'pointer',
                       opacity: approving ? 0.6 : 1, display: 'flex', alignItems: 'center', gap: 5 }}>
                     <Send size={11} />{approving ? 'Sending…' : 'Approve & Send'}
                   </button>
@@ -924,7 +926,7 @@ function ThreadView({ emails, onApprove, onEdit, approving, courierName, courier
             <span style={{
               fontSize: 10, fontWeight: 700, minWidth: 16, textAlign: 'center',
               padding: '0 5px', borderRadius: 8,
-              background: activeThread === t.key ? `${t.color}22` : C.card,
+              background: activeThread === t.key ? `color-mix(in srgb, ${t.color} 13%, transparent)` : C.card,
               color: activeThread === t.key ? t.color : C.muted,
             }}>{t.count}</span>
           </button>
@@ -984,7 +986,7 @@ function ComposeBar({ q, draft, setDraft, generateDraft }) {
               flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
               padding: '9px 8px', border: 'none',
               borderTop: `2px solid ${active === t.key ? t.color : 'transparent'}`,
-              background: active === t.key ? `${t.color}10` : 'transparent',
+              background: active === t.key ? `color-mix(in srgb, ${t.color} 6%, transparent)` : 'transparent',
               color: active === t.key ? t.color : C.muted,
               fontSize: 11, fontWeight: active === t.key ? 700 : 500,
               cursor: 'pointer', transition: 'all 0.1s',
@@ -1002,7 +1004,7 @@ function ComposeBar({ q, draft, setDraft, generateDraft }) {
         <div style={{ padding: '10px 14px' }}>
           {active !== 'note' && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8,
-              padding: '4px 9px', borderRadius: 5, background: C.amberDim, border: `1px solid ${C.amber}33` }}>
+              padding: '4px 9px', borderRadius: 5, background: C.amberDim, border: `1px solid color-mix(in srgb, ${C.amber} 20%, transparent)` }}>
               <AlertTriangle size={11} color={C.amber} />
               <span style={{ fontSize: 10, fontWeight: 700, color: C.amber, textTransform: 'uppercase', letterSpacing: '0.4px' }}>
                 Simulation — no emails will be sent
@@ -1015,13 +1017,13 @@ function ComposeBar({ q, draft, setDraft, generateDraft }) {
               <textarea value={noteText} onChange={e => setNoteText(e.target.value)}
                 placeholder="Add an internal note visible only to your team…"
                 style={{ width: '100%', boxSizing: 'border-box', background: C.card,
-                  border: `1px solid ${C.amber}33`, borderRadius: 6, color: C.text,
+                  border: `1px solid color-mix(in srgb, ${C.amber} 20%, transparent)`, borderRadius: 6, color: C.text,
                   fontSize: 12, padding: 10, resize: 'none', height: 90,
                   fontFamily: 'inherit', lineHeight: 1.55, outline: 'none', display: 'block' }}
               />
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
                 <button onClick={() => alert('SIMULATION MODE\n\nNotes will be saved in a future build.')}
-                  style={{ padding: '5px 14px', borderRadius: 5, border: `1px solid ${C.muted}44`,
+                  style={{ padding: '5px 14px', borderRadius: 5, border: `1px solid color-mix(in srgb, ${C.muted} 27%, transparent)`,
                     background: C.card, color: C.muted, fontSize: 12, fontWeight: 700, cursor: 'not-allowed',
                     display: 'flex', alignItems: 'center', gap: 5 }}>
                   <Send size={11} /> Save Note (sim)
@@ -1044,18 +1046,18 @@ function ComposeBar({ q, draft, setDraft, generateDraft }) {
                 value={current.text}
                 onChange={e => setDraft(d => ({ ...d, [active]: { ...d[active], text: e.target.value } }))}
                 style={{ width: '100%', boxSizing: 'border-box', background: C.card,
-                  border: `1px solid ${accent}33`, borderRadius: 6, color: C.text,
+                  border: `1px solid color-mix(in srgb, ${accent} 20%, transparent)`, borderRadius: 6, color: C.text,
                   fontSize: 12, padding: 10, resize: 'none', height: 140,
                   fontFamily: 'inherit', lineHeight: 1.55, outline: 'none', display: 'block' }}
               />
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
                 <button onClick={() => generateDraft(active)} disabled={loading}
-                  style={{ padding: '5px 10px', borderRadius: 5, border: `1px solid ${accent}44`,
+                  style={{ padding: '5px 10px', borderRadius: 5, border: `1px solid color-mix(in srgb, ${accent} 27%, transparent)`,
                     background: 'transparent', color: accent, fontSize: 11, cursor: 'pointer' }}>
                   Regenerate
                 </button>
                 <button onClick={() => alert('SIMULATION MODE\n\nThis email has not been sent.')}
-                  style={{ padding: '5px 14px', borderRadius: 5, border: `1px solid ${C.muted}44`,
+                  style={{ padding: '5px 14px', borderRadius: 5, border: `1px solid color-mix(in srgb, ${C.muted} 27%, transparent)`,
                     background: C.card, color: C.muted, fontSize: 12, fontWeight: 700, cursor: 'not-allowed',
                     display: 'flex', alignItems: 'center', gap: 5 }}>
                   <Send size={11} /> Send (sim only)
@@ -1066,7 +1068,7 @@ function ComposeBar({ q, draft, setDraft, generateDraft }) {
             <div style={{ padding: '12px 0', textAlign: 'center' }}>
               <button onClick={() => generateDraft(active)}
                 style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 16px',
-                  borderRadius: 6, border: `1px solid ${accent}55`, background: `${accent}14`,
+                  borderRadius: 6, border: `1px solid color-mix(in srgb, ${accent} 33%, transparent)`, background: `color-mix(in srgb, ${accent} 8%, transparent)`,
                   color: accent, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                 <Sparkles size={13} /> Generate AI Draft
               </button>
@@ -1231,7 +1233,7 @@ function QueryDetail({ queryId, onUpdated }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {logoUrl && (
               <div style={{ width: 26, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: '#fff', borderRadius: 3, padding: 2, flexShrink: 0 }}>
+                background: 'var(--mv-surface)', borderRadius: 3, padding: 2, flexShrink: 0 }}>
                 <img src={logoUrl} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
               </div>
             )}
@@ -1252,7 +1254,7 @@ function QueryDetail({ queryId, onUpdated }) {
             {showPhoneCall && (
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700,
                 color: C.red, background: C.redDim, padding: '2px 8px', borderRadius: 4,
-                border: `1px solid ${C.red}33`, flexShrink: 0 }}>
+                border: `1px solid color-mix(in srgb, ${C.red} 20%, transparent)`, flexShrink: 0 }}>
                 <Phone size={10} /> Call needed
               </span>
             )}
@@ -1291,7 +1293,7 @@ function QueryDetail({ queryId, onUpdated }) {
         <div style={{ flex: 1, overflowY: 'auto', padding: 14 }}>
 
           {/* ── Ticket ── */}
-          <div style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase',
+          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--mv-ink-52)', textTransform: 'uppercase',
             letterSpacing: '0.1em', marginBottom: 12, paddingTop: 4 }}>Ticket</div>
 
           {/* Status */}
@@ -1299,11 +1301,11 @@ function QueryDetail({ queryId, onUpdated }) {
             <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>Status</div>
             <select value={q.status} onChange={handleStatusChange} disabled={statusUpdating}
               style={{ width: '100%', background: STATUS_CFG[q.status]?.bg || C.card,
-                border: `1px solid ${(STATUS_CFG[q.status]?.color || C.muted) + '44'}`,
+                border: `1px solid color-mix(in srgb, ${STATUS_CFG[q.status]?.color || C.muted} 27%, transparent)`,
                 borderRadius: 6, color: STATUS_CFG[q.status]?.color || C.text,
                 fontSize: 11, padding: '5px 8px', cursor: 'pointer', fontWeight: 700, outline: 'none' }}>
               {Object.entries(STATUS_CFG).map(([k, v]) => (
-                <option key={k} value={k} style={{ background: '#FFFFFF', color: '#0F172A', fontWeight: 400 }}>{v.label}</option>
+                <option key={k} value={k} style={{ background: 'var(--mv-surface)', color: 'var(--mv-ink)', fontWeight: 400 }}>{v.label}</option>
               ))}
             </select>
           </div>
@@ -1312,7 +1314,7 @@ function QueryDetail({ queryId, onUpdated }) {
           <div style={{ marginBottom: 10 }}>
             <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>Assignee</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-              <div style={{ width: 22, height: 22, borderRadius: '50%', background: `${C.blue}33`,
+              <div style={{ width: 22, height: 22, borderRadius: '50%', background: `color-mix(in srgb, ${C.blue} 20%, transparent)`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 10, fontWeight: 700, color: C.blue, flexShrink: 0 }}>
                 {(q.assignee_name || 'U').charAt(0).toUpperCase()}
@@ -1340,7 +1342,7 @@ function QueryDetail({ queryId, onUpdated }) {
           {/* Attention banner */}
           {showAttention && (
             <div style={{ marginBottom: 10, padding: '8px 10px', borderRadius: 6, background: C.amberDim,
-              border: `1px solid ${C.amber}33`, fontSize: 11, color: C.amber, lineHeight: 1.4 }}>
+              border: `1px solid color-mix(in srgb, ${C.amber} 20%, transparent)`, fontSize: 11, color: C.amber, lineHeight: 1.4 }}>
               ⚠ {q.attention_reason}
             </div>
           )}
@@ -1350,13 +1352,13 @@ function QueryDetail({ queryId, onUpdated }) {
           {/* ── Parcel ── */}
           {(q.consignment_number || parcel) && (
             <div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase',
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--mv-ink-45)', textTransform: 'uppercase',
                 letterSpacing: '0.1em', marginBottom: 12 }}>Parcel</div>
 
               {logoUrl && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                   <div style={{ width: 32, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    background: '#fff', borderRadius: 4, padding: 3, flexShrink: 0 }}>
+                    background: 'var(--mv-surface)', borderRadius: 4, padding: 3, flexShrink: 0 }}>
                     <img src={logoUrl} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
                   </div>
                   <span style={{ fontSize: 12, color: C.sub }}>{q.courier_name}</span>
@@ -1391,7 +1393,7 @@ function QueryDetail({ queryId, onUpdated }) {
           {trackingEvents.length > 0 && (
             <div style={{ marginBottom: 4 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--mv-ink-52)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
                   Tracking
                 </div>
                 {q.consignment_number && (
@@ -1410,15 +1412,15 @@ function QueryDetail({ queryId, onUpdated }) {
                   return (
                     <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 10, alignItems: 'flex-start' }}>
                       <div style={{ width: 10, height: 10, borderRadius: '50%', flexShrink: 0, marginTop: 2,
-                        background: i === 0 ? cfg.color : '#E2E8F0',
-                        border: `2px solid ${i === 0 ? cfg.color + '44' : '#F1F5F9'}`,
-                        boxShadow: i === 0 ? `0 0 0 3px ${cfg.color}22` : 'none' }} />
+                        background: i === 0 ? cfg.color : 'var(--mv-hairline-2)',
+                        border: `2px solid ${i === 0 ? `color-mix(in srgb, ${cfg.color} 27%, transparent)` : 'var(--mv-bg)'}`,
+                        boxShadow: i === 0 ? `0 0 0 3px color-mix(in srgb, ${cfg.color} 13%, transparent)` : 'none' }} />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 11.5, fontWeight: i === 0 ? 600 : 400,
-                          color: i === 0 ? '#0F172A' : '#64748B', lineHeight: 1.3, marginBottom: 2 }}>
+                          color: i === 0 ? 'var(--mv-ink)' : 'var(--mv-ink-52)', lineHeight: 1.3, marginBottom: 2 }}>
                           {ev.description || cfg.label}
                         </div>
-                        <div style={{ fontSize: 10, color: '#94A3B8' }}>
+                        <div style={{ fontSize: 10, color: 'var(--mv-ink-52)' }}>
                           {timeAgo(ev.event_at || ev.event_datetime || ev.created_at)}
                           {ev.location && ` · ${ev.location}`}
                         </div>
@@ -1463,7 +1465,7 @@ function QueryDetail({ queryId, onUpdated }) {
               </div>
               {notifications.filter(n => !n.read_at).slice(0, 3).map(n => (
                 <div key={n.id} style={{ marginBottom: 7, padding: '6px 8px', background: C.amberDim,
-                  border: `1px solid ${C.amber}33`, borderRadius: 6 }}>
+                  border: `1px solid color-mix(in srgb, ${C.amber} 20%, transparent)`, borderRadius: 6 }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: C.amber, marginBottom: 2, textTransform: 'capitalize' }}>
                     {n.notification_type.replace(/_/g, ' ')}
                   </div>
@@ -1482,13 +1484,13 @@ function QueryDetail({ queryId, onUpdated }) {
               <textarea placeholder="Why does this need attention?" value={attentionNote}
                 onChange={e => setAttentionNote(e.target.value)}
                 style={{ width: '100%', boxSizing: 'border-box', background: C.card,
-                  border: `1px solid ${C.red}44`, borderRadius: 6, color: C.text,
+                  border: `1px solid color-mix(in srgb, ${C.red} 27%, transparent)`, borderRadius: 6, color: C.text,
                   fontSize: 11, padding: 9, resize: 'vertical', minHeight: 56,
                   fontFamily: 'inherit', outline: 'none' }} />
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={handleFlagAttention}
                   style={{ flex: 1, padding: '5px 0', borderRadius: 5, border: 'none',
-                    background: C.red, color: '#0F172A', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                    background: C.red, color: 'var(--mv-on-brand)', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
                   Flag
                 </button>
                 <button onClick={() => setShowFlag(false)}
@@ -1629,7 +1631,7 @@ function SeedButton({ onDone }) {
   return (
     <button onClick={run} disabled={state === 'loading'} title="Wipe and re-seed practice tickets"
       style={{ padding: '5px 11px', borderRadius: 7, border: `1px solid ${C.border}`,
-        background: bg, color: state === 'idle' ? C.muted : '#fff', fontSize: 11,
+        background: bg, color: state === 'idle' ? C.muted : 'var(--mv-on-brand)', fontSize: 11,
         cursor: state === 'loading' ? 'default' : 'pointer', maxWidth: state === 'error' ? 280 : 'auto',
         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
       {label}
@@ -1656,12 +1658,12 @@ const STATUS_FILTERS = [
 const userDefinedGroups = ['Claims', 'Queries', 'Billing', 'Technical'];
 
 const GROUP_COLORS = {
-  Claims:    '#D97706',
-  Queries:   '#2563EB',
-  Billing:   '#059669',
-  Technical: '#7C3AED',
+  Claims:    'var(--mv-amber)',
+  Queries:   'var(--mv-teal)',
+  Billing:   'var(--mv-green)',
+  Technical: 'var(--mv-purple)',
 };
-const DEFAULT_GROUP_COLOR = '#0F172A';
+const DEFAULT_GROUP_COLOR = 'var(--mv-ink)';
 const groupColor = (group) => GROUP_COLORS[group] || DEFAULT_GROUP_COLOR;
 
 const GROUP_TABS = [
@@ -1674,7 +1676,7 @@ function FilterPill({ active, color, onClick, children }) {
     <button onClick={onClick} style={{
       padding: '4px 11px', borderRadius: 20,
       border: `1px solid ${active ? color : C.border}`,
-      background: active ? `${color}18` : 'transparent',
+      background: active ? `color-mix(in srgb, ${color} 9%, transparent)` : 'transparent',
       color: active ? color : C.muted,
       fontSize: 11, fontWeight: 600, cursor: 'pointer', transition: 'all 0.12s',
       whiteSpace: 'nowrap',
@@ -1710,9 +1712,9 @@ const GROUPS_OPTS = [
 ];
 
 const filterSelectStyle = {
-  width: '100%', background: '#FFFFFF',
-  border: `1px solid rgba(0,0,0,0.12)`,
-  borderRadius: 6, color: '#0F172A', fontSize: 12,
+  width: '100%', background: 'var(--mv-surface)',
+  border: `1px solid var(--mv-hairline-2)`,
+  borderRadius: 6, color: 'var(--mv-ink)', fontSize: 12,
   padding: '6px 10px', outline: 'none', cursor: 'pointer',
 };
 
@@ -1801,7 +1803,7 @@ function FilterPanel({ filters, setFilters, staffList, onClose }) {
 
         {/* Active filter summary */}
         {hasActive && (
-          <div style={{ marginTop: 8, padding: '8px 10px', background: `${C.blue}10`, border: `1px solid ${C.blue}30`, borderRadius: 6 }}>
+          <div style={{ marginTop: 8, padding: '8px 10px', background: `color-mix(in srgb, ${C.blue} 6%, transparent)`, border: `1px solid color-mix(in srgb, ${C.blue} 19%, transparent)`, borderRadius: 6 }}>
             <div style={{ fontSize: 10, color: C.blue, fontWeight: 700, marginBottom: 4 }}>ACTIVE FILTERS</div>
             {filters.assigned_to && staffList.find(s => s.id === filters.assigned_to) && (
               <div style={{ fontSize: 11, color: C.sub }}>
@@ -2289,7 +2291,7 @@ export default function QueriesPage() {
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 18px', borderBottom: `0.5px solid ${C.border}`, background: C.surface, flexShrink: 0 }}>
-        <span style={{ fontSize: 22, fontWeight: 800, color: '#0F172A', letterSpacing: '-0.03em' }}>Queries</span>
+        <span style={{ fontSize: 22, fontWeight: 800, color: 'var(--mv-ink)', letterSpacing: '-0.03em' }}>Queries</span>
 
         {/* Workspace switcher — Unassigned / Assigned to me / All open */}
         <div className="ml-2 inline-flex items-center gap-1 rounded-xl bg-slate-100 p-1">
@@ -2347,13 +2349,13 @@ export default function QueriesPage() {
         <button style={{
           display: 'flex', alignItems: 'center', gap: 6,
           padding: '7px 16px', borderRadius: 8, cursor: 'pointer',
-          border: 'none', background: '#0F172A',
-          color: '#F8FAFC', fontSize: 12, fontWeight: 700,
+          border: 'none', background: 'var(--mv-ink)',
+          color: 'var(--mv-bg)', fontSize: 12, fontWeight: 700,
           letterSpacing: '0.01em',
           transition: 'background 0.12s, box-shadow 0.12s',
         }}
-          onMouseEnter={e => { e.currentTarget.style.background = '#1E293B'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(15,23,42,0.22)'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = '#0F172A'; e.currentTarget.style.boxShadow = 'none'; }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'color-mix(in srgb, var(--mv-ink) 85%, transparent)'; e.currentTarget.style.boxShadow = '0 4px 12px color-mix(in srgb, var(--mv-ink) 22%, transparent)'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'var(--mv-ink)'; e.currentTarget.style.boxShadow = 'none'; }}
         >
           <span style={{ fontSize: 15, lineHeight: 1, fontWeight: 400 }}>+</span> New query
         </button>
@@ -2362,13 +2364,13 @@ export default function QueriesPage() {
       {/* ── Threat Matrix — high-impact operational counters ───────────────── */}
       <div className="grid shrink-0 grid-cols-2 gap-3 bg-slate-50 px-[18px] pb-3 pt-3.5 lg:grid-cols-4">
         {[
-          { key: 'urgent', label: '🚨 Critical Threats',     value: stats?.urgent_open,          accent: '#DC2626', ring: 'ring-red-200',    tint: 'bg-red-50',    text: 'text-red-700',
+          { key: 'urgent', label: '🚨 Critical Threats',     value: stats?.urgent_open,          accent: 'var(--mv-magenta)', ring: 'ring-red-200',    tint: 'bg-red-50',    text: 'text-red-700',
             onClick: () => setFilters(f => ({ ...f, priority: f.priority === 'urgent' ? '' : 'urgent', sla_breached: false, status: '', attention: false })), active: filters.priority === 'urgent' },
-          { key: 'high',   label: '⚠️ High Priority',         value: stats?.high_open,            accent: '#D97706', ring: 'ring-amber-200',  tint: 'bg-amber-50',  text: 'text-amber-700',
+          { key: 'high',   label: '⚠️ High Priority',         value: stats?.high_open,            accent: 'var(--mv-amber)', ring: 'ring-amber-200',  tint: 'bg-amber-50',  text: 'text-amber-700',
             onClick: () => setFilters(f => ({ ...f, priority: f.priority === 'high' ? '' : 'high', sla_breached: false, status: '', attention: false })), active: filters.priority === 'high' },
-          { key: 'sla',    label: '⏳ Courier SLA Breaches',  value: stats?.courier_sla_breached, accent: '#7C3AED', ring: 'ring-purple-200', tint: 'bg-purple-50', text: 'text-purple-700',
+          { key: 'sla',    label: '⏳ Courier SLA Breaches',  value: stats?.courier_sla_breached, accent: 'var(--mv-purple)', ring: 'ring-purple-200', tint: 'bg-purple-50', text: 'text-purple-700',
             onClick: () => setFilters(f => ({ ...f, sla_breached: !f.sla_breached, priority: '', status: '', attention: false })), active: filters.sla_breached },
-          { key: 'auto',   label: '🤖 Autopilot Runs',        value: stats?.autopilot_runs,       accent: '#059669', ring: 'ring-emerald-200', tint: 'bg-emerald-50', text: 'text-emerald-700',
+          { key: 'auto',   label: '🤖 Autopilot Runs',        value: stats?.autopilot_runs,       accent: 'var(--mv-green-deep)', ring: 'ring-emerald-200', tint: 'bg-emerald-50', text: 'text-emerald-700',
             onClick: null, active: false },
         ].map(k => (
           <button

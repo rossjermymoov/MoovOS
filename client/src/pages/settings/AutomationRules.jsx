@@ -21,8 +21,8 @@ const TIERS    = ['', 'bronze', 'silver', 'gold', 'platinum', 'enterprise'];
 const PRIOS    = ['', 'urgent', 'high', 'medium', 'low'];
 const MODES    = ['off', 'draft', 'full'];
 
-const lbl = { fontSize: 11, fontWeight: 600, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4, display: 'block' };
-const inp = { width: '100%', padding: '7px 9px', border: '1px solid #E2E8F0', borderRadius: 8, fontSize: 13, background: '#fff' };
+const lbl = { fontSize: 11, fontWeight: 600, color: 'var(--mv-ink-52)', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4, display: 'block' };
+const inp = { width: '100%', padding: '7px 9px', border: '1px solid var(--mv-hairline)', borderRadius: 8, fontSize: 13, background: 'var(--mv-surface)' };
 
 function RuleCard({ rule, trustCap, onSave, onDelete }) {
   const [d, setD] = useState(rule);
@@ -30,23 +30,23 @@ function RuleCard({ rule, trustCap, onSave, onDelete }) {
   const set = (k, v) => setD(prev => ({ ...prev, [k]: v }));
 
   return (
-    <div style={{ background: '#fff', border: '1px solid #E2E8F0', borderRadius: 12, padding: 16, marginBottom: 12 }}>
+    <div style={{ background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline)', borderRadius: 12, padding: 16, marginBottom: 12 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-        <GripVertical size={16} color="#CBD5E1" />
+        <GripVertical size={16} color="var(--mv-ink-45)" />
         <input value={d.name || ''} onChange={e => set('name', e.target.value)}
           style={{ ...inp, fontWeight: 600, fontSize: 14, flex: 1 }} placeholder="Rule name" />
-        <label style={{ fontSize: 12, color: '#64748B', display: 'flex', alignItems: 'center', gap: 4 }}>
+        <label style={{ fontSize: 12, color: 'var(--mv-ink-52)', display: 'flex', alignItems: 'center', gap: 4 }}>
           Order
           <input type="number" value={d.position ?? 100} onChange={e => set('position', +e.target.value)}
             style={{ ...inp, width: 64 }} />
         </label>
-        <label style={{ fontSize: 12, color: '#475569', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <label style={{ fontSize: 12, color: 'var(--mv-ink-62)', display: 'flex', alignItems: 'center', gap: 6 }}>
           <input type="checkbox" checked={d.is_active !== false} onChange={e => set('is_active', e.target.checked)} />
           Active
         </label>
       </div>
 
-      <div style={{ fontSize: 11, fontWeight: 700, color: '#0F172A', marginBottom: 8 }}>WHEN <span style={{ color: '#94A3B8', fontWeight: 500 }}>(all set conditions must match)</span></div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--mv-ink)', marginBottom: 8 }}>WHEN <span style={{ color: 'var(--mv-ink-45)', fontWeight: 500 }}>(all set conditions must match)</span></div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, marginBottom: 16 }}>
         <div>
           <label style={lbl}>Subject / body contains</label>
@@ -73,7 +73,7 @@ function RuleCard({ rule, trustCap, onSave, onDelete }) {
         </div>
       </div>
 
-      <div style={{ fontSize: 11, fontWeight: 700, color: '#0F172A', marginBottom: 8 }}>THEN</div>
+      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--mv-ink)', marginBottom: 8 }}>THEN</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 12 }}>
         <div>
           <label style={lbl}>Set priority</label>
@@ -101,25 +101,25 @@ function RuleCard({ rule, trustCap, onSave, onDelete }) {
             <option value="full">Full — auto-send (after trust earned)</option>
           </select>
         </div>
-        <label style={{ fontSize: 13, color: '#475569', display: 'flex', alignItems: 'center', gap: 8, marginTop: 18 }}>
+        <label style={{ fontSize: 13, color: 'var(--mv-ink-62)', display: 'flex', alignItems: 'center', gap: 8, marginTop: 18 }}>
           <input type="checkbox" checked={d.scream_to_google_chat !== false} onChange={e => set('scream_to_google_chat', e.target.checked)} />
           Escalate to Google Chat on breach
         </label>
       </div>
 
       {d.autopilot_mode === 'full' && (
-        <div style={{ marginTop: 10, fontSize: 12, color: '#92400E', background: '#FEF3C7', borderRadius: 8, padding: '7px 10px', display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div style={{ marginTop: 10, fontSize: 12, color: 'var(--mv-amber-deep)', background: 'var(--mv-amber-100)', borderRadius: 8, padding: '7px 10px', display: 'flex', alignItems: 'center', gap: 6 }}>
           <Zap size={13} /> Full autopilot still only auto-sends once that courier + intent has earned {trustCap} clean approvals. Claims & complaints never auto-send.
         </div>
       )}
 
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 14 }}>
         <button onClick={() => onDelete(d.id)}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', border: '1px solid #FECACA', background: '#fff', color: '#B91C1C', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', border: '1px solid var(--mv-magenta-200)', background: 'var(--mv-surface)', color: 'var(--mv-magenta-deep)', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
           <Trash2 size={14} /> Delete
         </button>
         <button onClick={() => onSave(d)}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', border: 'none', background: 'var(--mv-green)', color: '#fff', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 14px', border: 'none', background: 'var(--mv-green)', color: 'var(--mv-on-brand)', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
           <Save size={14} /> Save
         </button>
       </div>
@@ -160,23 +160,23 @@ export default function AutomationRules() {
 
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 6 }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#0F172A', margin: 0 }}>Automation Rules</h1>
-          <p style={{ fontSize: 13, color: '#64748B', marginTop: 4, maxWidth: 620 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--mv-ink)', margin: 0 }}>Automation Rules</h1>
+          <p style={{ fontSize: 13, color: 'var(--mv-ink-52)', marginTop: 4, maxWidth: 620 }}>
             One ordered list — the first rule whose conditions match a ticket sets its priority,
             SLA window, escalation and autopilot behaviour. Drag order matters: lower order numbers run first.
           </p>
         </div>
         <button onClick={addRule}
-          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 14px', border: 'none', background: '#0F172A', color: '#fff', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 14px', border: 'none', background: 'var(--mv-ink)', color: 'var(--mv-bg)', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
           <Plus size={15} /> Add rule
         </button>
       </div>
 
       <div style={{ marginTop: 20 }}>
         {isLoading ? (
-          <p style={{ color: '#94A3B8', fontSize: 14 }}>Loading rules…</p>
+          <p style={{ color: 'var(--mv-ink-45)', fontSize: 14 }}>Loading rules…</p>
         ) : rules.length === 0 ? (
-          <p style={{ color: '#94A3B8', fontSize: 14 }}>No rules yet — add your first one.</p>
+          <p style={{ color: 'var(--mv-ink-45)', fontSize: 14 }}>No rules yet — add your first one.</p>
         ) : (
           rules.map(r => (
             <RuleCard key={r.id} rule={r} trustCap={trustCap}

@@ -26,26 +26,26 @@ const fmtPct = n => `${(parseFloat(n) || 0).toFixed(1)}%`;
 
 function marginColour(pct) {
   const v = parseFloat(pct) || 0;
-  if (v >= 20) return 'text-green-600';
-  if (v >= 10) return 'text-amber-500';
-  return 'text-red-500';
+  if (v >= 20) return 'var(--mv-green-deep)';
+  if (v >= 10) return 'var(--mv-amber)';
+  return 'var(--mv-magenta)';
 }
 
 function autoColour(pct) {
   const v = parseFloat(pct) || 0;
-  if (v >= 90) return 'text-green-600';
-  if (v >= 70) return 'text-amber-500';
-  return 'text-red-500';
+  if (v >= 90) return 'var(--mv-green-deep)';
+  if (v >= 70) return 'var(--mv-amber)';
+  return 'var(--mv-magenta)';
 }
 
 // ── KPI card ─────────────────────────────────────────────────────────────────
 
 function KpiCard({ label, value, sub, colour }) {
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4">
-      <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">{label}</p>
-      <p className={`text-2xl font-bold ${colour || 'text-gray-900'}`}>{value}</p>
-      {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
+    <div className="rounded-lg border p-4" style={{ background: 'var(--mv-surface)', borderColor: 'var(--mv-hairline)' }}>
+      <p className="text-xs font-medium uppercase tracking-wide mb-1" style={{ color: 'var(--mv-ink-52)' }}>{label}</p>
+      <p className="text-2xl font-bold" style={{ color: colour || 'var(--mv-ink)' }}>{value}</p>
+      {sub && <p className="text-xs mt-0.5" style={{ color: 'var(--mv-ink-45)' }}>{sub}</p>}
     </div>
   );
 }
@@ -108,17 +108,20 @@ export default function MarginReportPage() {
   }
 
   function SortIcon({ field }) {
-    if (sortField !== field) return <ChevronDown className="w-3 h-3 text-gray-300 inline ml-0.5" />;
+    if (sortField !== field) return <ChevronDown className="w-3 h-3 inline ml-0.5" style={{ color: 'var(--mv-ink-45)' }} />;
     return sortDir === 'asc'
-      ? <ChevronUp   className="w-3 h-3 text-blue-500 inline ml-0.5" />
-      : <ChevronDown className="w-3 h-3 text-blue-500 inline ml-0.5" />;
+      ? <ChevronUp   className="w-3 h-3 inline ml-0.5" style={{ color: 'var(--mv-teal)' }} />
+      : <ChevronDown className="w-3 h-3 inline ml-0.5" style={{ color: 'var(--mv-teal)' }} />;
   }
 
   function Th({ field, children, right }) {
     return (
       <th
-        className={`px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wide cursor-pointer select-none hover:text-gray-800 ${right ? 'text-right' : 'text-left'}`}
+        className={`px-3 py-2 text-xs font-semibold uppercase tracking-wide cursor-pointer select-none ${right ? 'text-right' : 'text-left'}`}
+        style={{ color: 'var(--mv-ink-52)' }}
         onClick={() => toggleSort(field)}
+        onMouseEnter={e => e.currentTarget.style.color = 'var(--mv-ink-78)'}
+        onMouseLeave={e => e.currentTarget.style.color = 'var(--mv-ink-52)'}
       >
         {children}<SortIcon field={field} />
       </th>
@@ -126,22 +129,27 @@ export default function MarginReportPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen" style={{ background: 'var(--mv-bg)' }}>
       {/* ── Header ── */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4 flex items-center gap-4">
+      <div className="border-b px-6 py-4 flex items-center gap-4" style={{ background: 'var(--mv-surface)', borderColor: 'var(--mv-hairline)' }}>
         <button
           onClick={() => navigate('/reconciliation')}
-          className="text-gray-400 hover:text-gray-700"
+          style={{ color: 'var(--mv-ink-45)' }}
+          onMouseEnter={e => e.currentTarget.style.color = 'var(--mv-ink-78)'}
+          onMouseLeave={e => e.currentTarget.style.color = 'var(--mv-ink-45)'}
         >
           <ArrowLeft className="w-5 h-5" />
         </button>
         <div className="flex-1">
-          <h1 className="text-lg font-semibold text-gray-900">Margin & Automation Report</h1>
-          <p className="text-sm text-gray-500">Buy vs Sell profitability per finalised reconciliation run</p>
+          <h1 className="text-lg font-semibold" style={{ color: 'var(--mv-ink)' }}>Margin & Automation Report</h1>
+          <p className="text-sm" style={{ color: 'var(--mv-ink-52)' }}>Buy vs Sell profitability per finalised reconciliation run</p>
         </div>
         <button
           onClick={() => refetch()}
-          className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 border border-gray-200 rounded-md px-3 py-1.5"
+          className="flex items-center gap-1.5 text-sm border rounded-md px-3 py-1.5"
+          style={{ color: 'var(--mv-ink-52)', borderColor: 'var(--mv-hairline)' }}
+          onMouseEnter={e => e.currentTarget.style.color = 'var(--mv-ink-78)'}
+          onMouseLeave={e => e.currentTarget.style.color = 'var(--mv-ink-52)'}
         >
           <RefreshCw className="w-3.5 h-3.5" />
           Refresh
@@ -156,13 +164,13 @@ export default function MarginReportPage() {
             label="Total Sell"
             value={fmtK(kpis.totalSell)}
             sub={`${total} finalised run${total !== 1 ? 's' : ''}`}
-            colour="text-gray-900"
+            colour="var(--mv-ink)"
           />
           <KpiCard
             label="Total Buy (Carrier Cost)"
             value={fmtK(kpis.totalBuy)}
             sub="What we paid carriers"
-            colour="text-gray-700"
+            colour="var(--mv-ink-78)"
           />
           <KpiCard
             label="Total Margin"
@@ -179,22 +187,22 @@ export default function MarginReportPage() {
         </div>
 
         {/* ── Table ── */}
-        <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+        <div className="rounded-lg overflow-hidden border" style={{ background: 'var(--mv-surface)', borderColor: 'var(--mv-hairline)' }}>
           {isLoading && (
-            <div className="p-8 text-center text-gray-400 text-sm">Loading…</div>
+            <div className="p-8 text-center text-sm" style={{ color: 'var(--mv-ink-45)' }}>Loading…</div>
           )}
           {isError && (
-            <div className="p-8 text-center text-red-500 text-sm">{error?.message || 'Failed to load'}</div>
+            <div className="p-8 text-center text-sm" style={{ color: 'var(--mv-magenta)' }}>{error?.message || 'Failed to load'}</div>
           )}
           {!isLoading && !isError && sorted.length === 0 && (
-            <div className="p-8 text-center text-gray-400 text-sm">
+            <div className="p-8 text-center text-sm" style={{ color: 'var(--mv-ink-45)' }}>
               No finalised runs yet. Finalise a reconciliation run to see margin data here.
             </div>
           )}
           {!isLoading && sorted.length > 0 && (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b border-gray-200">
+                <thead className="border-b" style={{ background: 'var(--mv-bg)', borderColor: 'var(--mv-hairline)' }}>
                   <tr>
                     <Th field="finalized_at">Date</Th>
                     <Th field="carrier_name">Carrier</Th>
@@ -208,7 +216,7 @@ export default function MarginReportPage() {
                     <Th field="xero_unpushed_count" right>Unpushed</Th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100">
+                <tbody>
                   {sorted.map(r => {
                     const mpct   = parseFloat(r.margin_pct)    || 0;
                     const apct   = parseFloat(r.automation_rate) || 0;
@@ -216,34 +224,37 @@ export default function MarginReportPage() {
                     return (
                       <tr
                         key={r.run_id}
-                        className="hover:bg-gray-50 cursor-pointer"
+                        className="cursor-pointer"
+                        style={{ borderBottom: '1px solid var(--mv-hairline)' }}
                         onClick={() => navigate(`/reconciliation/${r.run_id}`)}
+                        onMouseEnter={e => e.currentTarget.style.background = 'var(--mv-bg)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                       >
-                        <td className="px-3 py-2.5 text-gray-600">
+                        <td className="px-3 py-2.5" style={{ color: 'var(--mv-ink-62)' }}>
                           {r.finalized_at
                             ? new Date(r.finalized_at).toLocaleDateString('en-GB')
                             : '—'}
                         </td>
-                        <td className="px-3 py-2.5 font-medium text-gray-900">{r.carrier_name || '—'}</td>
-                        <td className="px-3 py-2.5 text-gray-600 font-mono text-xs">{r.invoice_ref || '—'}</td>
-                        <td className="px-3 py-2.5 text-right text-gray-700">{r.line_count}</td>
-                        <td className={`px-3 py-2.5 text-right font-medium ${autoColour(apct)}`}>
+                        <td className="px-3 py-2.5 font-medium" style={{ color: 'var(--mv-ink)' }}>{r.carrier_name || '—'}</td>
+                        <td className="px-3 py-2.5 font-mono text-xs" style={{ color: 'var(--mv-ink-62)' }}>{r.invoice_ref || '—'}</td>
+                        <td className="px-3 py-2.5 text-right" style={{ color: 'var(--mv-ink-78)' }}>{r.line_count}</td>
+                        <td className="px-3 py-2.5 text-right font-medium" style={{ color: autoColour(apct) }}>
                           {fmtPct(apct)}
                         </td>
-                        <td className="px-3 py-2.5 text-right text-gray-600">{fmt2(r.total_buy)}</td>
-                        <td className="px-3 py-2.5 text-right text-gray-900 font-medium">{fmt2(r.total_sell)}</td>
-                        <td className={`px-3 py-2.5 text-right font-medium ${marginColour(mpct)}`}>
+                        <td className="px-3 py-2.5 text-right" style={{ color: 'var(--mv-ink-62)' }}>{fmt2(r.total_buy)}</td>
+                        <td className="px-3 py-2.5 text-right font-medium" style={{ color: 'var(--mv-ink)' }}>{fmt2(r.total_sell)}</td>
+                        <td className="px-3 py-2.5 text-right font-medium" style={{ color: marginColour(mpct) }}>
                           {fmt2(r.total_margin)}
                         </td>
-                        <td className={`px-3 py-2.5 text-right font-bold ${marginColour(mpct)}`}>
+                        <td className="px-3 py-2.5 text-right font-bold" style={{ color: marginColour(mpct) }}>
                           {fmtPct(mpct)}
                         </td>
                         <td className="px-3 py-2.5 text-right">
                           {unpush > 0
-                            ? <span className="inline-flex items-center gap-1 text-amber-600 font-medium">
+                            ? <span className="inline-flex items-center gap-1 font-medium" style={{ color: 'var(--mv-amber)' }}>
                                 {unpush}
                               </span>
-                            : <span className="text-green-600 text-xs">✓ All pushed</span>
+                            : <span className="text-xs" style={{ color: 'var(--mv-green-deep)' }}>✓ All pushed</span>
                           }
                         </td>
                       </tr>
@@ -256,20 +267,26 @@ export default function MarginReportPage() {
 
           {/* ── Pagination ── */}
           {pages > 1 && (
-            <div className="px-4 py-3 border-t border-gray-200 flex items-center justify-between text-sm text-gray-500">
+            <div className="px-4 py-3 border-t flex items-center justify-between text-sm" style={{ borderColor: 'var(--mv-hairline)', color: 'var(--mv-ink-52)' }}>
               <span>Showing {page * limit + 1}–{Math.min((page + 1) * limit, total)} of {total}</span>
               <div className="flex gap-2">
                 <button
                   disabled={page === 0}
                   onClick={() => setPage(p => p - 1)}
-                  className="px-3 py-1 border border-gray-200 rounded disabled:opacity-40 hover:bg-gray-50"
+                  className="px-3 py-1 border rounded disabled:opacity-40"
+                  style={{ borderColor: 'var(--mv-hairline)' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--mv-bg)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                 >
                   Previous
                 </button>
                 <button
                   disabled={page >= pages - 1}
                   onClick={() => setPage(p => p + 1)}
-                  className="px-3 py-1 border border-gray-200 rounded disabled:opacity-40 hover:bg-gray-50"
+                  className="px-3 py-1 border rounded disabled:opacity-40"
+                  style={{ borderColor: 'var(--mv-hairline)' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--mv-bg)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                 >
                   Next
                 </button>
@@ -279,13 +296,13 @@ export default function MarginReportPage() {
         </div>
 
         {/* ── Legend ── */}
-        <div className="bg-white border border-gray-200 rounded-lg p-4 text-xs text-gray-500 space-y-1">
-          <p className="font-semibold text-gray-700 mb-2">How to read this report</p>
-          <p><span className="font-medium text-gray-700">Buy (Carrier Cost)</span> — what we paid the carrier per their invoice, mapped to each shipment.</p>
-          <p><span className="font-medium text-gray-700">Sell</span> — what we charge the customer (base + fuel + surcharges from our charges table).</p>
-          <p><span className="font-medium text-gray-700">Margin %</span> — (Sell − Buy) ÷ Sell × 100. <span className="text-green-600">Green ≥ 20%</span>, <span className="text-amber-500">Amber ≥ 10%</span>, <span className="text-red-500">Red &lt; 10%</span>.</p>
-          <p><span className="font-medium text-gray-700">Auto %</span> — proportion of lines resolved automatically (Matched + Corrected by engine). <span className="text-green-600">Green ≥ 90%</span>, <span className="text-amber-500">Amber ≥ 70%</span>, <span className="text-red-500">Red &lt; 70%</span>.</p>
-          <p><span className="font-medium text-gray-700">Unpushed</span> — finalized lines not yet pushed to Xero. Click a row to go to the run detail.</p>
+        <div className="rounded-lg border p-4 text-xs space-y-1" style={{ background: 'var(--mv-surface)', borderColor: 'var(--mv-hairline)', color: 'var(--mv-ink-52)' }}>
+          <p className="font-semibold mb-2" style={{ color: 'var(--mv-ink-78)' }}>How to read this report</p>
+          <p><span className="font-medium" style={{ color: 'var(--mv-ink-78)' }}>Buy (Carrier Cost)</span> — what we paid the carrier per their invoice, mapped to each shipment.</p>
+          <p><span className="font-medium" style={{ color: 'var(--mv-ink-78)' }}>Sell</span> — what we charge the customer (base + fuel + surcharges from our charges table).</p>
+          <p><span className="font-medium" style={{ color: 'var(--mv-ink-78)' }}>Margin %</span> — (Sell − Buy) ÷ Sell × 100. <span style={{ color: 'var(--mv-green-deep)' }}>Green ≥ 20%</span>, <span style={{ color: 'var(--mv-amber)' }}>Amber ≥ 10%</span>, <span style={{ color: 'var(--mv-magenta)' }}>Red &lt; 10%</span>.</p>
+          <p><span className="font-medium" style={{ color: 'var(--mv-ink-78)' }}>Auto %</span> — proportion of lines resolved automatically (Matched + Corrected by engine). <span style={{ color: 'var(--mv-green-deep)' }}>Green ≥ 90%</span>, <span style={{ color: 'var(--mv-amber)' }}>Amber ≥ 70%</span>, <span style={{ color: 'var(--mv-magenta)' }}>Red &lt; 70%</span>.</p>
+          <p><span className="font-medium" style={{ color: 'var(--mv-ink-78)' }}>Unpushed</span> — finalized lines not yet pushed to Xero. Click a row to go to the run detail.</p>
         </div>
       </div>
     </div>

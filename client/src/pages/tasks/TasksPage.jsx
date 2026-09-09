@@ -26,23 +26,30 @@ const api = axios.create({ baseURL: '/api' });
 // Spaces and statuses are user-configurable (edited in board Settings, persisted
 // server-side). Keys are stable — renaming only changes the label, so existing
 // tasks keep working. These defaults seed a board that has never been configured.
+// NOTE: these colours are deliberately literal hex, not var(--mv-*) — they're fed
+// through hexToRgb()/darken() below (and bound directly to native <input type="color">
+// pickers in SettingsModal), both of which require a real hex string and silently
+// break (NaN) on a CSS var() reference. That means these particular chips are
+// theme-static (their brand-green/red/blue values don't adapt to dark mode) rather
+// than fully token-driven — a known, structural limitation of this component, not
+// an oversight. Values are the new brand palette's light-mode hex equivalents.
 const DEFAULT_SPACES = [
-  { key: 'cs',      label: 'Customer Service', colour: 'var(--mv-teal)' },
-  { key: 'sales',   label: 'Sales',            colour: 'var(--mv-magenta)' },
-  { key: 'ops',     label: 'Operations',       colour: '#F59E0B' },
-  { key: 'product', label: 'Product & Data',   colour: 'var(--mv-purple)' },
+  { key: 'cs',      label: 'Customer Service', colour: '#276E93' },
+  { key: 'sales',   label: 'Sales',            colour: '#CD1D69' },
+  { key: 'ops',     label: 'Operations',       colour: '#D97706' },
+  { key: 'product', label: 'Product & Data',   colour: '#0F7A46' },
 ];
 const DEFAULT_STATUSES = [
-  { key: 'todo',     label: 'To do',       colour: '#94A3B8', isComplete: false },
-  { key: 'progress', label: 'In progress', colour: '#F59E0B', isComplete: false },
-  { key: 'review',   label: 'In review',   colour: 'var(--mv-purple)', isComplete: false },
-  { key: 'done',     label: 'Complete',    colour: 'var(--mv-green)', isComplete: true },
+  { key: 'todo',     label: 'To do',       colour: '#6B7280', isComplete: false },
+  { key: 'progress', label: 'In progress', colour: '#D97706', isComplete: false },
+  { key: 'review',   label: 'In review',   colour: '#0F7A46', isComplete: false },
+  { key: 'done',     label: 'Complete',    colour: '#0F7A46', isComplete: true },
 ];
 const PRIORITY = {
-  urgent: { label: 'Urgent', colour: '#EF4444', soft: '#FDECEC', text: '#B91C1C' },
-  high:   { label: 'High',   colour: '#F59E0B', soft: '#FEF3E2', text: '#B45309' },
-  medium: { label: 'Medium', colour: '#2563EB', soft: '#E7EEFD', text: '#1D4ED8' },
-  low:    { label: 'Low',    colour: '#94A3B8', soft: '#EEF2F6', text: '#64748B' },
+  urgent: { label: 'Urgent', colour: 'var(--mv-magenta)', soft: 'var(--mv-magenta-100)', text: 'var(--mv-magenta-deep)' },
+  high:   { label: 'High',   colour: 'var(--mv-amber)', soft: 'var(--mv-amber-100)', text: 'var(--mv-amber-deep)' },
+  medium: { label: 'Medium', colour: 'var(--mv-teal)', soft: 'var(--mv-teal-100)', text: 'var(--mv-teal)' },
+  low:    { label: 'Low',    colour: 'var(--mv-ink-45)', soft: 'var(--mv-bg)', text: 'var(--mv-ink-52)' },
 };
 
 // ── colour helpers — derive a soft background + readable text from any base hex ──
@@ -71,7 +78,7 @@ function applyConfig(data) {
   FIRST_STATUS = statuses[0]?.key || 'todo';
 }
 applyConfig(null); // seed defaults at load
-const AV_PALETTE = ['var(--mv-purple)', 'var(--mv-teal)', 'var(--mv-magenta)', 'var(--mv-green)', '#F59E0B', '#2563EB', '#EA4335', '#0F9D58', '#B45309', '#6B4423'];
+const AV_PALETTE = ['var(--mv-purple)', 'var(--mv-teal)', 'var(--mv-magenta)', 'var(--mv-green)', 'var(--mv-amber)', 'var(--mv-teal)', 'var(--mv-magenta)', 'var(--mv-green)', 'var(--mv-amber-deep)', 'var(--mv-amber-deep)'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -95,7 +102,7 @@ function RecChip({ link, navigate, onRemove }) {
   const clickable = !!link.route && !!navigate;
   const go = () => { if (clickable) navigate(link.route); };
   let lead = null;
-  if (link.type === 'customer') lead = <span className="mt-sq" style={{ background: '#1D4ED8' }}>{initials(link.label)}</span>;
+  if (link.type === 'customer') lead = <span className="mt-sq" style={{ background: 'var(--mv-teal)' }}>{initials(link.label)}</span>;
   else if (link.type === 'carrier') lead = <span className="mt-sq" style={{ background: colourFor(link.sub || link.label), fontSize: 8 }}>{String(link.sub || link.label || '').slice(0, 3).toUpperCase()}</span>;
   else if (link.type === 'tracking') lead = <span className="mt-sq" style={{ background: colourFor(link.label), fontSize: 8 }}>PKG</span>;
   const mono = link.type === 'query' || link.type === 'tracking';
@@ -104,8 +111,8 @@ function RecChip({ link, navigate, onRemove }) {
       {lead}
       <span className={mono ? 'mono' : ''} style={mono ? { fontWeight: 700 } : {}}>{link.label || link.ref}</span>
       {link.sub ? <span className="sub">{link.sub}</span> : null}
-      {link.status ? <span className="mt-badge" style={{ background: '#EEF2F6', color: '#475569' }}>{String(link.status).replace(/_/g, ' ')}</span> : null}
-      {clickable ? <ExternalLink size={12} style={{ color: '#94A3B8' }} /> : null}
+      {link.status ? <span className="mt-badge" style={{ background: 'var(--mv-bg)', color: 'var(--mv-ink-62)' }}>{String(link.status).replace(/_/g, ' ')}</span> : null}
+      {clickable ? <ExternalLink size={12} style={{ color: 'var(--mv-ink-45)' }} /> : null}
       {onRemove ? <span className="mt-recx" onClick={(e) => { e.stopPropagation(); onRemove(link); }}><X size={12} /></span> : null}
     </span>
   );
@@ -118,14 +125,14 @@ const PICKERS = {
     ph: 'Search team members…', noun: 'in the team', empty: 'No matching team member.',
     search: (q) => api.get('/staff').then(r => normList(r.data)).then(rows => q ? rows.filter(s => (s.full_name + ' ' + (s.role || '') + ' ' + (s.email || '')).toLowerCase().includes(q.toLowerCase())) : rows),
     key: (s) => s.id,
-    row: (s) => (<><Avatar name={s.full_name} id={s.id} size={24} /><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontWeight: 600 }}>{s.full_name}</div><div style={{ fontSize: 11, color: '#94A3B8' }}>{(s.role || '—').replace(/_/g, ' ')}</div></div></>),
+    row: (s) => (<><Avatar name={s.full_name} id={s.id} size={24} /><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontWeight: 600 }}>{s.full_name}</div><div style={{ fontSize: 11, color: 'var(--mv-ink-45)' }}>{(s.role || '—').replace(/_/g, ' ')}</div></div></>),
     norm: (s) => ({ kind: 'staff', id: s.id, name: s.full_name, role: s.role }),
   },
   customer: {
     ph: 'Search customers by name or account…', noun: 'in Moov', empty: 'No matching customer in Moov. You can only link a customer that already exists — create the customer record first.',
     search: (q) => api.get('/customers', { params: { search: q, limit: 8 } }).then(r => normList(r.data)),
     key: (c) => c.id,
-    row: (c) => (<><span className="mt-sq" style={{ background: '#1D4ED8' }}>{initials(c.business_name)}</span><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontWeight: 600 }}>{c.business_name}</div><div style={{ fontSize: 11, color: '#94A3B8' }}>{c.account_number}{c.city ? ' · ' + c.city : ''}</div></div>{c.tier ? <span className="mt-badge" style={{ background: '#F1E9F8', color: 'var(--mv-purple)' }}>{c.tier}</span> : null}</>),
+    row: (c) => (<><span className="mt-sq" style={{ background: 'var(--mv-teal)' }}>{initials(c.business_name)}</span><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontWeight: 600 }}>{c.business_name}</div><div style={{ fontSize: 11, color: 'var(--mv-ink-45)' }}>{c.account_number}{c.city ? ' · ' + c.city : ''}</div></div>{c.tier ? <span className="mt-badge" style={{ background: 'var(--mv-purple-100)', color: 'var(--mv-purple)' }}>{c.tier}</span> : null}</>),
     norm: (c) => ({ type: 'customer', ref: c.id, label: c.business_name, sub: c.account_number }),
   },
   carrier: {
@@ -139,14 +146,14 @@ const PICKERS = {
     ph: 'Search queries by reference or subject…', noun: 'in Moov', empty: 'No matching query in Moov.',
     search: (q) => api.get('/queries', { params: { search: q, limit: 8 } }).then(r => normList(r.data)),
     key: (x) => x.id,
-    row: (x) => (<><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontWeight: 600 }}>{x.subject || '(no subject)'}</div><div style={{ fontSize: 11, color: '#94A3B8' }}>{x.customer_name || '—'}</div></div><span className="mt-badge" style={{ background: '#FEF3E2', color: '#B45309' }}>{String(x.status || '').replace(/_/g, ' ')}</span></>),
+    row: (x) => (<><div style={{ flex: 1, minWidth: 0 }}><div style={{ fontWeight: 600 }}>{x.subject || '(no subject)'}</div><div style={{ fontSize: 11, color: 'var(--mv-ink-45)' }}>{x.customer_name || '—'}</div></div><span className="mt-badge" style={{ background: 'var(--mv-amber-100)', color: 'var(--mv-amber-deep)' }}>{String(x.status || '').replace(/_/g, ' ')}</span></>),
     norm: (x) => ({ type: 'query', ref: x.id, label: x.subject, sub: x.customer_name, status: x.status }),
   },
   tracking: {
     ph: 'Search by tracking number, customer or postcode…', noun: 'parcels', empty: 'No parcels found in Moov for that number, customer or postcode.',
     search: (q) => api.get('/tracking', { params: { search: q, limit: 8 } }).then(r => normList(r.data)),
     key: (p) => p.id,
-    row: (p) => (<><span className="mt-sq" style={{ background: colourFor(p.courier_code || p.courier_name), fontSize: 8 }}>{String(p.courier_code || p.courier_name || '?').slice(0, 3).toUpperCase()}</span><div style={{ flex: 1, minWidth: 0 }}><div className="mono" style={{ fontWeight: 600 }}>{p.consignment_number}</div><div style={{ fontSize: 11, color: '#94A3B8' }}>{(p.customer_name || p.recipient_name || '—')}{p.recipient_postcode ? ' · ' + p.recipient_postcode : ''}</div></div><span className="mt-badge" style={{ background: '#EEF2F6', color: '#475569' }}>{String(p.status || '').replace(/_/g, ' ')}</span></>),
+    row: (p) => (<><span className="mt-sq" style={{ background: colourFor(p.courier_code || p.courier_name), fontSize: 8 }}>{String(p.courier_code || p.courier_name || '?').slice(0, 3).toUpperCase()}</span><div style={{ flex: 1, minWidth: 0 }}><div className="mono" style={{ fontWeight: 600 }}>{p.consignment_number}</div><div style={{ fontSize: 11, color: 'var(--mv-ink-45)' }}>{(p.customer_name || p.recipient_name || '—')}{p.recipient_postcode ? ' · ' + p.recipient_postcode : ''}</div></div><span className="mt-badge" style={{ background: 'var(--mv-bg)', color: 'var(--mv-ink-62)' }}>{String(p.status || '').replace(/_/g, ' ')}</span></>),
     norm: (p) => ({ type: 'tracking', ref: p.id, label: p.consignment_number, sub: p.recipient_postcode || p.customer_name, status: p.status }),
   },
 };
@@ -257,7 +264,7 @@ function CommentComposer({ staffList, onSend, sending }) {
           {results.map(s => (
             <div key={s.id} className="mt-drop-row" onMouseDown={e => { e.preventDefault(); pick(s); }}>
               <Avatar name={s.full_name} id={s.id} size={22} />
-              <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontWeight: 600 }}>{s.full_name}</div><div style={{ fontSize: 11, color: '#94A3B8' }}>{(s.role || '—').replace(/_/g, ' ')}</div></div>
+              <div style={{ flex: 1, minWidth: 0 }}><div style={{ fontWeight: 600 }}>{s.full_name}</div><div style={{ fontSize: 11, color: 'var(--mv-ink-45)' }}>{(s.role || '—').replace(/_/g, ' ')}</div></div>
             </div>
           ))}
         </div>
@@ -357,14 +364,14 @@ function TaskDetail({ taskId, me, staffList, onOpenTask, focusComments, onClose,
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {confirmDel ? (
               <>
-                <span style={{ fontSize: 12.5, fontWeight: 600, color: '#B91C1C' }}>
+                <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--mv-magenta-deep)' }}>
                   Delete this task{task.subtasks?.length ? ` and its ${task.subtasks.length} subtask${task.subtasks.length === 1 ? '' : 's'}` : ''}?
                 </span>
-                <button className="mt-btn" style={{ background: '#EF4444', borderColor: '#EF4444', color: '#fff' }} disabled={mDelete.isLoading} onClick={del}>{mDelete.isLoading ? 'Deleting…' : 'Delete'}</button>
+                <button className="mt-btn" style={{ background: 'var(--mv-magenta)', borderColor: 'var(--mv-magenta)', color: '#fff' }} disabled={mDelete.isLoading} onClick={del}>{mDelete.isLoading ? 'Deleting…' : 'Delete'}</button>
                 <button className="mt-btn" onClick={() => setConfirmDel(false)}>Cancel</button>
               </>
             ) : (
-              <div className="mt-iconbtn" title="Delete task" style={{ color: '#B91C1C' }} onClick={() => setConfirmDel(true)}><Trash2 size={16} /></div>
+              <div className="mt-iconbtn" title="Delete task" style={{ color: 'var(--mv-magenta-deep)' }} onClick={() => setConfirmDel(true)}><Trash2 size={16} /></div>
             )}
             <div className="mt-iconbtn" onClick={onClose} title="Close"><X size={16} /></div>
           </div>
@@ -406,7 +413,7 @@ function TaskDetail({ taskId, me, staffList, onOpenTask, focusComments, onClose,
                           <StatusTag k={s.status} />
                           {s.assignee_id
                             ? <Avatar name={s.assignee_name} id={s.assignee_id} size={22} />
-                            : <span className="avatar" style={{ width: 22, height: 22, fontSize: 9, background: '#CBD5E1' }} title="Unassigned">–</span>}
+                            : <span className="avatar" style={{ width: 22, height: 22, fontSize: 9, background: 'var(--mv-hairline-2)' }} title="Unassigned">–</span>}
                         </span>
                       </div>
                     );
@@ -418,7 +425,7 @@ function TaskDetail({ taskId, me, staffList, onOpenTask, focusComments, onClose,
             })()}
 
             <div className="mt-sec"><Link2 size={14} />Linked Moov records</div>
-            {links.length === 0 && <div style={{ fontSize: 13, color: '#94A3B8', marginBottom: 10 }}>No linked records yet.</div>}
+            {links.length === 0 && <div style={{ fontSize: 13, color: 'var(--mv-ink-45)', marginBottom: 10 }}>No linked records yet.</div>}
             {[['customer', 'Customer'], ['carrier', 'Carrier'], ['query', 'Queries'], ['tracking', 'Tracking']].map(([t, lbl]) => {
               const items = linksByType(t); if (!items.length) return null;
               return <div className="mt-recline" key={t}><span className="mt-recline-lbl">{lbl}</span><span className="mt-recchips">{items.map(l => <RecChip key={l.id} link={l} navigate={navigate} onRemove={(x) => mUnlink.mutate(x.id)} />)}</span></div>;
@@ -436,15 +443,15 @@ function TaskDetail({ taskId, me, staffList, onOpenTask, focusComments, onClose,
             </details>
 
             <div className="mt-sec"><Paperclip size={14} />Attachments{task.attachments?.length ? ' · ' + task.attachments.length : ''}</div>
-            {(task.attachments || []).length === 0 && <div style={{ fontSize: 13, color: '#94A3B8' }}>No attachments yet.</div>}
+            {(task.attachments || []).length === 0 && <div style={{ fontSize: 13, color: 'var(--mv-ink-45)' }}>No attachments yet.</div>}
             {(task.attachments || []).map(a => (
               <div className="mt-doc" key={a.id}>
-                <div className="mt-doc-ico"><Paperclip size={16} color="#64748B" /></div>
+                <div className="mt-doc-ico"><Paperclip size={16} color="var(--mv-ink-52)" /></div>
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <div className="mt-doc-name">{a.name}</div>
                   <div className="mt-doc-sub">{a.url || (a.size_bytes ? fmtSize(a.size_bytes) : a.kind)}</div>
                 </div>
-                {a.url ? <a href={a.url} target="_blank" rel="noreferrer" style={{ color: '#64748B' }} onClick={e => e.stopPropagation()}><ExternalLink size={15} /></a> : null}
+                {a.url ? <a href={a.url} target="_blank" rel="noreferrer" style={{ color: 'var(--mv-ink-52)' }} onClick={e => e.stopPropagation()}><ExternalLink size={15} /></a> : null}
                 <span className="mt-recx" onClick={() => mUnattach.mutate(a.id)}><X size={14} /></span>
               </div>
             ))}
@@ -461,7 +468,7 @@ function TaskDetail({ taskId, me, staffList, onOpenTask, focusComments, onClose,
             )}
 
             <div className="mt-sec" ref={commentsRef}><MessageSquare size={14} />Comments · {task.comments?.length || 0}</div>
-            {(task.comments || []).length === 0 && <div style={{ fontSize: 13, color: '#94A3B8', marginBottom: 12 }}>No comments yet. Start the conversation.</div>}
+            {(task.comments || []).length === 0 && <div style={{ fontSize: 13, color: 'var(--mv-ink-45)', marginBottom: 12 }}>No comments yet. Start the conversation.</div>}
             {[...(task.comments || [])].reverse().map(c => (
               <div className="mt-comment" key={c.id}>
                 <Avatar name={c.author_name || 'You'} id={c.author_id} size={32} />
@@ -487,7 +494,7 @@ function TaskDetail({ taskId, me, staffList, onOpenTask, focusComments, onClose,
             <div className="mt-prop">
               <div className="mt-plabel">Assignee</div>
               <div className="mt-control" onClick={() => setAssignOpen(o => !o)}>
-                {task.assignee_id ? <><Avatar name={task.assignee_name} id={task.assignee_id} size={20} /><span>{task.assignee_name}</span></> : <span style={{ color: '#94A3B8' }}>Unassigned</span>}
+                {task.assignee_id ? <><Avatar name={task.assignee_name} id={task.assignee_id} size={20} /><span>{task.assignee_name}</span></> : <span style={{ color: 'var(--mv-ink-45)' }}>Unassigned</span>}
                 <span className="chev"><ChevronDown size={14} /></span>
               </div>
               {assignOpen && <div style={{ marginTop: 6 }}><Picker type="staff" autoFocus onPick={(s) => { set({ assignee_id: s.id, actor_id: me }); setAssignOpen(false); }} /></div>}
@@ -507,7 +514,7 @@ function TaskDetail({ taskId, me, staffList, onOpenTask, focusComments, onClose,
                 <label style={{ flex: 1 }}><span className="mt-minilbl">Start</span><input type="date" className="mt-date" defaultValue={toISO(task.start_date)} onChange={e => set({ start_date: e.target.value || null })} /></label>
                 <label style={{ flex: 1 }}><span className="mt-minilbl">Due</span><input type="date" className={'mt-date' + (od ? ' overdue' : '')} defaultValue={toISO(task.due_date)} onChange={e => set({ due_date: e.target.value || null })} /></label>
               </div>
-              {od && <div style={{ fontSize: 11.5, color: '#EF4444', fontWeight: 600, marginTop: 5 }}>Overdue</div>}
+              {od && <div style={{ fontSize: 11.5, color: 'var(--mv-magenta)', fontWeight: 600, marginTop: 5 }}>Overdue</div>}
             </div>
 
             {task.created_by_name && (
@@ -592,17 +599,17 @@ function CreateModal({ defaultSpace, currentUserId, onClose, onCreated }) {
               const showInput = multi || !picked[t];
               return (
                 <div className="mt-lookup" key={t}>
-                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#334155', marginBottom: 6 }}>{lbl}{t === 'customer' && space === 'cs' ? <span style={{ color: '#EF4444', marginLeft: 2 }}>*</span> : null}{multi ? <span style={{ color: '#94A3B8', fontWeight: 500 }}> (add one or more)</span> : null}</label>
+                  <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--mv-ink-78)', marginBottom: 6 }}>{lbl}{t === 'customer' && space === 'cs' ? <span style={{ color: 'var(--mv-magenta)', marginLeft: 2 }}>*</span> : null}{multi ? <span style={{ color: 'var(--mv-ink-45)', fontWeight: 500 }}> (add one or more)</span> : null}</label>
                   {chips.length ? <div className="mt-sel-chips">{chips.map(c => <RecChip key={c.ref} link={c} onRemove={removePick} />)}</div> : null}
                   {showInput ? <Picker type={t} exclude={chips.map(c => String(c.ref))} onPick={addPick} /> : null}
-                  {t === 'customer' && needCustomer ? <div style={{ fontSize: 11.5, color: '#B45309', marginTop: 6, display: 'flex', gap: 6, alignItems: 'center' }}><AlertCircle size={13} />A customer is required for Customer Service tasks.</div> : null}
+                  {t === 'customer' && needCustomer ? <div style={{ fontSize: 11.5, color: 'var(--mv-amber-deep)', marginTop: 6, display: 'flex', gap: 6, alignItems: 'center' }}><AlertCircle size={13} />A customer is required for Customer Service tasks.</div> : null}
                 </div>
               );
             })}
           </div>
         </div>
         <div className="mt-modal-foot">
-          <span style={{ fontSize: 12, color: '#94A3B8' }}>Linking is optional — add what's relevant.</span>
+          <span style={{ fontSize: 12, color: 'var(--mv-ink-45)' }}>Linking is optional — add what's relevant.</span>
           <div style={{ display: 'flex', gap: 10 }}>
             <button className="mt-btn" onClick={onClose}>Cancel</button>
             <button className="mt-btn primary" disabled={!canCreate || mCreate.isLoading} onClick={submit}>{mCreate.isLoading ? 'Creating…' : 'Create task'}</button>
@@ -619,7 +626,7 @@ function TaskCard({ task, onOpen, navigate, sub, dragging, onDragStart, onDragEn
   const custom = (task.links || []).find(l => l.type === 'customer');
   const carrier = (task.links || []).find(l => l.type === 'carrier');
   const chip = custom
-    ? <span className="mt-gchip" onClick={(e) => { e.stopPropagation(); custom.route && navigate(custom.route); }}><span className="mt-sq" style={{ width: 14, height: 14, fontSize: 7, background: '#1D4ED8' }}>{initials(custom.label)}</span>{custom.label}</span>
+    ? <span className="mt-gchip" onClick={(e) => { e.stopPropagation(); custom.route && navigate(custom.route); }}><span className="mt-sq" style={{ width: 14, height: 14, fontSize: 7, background: 'var(--mv-teal)' }}>{initials(custom.label)}</span>{custom.label}</span>
     : carrier
       ? <span className="mt-gchip" onClick={(e) => { e.stopPropagation(); carrier.route && navigate(carrier.route); }}><span className="mt-sq" style={{ width: 14, height: 14, fontSize: 7, background: colourFor(carrier.sub || carrier.label) }}>{String(carrier.sub || carrier.label || '').slice(0, 3).toUpperCase()}</span>{carrier.label}</span>
       : null;
@@ -633,10 +640,10 @@ function TaskCard({ task, onOpen, navigate, sub, dragging, onDragStart, onDragEn
         <div className="mt-foot-left">
           <span className="mt-ico"><MessageSquare size={14} />{task.comment_count || 0}</span>
           <span className="mt-ico"><Paperclip size={14} />{task.attachment_count || 0}</span>
-          {sub && sub.total ? <span className="mt-ico" title="Subtasks complete" style={{ color: sub.done === sub.total ? '#00A344' : undefined }}><ListChecks size={14} />{sub.done}/{sub.total}</span> : null}
+          {sub && sub.total ? <span className="mt-ico" title="Subtasks complete" style={{ color: sub.done === sub.total ? 'var(--mv-green)' : undefined }}><ListChecks size={14} />{sub.done}/{sub.total}</span> : null}
           <span className={'mt-due' + (od ? ' overdue' : '')}><Calendar size={13} />{fmtDate(task.due_date)}</span>
         </div>
-        {task.assignee_id ? <Avatar name={task.assignee_name} id={task.assignee_id} size={26} /> : <span className="avatar" style={{ width: 26, height: 26, fontSize: 10, background: '#CBD5E1' }} title="Unassigned">–</span>}
+        {task.assignee_id ? <Avatar name={task.assignee_name} id={task.assignee_id} size={26} /> : <span className="avatar" style={{ width: 26, height: 26, fontSize: 10, background: 'var(--mv-hairline-2)' }} title="Unassigned">–</span>}
       </div>
     </div>
   );
@@ -646,14 +653,14 @@ function TaskCard({ task, onOpen, navigate, sub, dragging, onDragStart, onDragEn
 function MyTasksView({ myTasks, me, bypass, staffList, taskById, onOpen, onNew }) {
   // Bypass mode has no real identity — let the user pick who they're viewing as.
   const viewAsControl = bypass ? (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18, fontSize: 12.5, color: '#64748B' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 18, fontSize: 12.5, color: 'var(--mv-ink-52)' }}>
       <User size={14} />
       <span>Viewing as</span>
       <select value={me || ''} onChange={(e) => setViewAs(e.target.value)} className="mt-date" style={{ width: 'auto', fontWeight: 600 }}>
         <option value="">— choose a team member —</option>
         {staffList.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
       </select>
-      <span style={{ color: '#94A3B8' }}>(passwords aren’t set yet, so pick who “you” are to preview your tasks)</span>
+      <span style={{ color: 'var(--mv-ink-45)' }}>(passwords aren’t set yet, so pick who “you” are to preview your tasks)</span>
     </div>
   ) : null;
 
@@ -681,11 +688,11 @@ function MyTasksView({ myTasks, me, bypass, staffList, taskById, onOpen, onNew }
   const inProgress = notDone.filter(t => t.status !== FIRST_STATUS).length;
 
   const Tile = ({ label, count, colour, soft, icon }) => (
-    <div style={{ flex: 1, minWidth: 160, background: '#fff', border: '1px solid #E5E7EB', borderRadius: 14, padding: '15px 18px', display: 'flex', alignItems: 'center', gap: 14, boxShadow: '0 1px 3px rgba(15,23,42,.05), 0 1px 2px rgba(15,23,42,.03)' }}>
+    <div style={{ flex: 1, minWidth: 160, background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline)', borderRadius: 14, padding: '15px 18px', display: 'flex', alignItems: 'center', gap: 14, boxShadow: '0 1px 3px rgba(15,23,42,.05), 0 1px 2px rgba(15,23,42,.03)' }}>
       <div style={{ width: 42, height: 42, borderRadius: 11, background: soft, color: colour, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{icon}</div>
       <div>
-        <div style={{ fontSize: 26, fontWeight: 800, lineHeight: 1, color: count > 0 ? colour : '#0F172A' }}>{count}</div>
-        <div style={{ fontSize: 12.5, color: '#64748B', marginTop: 4, fontWeight: 600 }}>{label}</div>
+        <div style={{ fontSize: 26, fontWeight: 800, lineHeight: 1, color: count > 0 ? colour : 'var(--mv-ink)' }}>{count}</div>
+        <div style={{ fontSize: 12.5, color: 'var(--mv-ink-52)', marginTop: 4, fontWeight: 600 }}>{label}</div>
       </div>
     </div>
   );
@@ -694,13 +701,13 @@ function MyTasksView({ myTasks, me, bypass, staffList, taskById, onOpen, onNew }
     const od = isOverdue(t);
     return (
       <div className="mt-myrow" onClick={() => onOpen(t.id)}
-        style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: '#fff', border: '1px solid #E5E7EB', borderRadius: 11, cursor: 'pointer', marginBottom: 8, boxShadow: '0 1px 3px rgba(15,23,42,.05), 0 1px 2px rgba(15,23,42,.03)', transition: 'box-shadow .14s, border-color .14s' }}
-        onMouseEnter={e => { e.currentTarget.style.borderColor = '#D3DBE3'; e.currentTarget.style.boxShadow = '0 4px 14px rgba(15,23,42,.08), 0 2px 5px rgba(15,23,42,.04)'; }}
-        onMouseLeave={e => { e.currentTarget.style.borderColor = '#E5E7EB'; e.currentTarget.style.boxShadow = '0 1px 3px rgba(15,23,42,.05), 0 1px 2px rgba(15,23,42,.03)'; }}>
+        style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline)', borderRadius: 11, cursor: 'pointer', marginBottom: 8, boxShadow: '0 1px 3px rgba(15,23,42,.05), 0 1px 2px rgba(15,23,42,.03)', transition: 'box-shadow .14s, border-color .14s' }}
+        onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--mv-hairline-2)'; e.currentTarget.style.boxShadow = '0 4px 14px rgba(15,23,42,.08), 0 2px 5px rgba(15,23,42,.04)'; }}
+        onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--mv-hairline)'; e.currentTarget.style.boxShadow = '0 1px 3px rgba(15,23,42,.05), 0 1px 2px rgba(15,23,42,.03)'; }}>
         <span className="dot" style={{ width: 9, height: 9, background: STATUS[t.status]?.colour }} />
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 13.5, fontWeight: 600, color: '#0F172A', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.title}</div>
-          <div style={{ fontSize: 11.5, color: '#94A3B8' }}>{shortId(t.id)} · {t.parent_id ? <>↳ {taskById?.[t.parent_id]?.title || 'subtask'}</> : (SPACES[t.space]?.label || t.space)}</div>
+          <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--mv-ink)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.title}</div>
+          <div style={{ fontSize: 11.5, color: 'var(--mv-ink-45)' }}>{shortId(t.id)} · {t.parent_id ? <>↳ {taskById?.[t.parent_id]?.title || 'subtask'}</> : (SPACES[t.space]?.label || t.space)}</div>
         </div>
         <Pill map={PRIORITY} k={t.priority} />
         <span className={'mt-due' + (od ? ' overdue' : '')} style={{ fontSize: 12.5, minWidth: 96, justifyContent: 'flex-end' }}><Calendar size={13} />{fmtDate(t.due_date)}</span>
@@ -710,10 +717,10 @@ function MyTasksView({ myTasks, me, bypass, staffList, taskById, onOpen, onNew }
   };
 
   const groups = [
-    { key: 'overdue', label: 'Overdue', colour: '#EF4444', items: overdue },
-    { key: 'today', label: 'Due today', colour: '#F59E0B', items: dueToday },
-    { key: 'week', label: 'Due this week', colour: '#F59E0B', items: thisWeek },
-    { key: 'later', label: 'Later & no date', colour: '#94A3B8', items: later },
+    { key: 'overdue', label: 'Overdue', colour: 'var(--mv-magenta)', items: overdue },
+    { key: 'today', label: 'Due today', colour: 'var(--mv-amber)', items: dueToday },
+    { key: 'week', label: 'Due this week', colour: 'var(--mv-amber)', items: thisWeek },
+    { key: 'later', label: 'Later & no date', colour: 'var(--mv-ink-45)', items: later },
     { key: 'done', label: 'Completed', colour: 'var(--mv-green)', items: done },
   ];
 
@@ -722,14 +729,14 @@ function MyTasksView({ myTasks, me, bypass, staffList, taskById, onOpen, onNew }
       {viewAsControl}
 
       <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginBottom: 22 }}>
-        <Tile label="Overdue" count={overdue.length} colour="#EF4444" soft="#FDECEC" icon={<AlertTriangle size={20} />} />
-        <Tile label="Due this week" count={dueToday.length + thisWeek.length} colour="#F59E0B" soft="#FEF3E2" icon={<Clock size={20} />} />
-        <Tile label="In progress" count={inProgress} colour="#2563EB" soft="#E7EEFD" icon={<CircleDashed size={20} />} />
-        <Tile label="Completed" count={done.length} colour="var(--mv-green)" soft="#E7F8EE" icon={<CheckCircle2 size={20} />} />
+        <Tile label="Overdue" count={overdue.length} colour="var(--mv-magenta)" soft="var(--mv-magenta-100)" icon={<AlertTriangle size={20} />} />
+        <Tile label="Due this week" count={dueToday.length + thisWeek.length} colour="var(--mv-amber)" soft="var(--mv-amber-100)" icon={<Clock size={20} />} />
+        <Tile label="In progress" count={inProgress} colour="var(--mv-teal)" soft="var(--mv-teal-100)" icon={<CircleDashed size={20} />} />
+        <Tile label="Completed" count={done.length} colour="var(--mv-green)" soft="var(--mv-purple-100)" icon={<CheckCircle2 size={20} />} />
       </div>
 
       {overdue.length > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#FDECEC', color: '#B91C1C', border: '1px solid #FCA5A5', borderRadius: 10, padding: '10px 14px', marginBottom: 20, fontSize: 13, fontWeight: 600 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--mv-magenta-100)', color: 'var(--mv-magenta-deep)', border: '1px solid var(--mv-magenta-200)', borderRadius: 10, padding: '10px 14px', marginBottom: 20, fontSize: 13, fontWeight: 600 }}>
           <AlertTriangle size={15} />
           You have {overdue.length} overdue task{overdue.length === 1 ? '' : 's'}. These are past their due date — worth clearing first.
         </div>
@@ -744,7 +751,7 @@ function MyTasksView({ myTasks, me, bypass, staffList, taskById, onOpen, onNew }
         <div key={g.key} style={{ marginBottom: 22 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 11 }}>
             <span className="dot" style={{ width: 10, height: 10, background: g.colour }} />
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>{g.label}</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--mv-ink-78)' }}>{g.label}</span>
             <span className="mt-count">{g.items.length}</span>
           </div>
           {g.items.map(t => <Row key={t.id} t={t} />)}
@@ -788,18 +795,18 @@ function SettingsModal({ initSpaces, initStatuses, spaceCounts, statusCounts, sa
   };
 
   const swatch = (colour, onChange) => (
-    <input type="color" value={colour || '#2563EB'} onChange={e => onChange(e.target.value)}
-      style={{ width: 34, height: 32, border: '1px solid #E2E8F0', borderRadius: 8, padding: 2, background: '#fff', cursor: 'pointer', flexShrink: 0 }} title="Pick a colour" />
+    <input type="color" value={colour || '#276E93'} onChange={e => onChange(e.target.value)}
+      style={{ width: 34, height: 32, border: '1px solid var(--mv-hairline)', borderRadius: 8, padding: 2, background: 'var(--mv-surface)', cursor: 'pointer', flexShrink: 0 }} title="Pick a colour" />
   );
   const iconBtn = (child, onClick, disabled, title) => (
-    <button onClick={onClick} disabled={disabled} title={title} style={{ width: 28, height: 28, borderRadius: 7, border: '1px solid #E2E8F0', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: disabled ? 'not-allowed' : 'pointer', color: disabled ? '#CBD5E1' : '#64748B', flexShrink: 0 }}>{child}</button>
+    <button onClick={onClick} disabled={disabled} title={title} style={{ width: 28, height: 28, borderRadius: 7, border: '1px solid var(--mv-hairline)', background: 'var(--mv-surface)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: disabled ? 'not-allowed' : 'pointer', color: disabled ? 'var(--mv-hairline-2)' : 'var(--mv-ink-52)', flexShrink: 0 }}>{child}</button>
   );
 
   const renderSection = ({ title, hint, arr, setArr, counts, isStatus }) => (
     <div style={{ marginBottom: 22 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
         <label className="mt-fld-label" style={{ marginBottom: 0 }}>{title}</label>
-        <button className="mt-btn" style={{ padding: '5px 10px' }} onClick={() => setArr([...arr, isStatus ? { key: '', label: '', colour: '#2563EB', isComplete: false } : { key: '', label: '', colour: '#2563EB' }])}><Plus size={13} />Add {isStatus ? 'status' : 'space'}</button>
+        <button className="mt-btn" style={{ padding: '5px 10px' }} onClick={() => setArr([...arr, isStatus ? { key: '', label: '', colour: '#276E93', isComplete: false } : { key: '', label: '', colour: '#276E93' }])}><Plus size={13} />Add {isStatus ? 'status' : 'space'}</button>
       </div>
       <div className="mt-hint" style={{ marginBottom: 10 }}>{hint}</div>
       {arr.map((it, i) => {
@@ -811,7 +818,7 @@ function SettingsModal({ initSpaces, initStatuses, spaceCounts, statusCounts, sa
             <input className="mt-input" value={it.label} placeholder={isStatus ? 'Status name' : 'Space name'} onChange={e => upd(arr, setArr, i, { label: e.target.value })} style={{ flex: 1 }} />
             {isStatus && (
               <button onClick={() => upd(arr, setArr, i, { isComplete: !it.isComplete })} title="Tasks in this column count as complete"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, fontWeight: 600, padding: '6px 9px', borderRadius: 7, cursor: 'pointer', flexShrink: 0, border: '1px solid ' + (it.isComplete ? 'var(--mv-green)' : '#E2E8F0'), background: it.isComplete ? '#E7F8EE' : '#fff', color: it.isComplete ? '#047857' : '#94A3B8' }}>
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, fontWeight: 600, padding: '6px 9px', borderRadius: 7, cursor: 'pointer', flexShrink: 0, border: '1px solid ' + (it.isComplete ? 'var(--mv-green)' : 'var(--mv-hairline)'), background: it.isComplete ? 'var(--mv-purple-100)' : 'var(--mv-surface)', color: it.isComplete ? 'var(--mv-green-deep)' : 'var(--mv-ink-45)' }}>
                 <Check size={12} />Complete
               </button>
             )}
@@ -833,10 +840,10 @@ function SettingsModal({ initSpaces, initStatuses, spaceCounts, statusCounts, sa
             hint: 'Spaces group your work (teams, functions, projects). Rename, recolour, reorder, add or remove them — renaming keeps existing tasks intact.' })}
           {renderSection({ title: 'Status columns', isStatus: true, arr: statuses, setArr: setStatuses, counts: statusCounts,
             hint: 'These are your board columns, left to right. Mark the column(s) that mean “done” as Complete — that drives overdue flags, progress and the My Tasks view.' })}
-          {err && <div style={{ fontSize: 12.5, color: '#B91C1C', background: '#FDECEC', border: '1px solid #FCA5A5', borderRadius: 9, padding: '9px 12px', display: 'flex', gap: 7, alignItems: 'flex-start' }}><AlertCircle size={14} style={{ flexShrink: 0, marginTop: 1 }} />{err}</div>}
+          {err && <div style={{ fontSize: 12.5, color: 'var(--mv-magenta-deep)', background: 'var(--mv-magenta-100)', border: '1px solid var(--mv-magenta-200)', borderRadius: 9, padding: '9px 12px', display: 'flex', gap: 7, alignItems: 'flex-start' }}><AlertCircle size={14} style={{ flexShrink: 0, marginTop: 1 }} />{err}</div>}
         </div>
         <div className="mt-modal-foot">
-          <span style={{ fontSize: 12, color: '#94A3B8' }}>Changes apply for the whole team.</span>
+          <span style={{ fontSize: 12, color: 'var(--mv-ink-45)' }}>Changes apply for the whole team.</span>
           <div style={{ display: 'flex', gap: 10 }}>
             <button className="mt-btn" onClick={onClose}>Cancel</button>
             <button className="mt-btn primary" disabled={saving} onClick={save}>{saving ? 'Saving…' : 'Save settings'}</button>
@@ -943,13 +950,13 @@ export default function TasksPage() {
           <div className="mt-tabs">
             <div className={'mt-tab' + (view === 'board' ? ' active' : '')} onClick={() => setView('board')}><LayoutGrid size={14} />Board</div>
             <div className={'mt-tab' + (view === 'list' ? ' active' : '')} onClick={() => setView('list')}><ListIcon size={14} />List</div>
-            <div className={'mt-tab' + (view === 'mine' ? ' active' : '')} onClick={() => setView('mine')}><User size={14} />My tasks{myOverdue > 0 && <span style={{ marginLeft: 2, background: '#EF4444', color: '#fff', fontSize: 10, fontWeight: 700, borderRadius: 99, padding: '1px 6px' }}>{myOverdue}</span>}</div>
+            <div className={'mt-tab' + (view === 'mine' ? ' active' : '')} onClick={() => setView('mine')}><User size={14} />My tasks{myOverdue > 0 && <span style={{ marginLeft: 2, background: 'var(--mv-magenta)', color: '#fff', fontSize: 10, fontWeight: 700, borderRadius: 99, padding: '1px 6px' }}>{myOverdue}</span>}</div>
           </div>
         </div>
       </div>
 
       {tasksQuery.isLoading ? <div className="mt-loading" style={{ marginTop: 60 }}>Loading tasks…</div>
-        : tasksQuery.isError ? <div className="mt-loading" style={{ marginTop: 60, color: '#EF4444' }}>Couldn’t load tasks. Is the API deployed?</div>
+        : tasksQuery.isError ? <div className="mt-loading" style={{ marginTop: 60, color: 'var(--mv-magenta)' }}>Couldn’t load tasks. Is the API deployed?</div>
           : view === 'mine' ? (
             <MyTasksView myTasks={myTasks} me={me} bypass={bypass} staffList={staffList} taskById={taskById} onOpen={setOpenId} onNew={() => setCreating(true)} />
           ) : view === 'list' ? (
@@ -960,12 +967,12 @@ export default function TasksPage() {
                   {viewTasks.map(t => {
                     const od = isOverdue(t);
                     return <tr key={t.id} onClick={() => setOpenId(t.id)}>
-                      <td><div style={{ fontWeight: 600, color: '#0F172A' }}>{t.title}</div><div style={{ fontSize: 11, color: '#94A3B8' }}>{shortId(t.id)} · {SPACES[t.space]?.label}</div></td>
-                      <td>{t.assignee_id ? <div className="mt-assignee-cell"><Avatar name={t.assignee_name} id={t.assignee_id} size={24} /><span>{t.assignee_name}</span></div> : <span style={{ color: '#94A3B8' }}>Unassigned</span>}</td>
+                      <td><div style={{ fontWeight: 600, color: 'var(--mv-ink)' }}>{t.title}</div><div style={{ fontSize: 11, color: 'var(--mv-ink-45)' }}>{shortId(t.id)} · {SPACES[t.space]?.label}</div></td>
+                      <td>{t.assignee_id ? <div className="mt-assignee-cell"><Avatar name={t.assignee_name} id={t.assignee_id} size={24} /><span>{t.assignee_name}</span></div> : <span style={{ color: 'var(--mv-ink-45)' }}>Unassigned</span>}</td>
                       <td><Pill map={PRIORITY} k={t.priority} /></td>
                       <td><StatusTag k={t.status} /></td>
                       <td><span className={'mt-due' + (od ? ' overdue' : '')} style={{ fontSize: 12.5 }}>{fmtDate(t.due_date)}{od ? ' · overdue' : ''}</span></td>
-                      <td style={{ textAlign: 'center', color: '#94A3B8', fontWeight: 600, fontSize: 12 }}>{t.comment_count || 0} · {t.attachment_count || 0}</td>
+                      <td style={{ textAlign: 'center', color: 'var(--mv-ink-45)', fontWeight: 600, fontSize: 12 }}>{t.comment_count || 0} · {t.attachment_count || 0}</td>
                     </tr>;
                   })}
                   {viewTasks.length === 0 && <tr><td colSpan={6}><div className="mt-empty" style={{ padding: 40 }}>No tasks yet. Hit “New task” to create one.</div></td></tr>}

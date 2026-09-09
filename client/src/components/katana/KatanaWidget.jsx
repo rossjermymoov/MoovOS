@@ -11,21 +11,21 @@ import { X, Send, Sparkles, RefreshCw, ChevronDown, Mic, MicOff } from 'lucide-r
 
 // ─── Colours ──────────────────────────────────────────────────────────────────
 const C = {
-  bg:        '#FFFFFF',
-  surface:   '#F8FAFC',
-  card:      '#F1F5F9',
-  border:    'rgba(0,0,0,0.08)',
-  amber:     '#B45309',
-  amberDim:  'rgba(180,83,9,0.08)',
-  amberGlow: 'rgba(180,83,9,0.18)',
-  text:      '#0F172A',
-  muted:     '#64748B',
-  userBg:    '#FEF3C7',
-  userBorder:'rgba(180,83,9,0.25)',
+  bg:        'var(--mv-surface)',
+  surface:   'var(--mv-bg)',
+  card:      'var(--mv-bg)',
+  border:    'var(--mv-hairline)',
+  amber:     'var(--mv-amber-deep)',
+  amberDim:  'var(--mv-amber-100)',
+  amberGlow: 'var(--mv-amber-200)',
+  text:      'var(--mv-ink)',
+  muted:     'var(--mv-ink-52)',
+  userBg:    'var(--mv-amber-100)',
+  userBorder:'var(--mv-amber-200)',
 };
 
 // ─── Katana sword SVG icon ────────────────────────────────────────────────────
-function KatanaIcon({ size = 22, color = '#F59E0B' }) {
+function KatanaIcon({ size = 22, color = 'var(--mv-amber)' }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path d="M3 21L12 12M12 12L19 5M12 12L15 9" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
@@ -66,11 +66,11 @@ function MessageBubble({ msg }) {
       {!isUser && (
         <div style={{
           width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
-          background: `linear-gradient(135deg, ${C.amber}, #D97706)`,
+          background: `linear-gradient(135deg, ${C.amber}, var(--mv-amber))`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           marginRight: 8, marginTop: 2, boxShadow: `0 0 8px ${C.amberGlow}`,
         }}>
-          <KatanaIcon size={14} color="#FFFFFF" />
+          <KatanaIcon size={14} color="var(--mv-on-brand)" />
         </div>
       )}
       <div style={{
@@ -204,8 +204,8 @@ export default function KatanaWidget() {
           40% { transform: translateY(-5px); opacity: 1; }
         }
         @keyframes katana-pulse {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(245,158,11,0.4); }
-          50% { box-shadow: 0 0 0 8px rgba(245,158,11,0); }
+          0%, 100% { box-shadow: 0 0 0 0 var(--mv-amber-200); }
+          50% { box-shadow: 0 0 0 8px transparent; }
         }
         @keyframes katana-slide-up {
           from { opacity: 0; transform: translateY(16px) scale(0.97); }
@@ -219,28 +219,28 @@ export default function KatanaWidget() {
           position: 'fixed', bottom: 84, right: 24, zIndex: 9998,
           width: 400, height: 560,
           background: C.bg,
-          border: `1px solid rgba(245,158,11,0.2)`,
+          border: `1px solid var(--mv-amber-200)`,
           borderRadius: 16,
           display: 'flex', flexDirection: 'column',
-          boxShadow: `0 24px 64px rgba(0,0,0,0.6), 0 0 0 1px rgba(245,158,11,0.08)`,
+          boxShadow: `0 24px 64px rgba(0,0,0,0.6), 0 0 0 1px var(--mv-amber-100)`,
           animation: 'katana-slide-up 0.2s ease',
           overflow: 'hidden',
         }}>
           {/* Header */}
           <div style={{
             padding: '14px 16px',
-            background: `linear-gradient(135deg, rgba(245,158,11,0.12), rgba(245,158,11,0.04))`,
-            borderBottom: `1px solid rgba(245,158,11,0.15)`,
+            background: `linear-gradient(135deg, var(--mv-amber-100), color-mix(in srgb, var(--mv-amber) 4%, transparent))`,
+            borderBottom: `1px solid var(--mv-amber-200)`,
             display: 'flex', alignItems: 'center', gap: 10,
           }}>
             <div style={{
               width: 32, height: 32, borderRadius: '50%',
-              background: `linear-gradient(135deg, ${C.amber}, #D97706)`,
+              background: `linear-gradient(135deg, ${C.amber}, var(--mv-amber))`,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               boxShadow: `0 0 12px ${C.amberGlow}`,
               flexShrink: 0,
             }}>
-              <KatanaIcon size={18} color="#FFFFFF" />
+              <KatanaIcon size={18} color="var(--mv-on-brand)" />
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 14, fontWeight: 700, color: C.amber, letterSpacing: '0.03em' }}>
@@ -311,7 +311,7 @@ export default function KatanaWidget() {
                         transition: 'all 0.12s',
                       }}
                       onMouseEnter={e => {
-                        e.currentTarget.style.borderColor = 'rgba(245,158,11,0.3)';
+                        e.currentTarget.style.borderColor = 'var(--mv-amber-200)';
                         e.currentTarget.style.color = C.text;
                       }}
                       onMouseLeave={e => {
@@ -334,11 +334,11 @@ export default function KatanaWidget() {
               <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 10, padding: '0 4px' }}>
                 <div style={{
                   width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
-                  background: `linear-gradient(135deg, ${C.amber}, #D97706)`,
+                  background: `linear-gradient(135deg, ${C.amber}, var(--mv-amber))`,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   marginRight: 8, marginTop: 2,
                 }}>
-                  <KatanaIcon size={14} color="#FFFFFF" />
+                  <KatanaIcon size={14} color="var(--mv-on-brand)" />
                 </div>
                 <div style={{
                   background: C.card, border: `1px solid ${C.border}`,
@@ -352,9 +352,9 @@ export default function KatanaWidget() {
             {error && (
               <div style={{
                 margin: '6px 4px', padding: '8px 12px',
-                background: 'rgba(239,68,68,0.08)',
-                border: '1px solid rgba(239,68,68,0.2)',
-                borderRadius: 8, fontSize: 12, color: '#FCA5A5',
+                background: 'var(--mv-magenta-100)',
+                border: '1px solid var(--mv-magenta-200)',
+                borderRadius: 8, fontSize: 12, color: 'var(--mv-magenta-deep)',
               }}>
                 {error}
               </div>
@@ -372,13 +372,13 @@ export default function KatanaWidget() {
             <div style={{
               display: 'flex', gap: 8, alignItems: 'flex-end',
               background: C.card,
-              border: `1px solid rgba(245,158,11,0.2)`,
+              border: `1px solid var(--mv-amber-200)`,
               borderRadius: 10,
               padding: '8px 8px 8px 12px',
               transition: 'border-color 0.15s',
             }}
-              onFocusCapture={e => e.currentTarget.style.borderColor = 'rgba(245,158,11,0.45)'}
-              onBlurCapture={e => e.currentTarget.style.borderColor = 'rgba(245,158,11,0.2)'}
+              onFocusCapture={e => e.currentTarget.style.borderColor = 'color-mix(in srgb, var(--mv-amber) 45%, transparent)'}
+              onBlurCapture={e => e.currentTarget.style.borderColor = 'var(--mv-amber-200)'}
             >
               <textarea
                 ref={inputRef}
@@ -400,7 +400,7 @@ export default function KatanaWidget() {
                 onClick={speech.toggle}
                 title={speech.listening ? 'Stop listening' : 'Dictate question (en-GB)'}
                 style={{
-                  background: speech.listening ? C.amber : 'rgba(0,0,0,0.06)',
+                  background: speech.listening ? C.amber : 'color-mix(in srgb, var(--mv-ink) 6%, transparent)',
                   border: 'none', borderRadius: 7, cursor: 'pointer',
                   width: 32, height: 32, flexShrink: 0,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -409,7 +409,7 @@ export default function KatanaWidget() {
                 }}
               >
                 {speech.listening
-                  ? <MicOff size={13} color="#FFFFFF" />
+                  ? <MicOff size={13} color="var(--mv-on-brand)" />
                   : <Mic size={13} color={C.muted} />
                 }
               </button>
@@ -419,8 +419,8 @@ export default function KatanaWidget() {
                 disabled={!input.trim() || loading}
                 style={{
                   background: input.trim() && !loading
-                    ? `linear-gradient(135deg, ${C.amber}, #D97706)`
-                    : 'rgba(0,0,0,0.06)',
+                    ? `linear-gradient(135deg, ${C.amber}, var(--mv-amber))`
+                    : 'color-mix(in srgb, var(--mv-ink) 6%, transparent)',
                   border: 'none', borderRadius: 7, cursor: input.trim() && !loading ? 'pointer' : 'default',
                   width: 32, height: 32, flexShrink: 0,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -428,7 +428,7 @@ export default function KatanaWidget() {
                   boxShadow: input.trim() && !loading ? `0 0 12px ${C.amberGlow}` : 'none',
                 }}
               >
-                <Send size={14} color={input.trim() && !loading ? '#FFFFFF' : C.muted} />
+                <Send size={14} color={input.trim() && !loading ? 'var(--mv-on-brand)' : C.muted} />
               </button>
             </div>
             <div style={{ fontSize: 10.5, color: C.muted, marginTop: 6, textAlign: 'center' }}>
@@ -447,20 +447,20 @@ export default function KatanaWidget() {
           width: 52, height: 52, borderRadius: '50%',
           background: open
             ? C.surface
-            : `linear-gradient(135deg, ${C.amber}, #D97706)`,
-          border: open ? `1px solid rgba(245,158,11,0.3)` : 'none',
+            : `linear-gradient(135deg, ${C.amber}, var(--mv-amber))`,
+          border: open ? `1px solid var(--mv-amber-200)` : 'none',
           cursor: 'pointer',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           boxShadow: open
             ? `0 4px 20px rgba(0,0,0,0.4)`
-            : `0 4px 20px rgba(245,158,11,0.4), 0 0 0 0 rgba(245,158,11,0.4)`,
+            : `0 4px 20px var(--mv-amber-200), 0 0 0 0 var(--mv-amber-200)`,
           animation: !open ? 'katana-pulse 3s ease-in-out infinite' : 'none',
           transition: 'background 0.2s, box-shadow 0.2s',
         }}
       >
         {open
           ? <X size={20} color={C.amber} />
-          : <KatanaIcon size={24} color="#FFFFFF" />
+          : <KatanaIcon size={24} color="var(--mv-on-brand)" />
         }
       </button>
     </>

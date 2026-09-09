@@ -300,7 +300,7 @@ export default function ShipmentsPage() {
         {/* Tile 4: Total Gross Margin */}
         <div className="mv-kpi">
           <div className="mv-kpi-label">Total Gross Margin</div>
-          <div className="mv-kpi-value mv-num" style={{ color: totalMargin >= 0 ? 'var(--mv-green-deep, #059669)' : 'var(--mv-magenta-deep, #dc2626)' }}>
+          <div className="mv-kpi-value mv-num" style={{ color: totalMargin >= 0 ? 'var(--mv-green-deep)' : 'var(--mv-magenta-deep)' }}>
             £{totalMargin.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
           <div className="mv-kpi-sub">Sell revenue minus buy cost</div>
@@ -309,7 +309,7 @@ export default function ShipmentsPage() {
         {/* Tile 5: Gross Margin Percentage */}
         <div className="mv-kpi">
           <div className="mv-kpi-label">Gross Margin %</div>
-          <div className="mv-kpi-value mv-num" style={{ color: marginPct >= 0 ? 'var(--mv-green-deep, #059669)' : 'var(--mv-magenta-deep, #dc2626)' }}>
+          <div className="mv-kpi-value mv-num" style={{ color: marginPct >= 0 ? 'var(--mv-green-deep)' : 'var(--mv-magenta-deep)' }}>
             {marginPct}%
           </div>
           <div className="mv-kpi-sub">Blended profit margin</div>

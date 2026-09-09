@@ -17,21 +17,23 @@ import { getCourierLogo } from '../../utils/courierLogos';
 const api = axios.create({ baseURL: '/api' });
 
 // ── Design tokens ─────────────────────────────────────────────────────────────
+// Values now point at the app-wide mv- design tokens (client/src/styles/moov.css)
+// instead of hardcoded hex, so this screen follows light/dark theme switching.
 const C = {
-  bg:       '#F8FAFC',  // crisp slate
-  card:     '#FFFFFF',
-  border:   'rgba(0,0,0,0.08)',
-  green:    '#166534',
-  amber:    '#92400E',
-  red:      '#991B1B',
-  blue:     '#1E40AF',
-  text:     '#0F172A',
-  sub:      '#334155',
-  muted:    '#94A3B8',
-  greenDim: '#DCFCE7',
-  amberDim: '#FEF3C7',
-  redDim:   '#FEE2E2',
-  blueDim:  '#EFF6FF',
+  bg:       'var(--mv-bg)',
+  card:     'var(--mv-surface)',
+  border:   'var(--mv-hairline)',
+  green:    'var(--mv-green-deep)',
+  amber:    'var(--mv-amber-deep)',
+  red:      'var(--mv-magenta-deep)',
+  blue:     'var(--mv-teal)',
+  text:     'var(--mv-ink)',
+  sub:      'var(--mv-ink-78)',
+  muted:    'var(--mv-ink-45)',
+  greenDim: 'var(--mv-purple-100)',
+  amberDim: 'var(--mv-amber-100)',
+  redDim:   'var(--mv-magenta-100)',
+  blueDim:  'var(--mv-teal-100)',
 };
 
 // ── Status / priority config ──────────────────────────────────────────────────
@@ -68,15 +70,20 @@ const GROUPS = ['Claims', 'Queries', 'Billing', 'Technical'];
 // Badge colour driven strictly by the priority spectrum (matching the queue's
 // left-hand indicator strip), with completed tickets overriding to green.
 //   Closed/Resolved → green · Urgent → red · High → amber · Medium → yellow · Low → blue
-function ticketBadgeClasses(ticket) {
+// Returns an inline style object (mv- tokens) instead of Tailwind color
+// classes, plus any non-color classes (e.g. font-bold) to keep on the element.
+function ticketBadgeStyle(ticket) {
   const s = (ticket?.status || '').toLowerCase();
   const p = (ticket?.priority || '').toLowerCase();
   if (['resolved', 'resolved_claim_approved', 'resolved_claim_rejected', 'closed'].includes(s))
-    return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-  if (p === 'urgent') return 'bg-red-50 text-red-700 border-red-200 font-bold';
-  if (p === 'high')   return 'bg-amber-50 text-amber-700 border-amber-200 font-bold';
-  if (p === 'medium') return 'bg-yellow-50 text-yellow-700 border-yellow-200 font-bold';
-  return 'bg-blue-50 text-blue-700 border-blue-200'; // low / default
+    return { style: { background: 'var(--mv-purple-100)', color: 'var(--mv-green-deep)', borderColor: 'var(--mv-purple-200)' }, cls: '' };
+  if (p === 'urgent') return { style: { background: 'var(--mv-magenta-100)', color: 'var(--mv-magenta-deep)', borderColor: 'var(--mv-magenta-200)' }, cls: 'font-bold' };
+  if (p === 'high')   return { style: { background: 'var(--mv-amber-100)', color: 'var(--mv-amber-deep)', borderColor: 'var(--mv-amber-200)' }, cls: 'font-bold' };
+  // "medium" has no dedicated token in the mv- system (only urgent/high/low map
+  // cleanly onto magenta/amber/teal) — reusing the amber tint here, one shade
+  // lighter in weight than "high", is a judgement call (see report).
+  if (p === 'medium') return { style: { background: 'var(--mv-amber-100)', color: 'var(--mv-amber-deep)', borderColor: 'var(--mv-amber-200)' }, cls: 'font-bold' };
+  return { style: { background: 'var(--mv-teal-100)', color: 'var(--mv-teal)', borderColor: 'var(--mv-teal-200)' }, cls: '' }; // low / default
 }
 
 // Dynamic SLA countdown string from courier_sla_expires_at.
@@ -134,9 +141,9 @@ function useSpeechInput(setText) {
 // ── Sidebar card ──────────────────────────────────────────────────────────────
 function SbSection({ title, action, children }) {
   return (
-    <div style={{ padding: '18px 20px', borderBottom: '1px solid #F1F5F9' }}>
+    <div style={{ padding: '18px 20px', borderBottom: '1px solid var(--mv-hairline)' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: '#94A3B8', margin: 0 }}>{title}</p>
+        <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--mv-ink-45)', margin: 0 }}>{title}</p>
         {action}
       </div>
       {children}
@@ -147,22 +154,25 @@ function SbSection({ title, action, children }) {
 function SbRow({ label, children }) {
   return (
     <div style={{ display: 'flex', alignItems: 'flex-start', padding: '5px 0' }}>
-      <span style={{ fontSize: 11.5, color: '#94A3B8', fontWeight: 500, width: 90, flexShrink: 0, paddingTop: 1 }}>{label}</span>
-      <span style={{ fontSize: 12, color: '#1E293B', fontWeight: 500, flex: 1, textAlign: 'right', lineHeight: 1.4 }}>{children}</span>
+      <span style={{ fontSize: 11.5, color: 'var(--mv-ink-45)', fontWeight: 500, width: 90, flexShrink: 0, paddingTop: 1 }}>{label}</span>
+      <span style={{ fontSize: 12, color: 'var(--mv-ink)', fontWeight: 500, flex: 1, textAlign: 'right', lineHeight: 1.4 }}>{children}</span>
     </div>
   );
 }
 
 // ── Inline select (for sidebar fields) ───────────────────────────────────────
+// Note: the dropdown-chevron icon is a literal data-URI SVG, so its stroke
+// colour can't reference a CSS custom property — it stays a fixed hex that
+// approximates var(--mv-ink-45) in light mode (a known light-mode-only spot).
 function InlineSelect({ value, onChange, options, colorMap, fill = false }) {
-  const color = colorMap?.[value]?.color || '#1E293B';
+  const color = colorMap?.[value]?.color || 'var(--mv-ink)';
   return (
     <select
       value={value || ''}
       onChange={e => onChange(e.target.value)}
       style={{
-        width: '100%', maxWidth: fill ? 'none' : 170, background: '#fff',
-        border: '1px solid #E2E8F0', borderRadius: 6, outline: 'none',
+        width: '100%', maxWidth: fill ? 'none' : 170, background: 'var(--mv-surface)',
+        border: '1px solid var(--mv-hairline)', borderRadius: 6, outline: 'none',
         color, fontSize: 12, fontWeight: 500, cursor: 'pointer',
         padding: '5px 26px 5px 9px', textAlign: 'left', appearance: 'none',
         backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='3'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")",
@@ -209,7 +219,7 @@ function TrackingTimeline({ events }) {
       <div style={{
         position: 'absolute', left: 5, top: 7,
         width: 1.5, height: `calc(100% - 14px)`,
-        background: 'linear-gradient(to bottom, #6366F1, #10B981 40%, #E2E8F0)',
+        background: 'linear-gradient(to bottom, var(--mv-purple), var(--mv-green) 40%, color-mix(in srgb, var(--mv-ink) 12%, var(--mv-surface)))',
         borderRadius: 2,
       }} />
       {recent.map((ev, i) => (
@@ -218,14 +228,14 @@ function TrackingTimeline({ events }) {
           <div style={{
             position: 'absolute', left: -22, top: 2,
             width: 12, height: 12, borderRadius: '50%',
-            background: i === 0 ? '#6366F1' : i === 1 ? '#10B981' : '#E2E8F0',
-            border: `2px solid #fff`,
-            boxShadow: i === 0 ? '0 0 0 2.5px #C7D2FE' : i === 1 ? '0 0 0 2px #D1FAE5' : 'none',
+            background: i === 0 ? 'var(--mv-purple)' : i === 1 ? 'var(--mv-green)' : 'color-mix(in srgb, var(--mv-ink) 12%, var(--mv-surface))',
+            border: '2px solid var(--mv-surface)',
+            boxShadow: i === 0 ? '0 0 0 2.5px var(--mv-purple-200)' : i === 1 ? '0 0 0 2px var(--mv-purple-100)' : 'none',
           }} />
-          <div style={{ fontSize: 12, fontWeight: i === 0 ? 600 : 400, color: i === 0 ? '#0F172A' : '#475569', lineHeight: 1.3 }}>
+          <div style={{ fontSize: 12, fontWeight: i === 0 ? 600 : 400, color: i === 0 ? 'var(--mv-ink)' : 'var(--mv-ink-62)', lineHeight: 1.3 }}>
             {ev.description || ev.status?.replace(/_/g, ' ')}
           </div>
-          <div style={{ fontSize: 10, color: '#94A3B8', marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
+          <div style={{ fontSize: 10, color: 'var(--mv-ink-45)', marginTop: 2, fontVariantNumeric: 'tabular-nums' }}>
             {timeAgo(ev.event_at)}{ev.location ? ` · ${ev.location}` : ''}
           </div>
         </div>
@@ -324,8 +334,8 @@ function EmailHtml({ html }) {
     root.innerHTML =
       `<style>:host{display:block}` +
       `img{max-width:100%!important;height:auto}table{max-width:100%!important}` +
-      `a{color:#1d4ed8}*{word-break:break-word;overflow-wrap:break-word}</style>` +
-      `<div style="font:13px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#334155">${safe}</div>`;
+      `a{color:var(--mv-teal)}*{word-break:break-word;overflow-wrap:break-word}</style>` +
+      `<div style="font:13px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:var(--mv-ink-78)">${safe}</div>`;
   }, [html]);
   return <div ref={hostRef} />;
 }
@@ -356,24 +366,24 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
   const logoUrl = isCourier && courierCode ? getCourierLogo(courierCode) : null;
 
   // Card background + accent per direction
-  const cardBg = isNote             ? 'rgba(234,179,8,0.05)'
-    : dir === 'inbound_customer'     ? '#FFFFFF'
-    : dir === 'outbound_customer'    ? 'rgba(30,64,175,0.03)'
-    : dir === 'inbound_courier'      ? 'rgba(217,119,6,0.06)'
-    :                                  'rgba(217,119,6,0.03)';
+  const cardBg = isNote             ? 'color-mix(in srgb, var(--mv-amber) 5%, transparent)'
+    : dir === 'inbound_customer'     ? 'var(--mv-surface)'
+    : dir === 'outbound_customer'    ? 'color-mix(in srgb, var(--mv-teal) 3%, transparent)'
+    : dir === 'inbound_courier'      ? 'color-mix(in srgb, var(--mv-amber) 6%, transparent)'
+    :                                  'color-mix(in srgb, var(--mv-amber) 3%, transparent)';
 
-  const cardBorderLeft = isNote             ? '3px solid rgba(234,179,8,0.45)'
-    : dir === 'inbound_customer'             ? '3px solid rgba(30,64,175,0.35)'
-    : dir === 'inbound_courier'              ? '3px solid rgba(217,119,6,0.50)'
+  const cardBorderLeft = isNote             ? '3px solid color-mix(in srgb, var(--mv-amber) 45%, transparent)'
+    : dir === 'inbound_customer'             ? '3px solid color-mix(in srgb, var(--mv-teal) 35%, transparent)'
+    : dir === 'inbound_courier'              ? '3px solid color-mix(in srgb, var(--mv-amber) 50%, transparent)'
     :                                          'none';
 
   // Avatar colour
-  const avBg = isNote    ? '#FEF9C3'
-    : isOut              ? '#EDE9FE'
-    : isCourier          ? '#FEF3C7'
-    :                      '#DBEAFE';
+  const avBg = isNote    ? 'var(--mv-amber-100)'
+    : isOut              ? 'var(--mv-purple-100)'
+    : isCourier          ? 'var(--mv-amber-100)'
+    :                      'var(--mv-teal-100)';
   const avColor = isNote ? C.amber
-    : isOut              ? '#4F46E5'
+    : isOut              ? 'var(--mv-purple)'
     : isCourier          ? C.amber
     :                      C.blue;
   const avInitial = isNote ? '—'
@@ -434,33 +444,34 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
   const plainFallback = stripCidTokens(trimQuotedText(displayBody));
   const isInbound = dir.startsWith('inbound');
   const stepBadge = isNote
-    ? { label: 'Note',     cls: 'bg-amber-50 text-amber-700' }
+    ? { label: 'Note',     style: { background: 'var(--mv-amber-100)', color: 'var(--mv-amber-deep)' } }
     : isInbound
-      ? { label: 'Inbound',  cls: 'bg-blue-50 text-blue-700' }
-      : { label: 'Outbound', cls: 'bg-slate-100 text-slate-600' };
+      ? { label: 'Inbound',  style: { background: 'var(--mv-teal-100)', color: 'var(--mv-teal)' } }
+      : { label: 'Outbound', style: { background: 'var(--mv-bg)', color: 'var(--mv-ink-62)' } };
   const rowClass = (!isInbound && !isNote)
-    ? 'my-4 rounded-2xl border border-slate-100 bg-slate-50/70 px-6 py-8'
-    : 'border-b border-slate-100 py-10 last:border-b-0';
+    ? 'my-4 rounded-2xl border px-6 py-8'
+    : 'border-b py-10 last:border-b-0';
+  const rowStyle = { borderColor: 'var(--mv-hairline)', ...((!isInbound && !isNote) ? { background: 'var(--mv-bg)' } : {}) };
 
   // The server returns `body` already parsed down to just the new message.
   // Fall back to client-side trimming for older payloads.
   const bodyText = (email.body && email.body.trim()) ? email.body.trim() : plainFallback;
 
-  const dirBadge = isNote ? { label: 'Note', bg: '#FEF9C3', color: '#854D0E', border: '#FDE047' }
-    : dir === 'inbound_customer'  ? { label: 'Inbound', bg: '#DBEAFE', color: '#1D4ED8', border: '#93C5FD' }
-    : dir === 'outbound_customer' ? { label: 'Sent', bg: '#DCFCE7', color: '#166534', border: '#86EFAC' }
-    : dir === 'inbound_courier'   ? { label: 'Courier', bg: '#FEF3C7', color: '#92400E', border: '#FDE68A' }
-    :                               { label: 'To courier', bg: '#DCFCE7', color: '#166534', border: '#86EFAC' };
+  const dirBadge = isNote ? { label: 'Note', bg: 'var(--mv-amber-100)', color: 'var(--mv-amber-deep)', border: 'var(--mv-amber-200)' }
+    : dir === 'inbound_customer'  ? { label: 'Inbound', bg: 'var(--mv-teal-100)', color: 'var(--mv-teal)', border: 'var(--mv-teal-200)' }
+    : dir === 'outbound_customer' ? { label: 'Sent', bg: 'var(--mv-purple-100)', color: 'var(--mv-green-deep)', border: 'var(--mv-purple-200)' }
+    : dir === 'inbound_courier'   ? { label: 'Courier', bg: 'var(--mv-amber-100)', color: 'var(--mv-amber-deep)', border: 'var(--mv-amber-200)' }
+    :                               { label: 'To courier', bg: 'var(--mv-purple-100)', color: 'var(--mv-green-deep)', border: 'var(--mv-purple-200)' };
 
   return (
-    <article className={`w-full max-w-none ${rowClass}`}>
+    <article className={`w-full max-w-none ${rowClass}`} style={rowStyle}>
 
       {/* Minimalist header */}
       <header className="mb-5 flex items-center gap-3">
         {/* Avatar */}
         <div
           className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full"
-          style={{ background: logoUrl ? '#fff' : avBg, border: logoUrl ? `1px solid ${C.border}` : 'none' }}
+          style={{ background: logoUrl ? 'var(--mv-surface)' : avBg, border: logoUrl ? `1px solid ${C.border}` : 'none' }}
         >
           {logoUrl
             ? <img src={logoUrl} alt="" style={{ width: '100%', objectFit: 'contain', padding: 4 }} />
@@ -470,20 +481,20 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
         {/* Sender info */}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <span className="truncate text-sm font-semibold text-slate-800">{senderLabel}</span>
+            <span className="truncate text-sm font-semibold" style={{ color: 'var(--mv-ink)' }}>{senderLabel}</span>
             {isDraft && (
-              <span className="shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">AI draft</span>
+              <span className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium" style={{ background: 'var(--mv-purple-100)', color: 'var(--mv-green-deep)' }}>AI draft</span>
             )}
           </div>
           {email.from_address && !isOut && (
-            <p className="truncate text-xs text-slate-400">{email.from_address}</p>
+            <p className="truncate text-xs" style={{ color: 'var(--mv-ink-45)' }}>{email.from_address}</p>
           )}
         </div>
         {/* Direction badge + timestamp */}
-        <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${stepBadge.cls}`}>
+        <span className="shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium" style={stepBadge.style}>
           {stepBadge.label}
         </span>
-        <time className="shrink-0 text-xs text-slate-400">{fmtDate(ts)}</time>
+        <time className="shrink-0 text-xs" style={{ color: 'var(--mv-ink-45)' }}>{fmtDate(ts)}</time>
       </header>
 
       {/* Body — full width, no fixed height, no inner scroll */}
@@ -493,9 +504,9 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
             value={editBody}
             onChange={e => setEditBody(e.target.value)}
             style={{
-              width: '100%', minHeight: 120, background: '#FAFAFA',
-              border: '1px solid #E2E8F0', borderRadius: 8,
-              color: '#334155', fontSize: 13, padding: 10, resize: 'vertical',
+              width: '100%', minHeight: 120, background: 'var(--mv-bg)',
+              border: '1px solid var(--mv-hairline)', borderRadius: 8,
+              color: 'var(--mv-ink-78)', fontSize: 13, padding: 10, resize: 'vertical',
               fontFamily: 'inherit', boxSizing: 'border-box', outline: 'none', lineHeight: 1.65,
             }}
           />
@@ -504,8 +515,8 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
             <EmailHtml html={email.html_body} />
           </div>
         ) : (
-          <pre className="m-0 h-auto w-full max-w-none whitespace-pre-wrap break-words font-sans text-base leading-relaxed text-slate-800">
-            {bodyText || <span className="italic text-slate-400">No content</span>}
+          <pre className="m-0 h-auto w-full max-w-none whitespace-pre-wrap break-words font-sans text-base leading-relaxed" style={{ color: 'var(--mv-ink)' }}>
+            {bodyText || <span className="italic" style={{ color: 'var(--mv-ink-45)' }}>No content</span>}
           </pre>
         )}
 
@@ -530,7 +541,7 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
                   width: 32, height: 32, borderRadius: 8,
                   border: `0.5px solid ${C.border}`,
                   background: speech.listening ? C.blue : C.card,
-                  color: speech.listening ? '#fff' : C.muted,
+                  color: speech.listening ? 'var(--mv-on-brand)' : C.muted,
                   cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}>
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -540,7 +551,7 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
                 </button>
                 <button onClick={submitRevision} disabled={revising || !reviseText.trim()} style={{
                   padding: '0 14px', height: 32, borderRadius: 8, border: 'none',
-                  background: C.blue, color: '#fff', fontSize: 12, fontWeight: 500,
+                  background: C.blue, color: 'var(--mv-on-brand)', fontSize: 12, fontWeight: 500,
                   cursor: (revising || !reviseText.trim()) ? 'not-allowed' : 'pointer',
                   opacity: (revising || !reviseText.trim()) ? 0.5 : 1,
                   display: 'flex', alignItems: 'center', gap: 5,
@@ -560,7 +571,7 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={() => { doApprove(editBody); setEditMode(false); }} disabled={approving} style={{
                   padding: '6px 14px', borderRadius: 8, border: 'none',
-                  background: C.green, color: '#fff', fontSize: 12, fontWeight: 500,
+                  background: C.green, color: 'var(--mv-on-brand)', fontSize: 12, fontWeight: 500,
                   cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5,
                 }}>
                   <CheckCircle2 size={11} /> {approving ? 'Saving…' : 'Approve & send'}
@@ -576,7 +587,7 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={() => doApprove()} disabled={approving} style={{
                   padding: '6px 14px', borderRadius: 8, border: 'none',
-                  background: C.green, color: '#fff', fontSize: 12, fontWeight: 500,
+                  background: C.green, color: 'var(--mv-on-brand)', fontSize: 12, fontWeight: 500,
                   opacity: approving ? 0.6 : 1, cursor: 'pointer',
                   display: 'flex', alignItems: 'center', gap: 5,
                 }}>
@@ -597,8 +608,8 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
                   <Edit2 size={11} /> Edit
                 </button>
                 <button onClick={discardDraft} style={{
-                  padding: '6px 12px', borderRadius: 8, border: '0.5px solid #FCA5A5',
-                  background: 'transparent', color: '#DC2626', fontSize: 12, cursor: 'pointer',
+                  padding: '6px 12px', borderRadius: 8, border: '0.5px solid var(--mv-magenta-200)',
+                  background: 'transparent', color: 'var(--mv-magenta)', fontSize: 12, cursor: 'pointer',
                   display: 'flex', alignItems: 'center', gap: 5, marginLeft: 'auto',
                 }}>
                   🗑️ Discard Draft
@@ -661,24 +672,24 @@ function ComposeBar({ queryId, courierName, onSent }) {
   }
 
   return (
-    <div style={{ flexShrink: 0, borderTop: '1px solid #E2E8F0', background: '#fff' }}>
+    <div style={{ flexShrink: 0, borderTop: '1px solid var(--mv-divider)', background: 'var(--mv-surface)' }}>
       {/* Premium tab bar */}
-      <div style={{ display: 'flex', padding: '10px 16px 0', gap: 2, borderBottom: '1px solid #E2E8F0', background: '#fff' }}>
+      <div style={{ display: 'flex', padding: '10px 16px 0', gap: 2, borderBottom: '1px solid var(--mv-hairline)', background: 'var(--mv-surface)' }}>
         {tabs.map(t => (
           <button key={t.key} onClick={() => switchTab(t.key)} style={{
             padding: '6px 12px',
-            border: active === t.key ? '1px solid #E2E8F0' : 'none',
-            borderBottom: active === t.key ? '2px solid #0F172A' : '2px solid transparent',
+            border: active === t.key ? '1px solid var(--mv-hairline)' : 'none',
+            borderBottom: active === t.key ? '2px solid var(--mv-ink)' : '2px solid transparent',
             borderRadius: 0,
             background: 'transparent',
-            color: active === t.key ? '#0F172A' : '#94A3B8',
+            color: active === t.key ? 'var(--mv-ink)' : 'var(--mv-ink-45)',
             fontSize: 12.5, fontWeight: active === t.key ? 700 : 500,
             cursor: 'pointer', marginBottom: 0,
             display: 'flex', alignItems: 'center', gap: 6,
             transition: 'all 0.1s', fontFamily: 'inherit',
           }}
-            onMouseEnter={e => { if (active !== t.key) e.currentTarget.style.color = '#64748B'; }}
-            onMouseLeave={e => { if (active !== t.key) e.currentTarget.style.color = '#94A3B8'; }}
+            onMouseEnter={e => { if (active !== t.key) e.currentTarget.style.color = 'var(--mv-ink-52)'; }}
+            onMouseLeave={e => { if (active !== t.key) e.currentTarget.style.color = 'var(--mv-ink-45)'; }}
           >
             <t.icon size={12} />
             {t.label}
@@ -722,8 +733,8 @@ function ComposeBar({ queryId, courierName, onSent }) {
               {active !== 'note' && (
                 <button onClick={generateDraft} disabled={generating} style={{
                   display: 'flex', alignItems: 'center', gap: 5, padding: '5px 11px',
-                  borderRadius: 6, border: '1px solid #E2E8F0', background: '#fff',
-                  color: generating ? '#94A3B8' : '#6366F1', fontSize: 12,
+                  borderRadius: 6, border: '1px solid var(--mv-hairline)', background: 'var(--mv-surface)',
+                  color: generating ? 'var(--mv-ink-45)' : 'var(--mv-purple)', fontSize: 12,
                   cursor: generating ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
                 }}>
                   <Sparkles size={12} />
@@ -732,8 +743,8 @@ function ComposeBar({ queryId, courierName, onSent }) {
               )}
               <button style={{
                 padding: '5px 11px', borderRadius: 6,
-                border: '1px solid #E2E8F0', background: '#fff',
-                color: '#64748B', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
+                border: '1px solid var(--mv-hairline)', background: 'var(--mv-surface)',
+                color: 'var(--mv-ink-52)', fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
               }}>
                 Template
               </button>
@@ -741,8 +752,8 @@ function ComposeBar({ queryId, courierName, onSent }) {
             <button onClick={send} disabled={sending || !text.trim()} style={{
               display: 'flex', alignItems: 'center', gap: 5, padding: '7px 18px',
               borderRadius: 7, border: 'none',
-              background: text.trim() ? '#0F172A' : '#CBD5E1',
-              color: '#fff', fontSize: 12, fontWeight: 600,
+              background: text.trim() ? 'var(--mv-ink)' : 'color-mix(in srgb, var(--mv-ink) 22%, var(--mv-surface))',
+              color: 'var(--mv-on-brand)', fontSize: 12, fontWeight: 600,
               cursor: sending || !text.trim() ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
             }}>
               <Send size={12} />
@@ -873,19 +884,25 @@ export default function TicketDetailPage() {
       <div style={{ flexShrink: 0 }}>
 
         {/* ── Unified Command Banner ──────────────────────────────────────── */}
-        <div className="flex w-full items-center justify-between border-b border-slate-200 bg-white p-6">
+        <div className="flex w-full items-center justify-between border-b p-6" style={{ borderColor: 'var(--mv-divider)', background: 'var(--mv-surface)' }}>
           {/* Left — back + identity */}
           <div className="flex min-w-0 items-center">
             <button
               onClick={() => navigate('/queries')}
-              className="mr-4 flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-bold text-slate-500 transition-colors hover:text-slate-800"
+              className="mr-4 flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-bold transition-colors"
+              style={{ borderColor: 'var(--mv-hairline)', background: 'var(--mv-bg)', color: 'var(--mv-ink-52)' }}
+              onMouseEnter={e => { e.currentTarget.style.color = 'var(--mv-ink)'; }}
+              onMouseLeave={e => { e.currentTarget.style.color = 'var(--mv-ink-52)'; }}
             >
               ❮ Back to Queue
             </button>
-            <span className={`mr-3 inline-flex shrink-0 items-center rounded-md border px-3 py-1 text-sm font-bold tracking-wide ${ticketBadgeClasses(ticket)}`}>
+            <span
+              className={`mr-3 inline-flex shrink-0 items-center rounded-md border px-3 py-1 text-sm font-bold tracking-wide ${ticketBadgeStyle(ticket).cls}`}
+              style={ticketBadgeStyle(ticket).style}
+            >
               Moov-{ticket.ticket_number}
             </span>
-            <span className="truncate text-xl font-black tracking-tight text-slate-900">
+            <span className="truncate text-xl font-black tracking-tight" style={{ color: 'var(--mv-ink)' }}>
               {ticket.customer_name || ticket.subject || 'Ticket'}
             </span>
           </div>
@@ -893,17 +910,20 @@ export default function TicketDetailPage() {
           {/* Right — resolution control */}
           <button
             onClick={() => patch.mutate({ status: 'resolved' })}
-            className="flex shrink-0 items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-bold text-white shadow-sm shadow-emerald-100 transition-all hover:bg-emerald-700"
+            className="flex shrink-0 items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-bold transition-all"
+            style={{ background: 'var(--mv-green)', color: 'var(--mv-on-brand)', boxShadow: '0 1px 2px 0 color-mix(in srgb, var(--mv-green) 30%, transparent)' }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'var(--mv-green-deep)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'var(--mv-green)'; }}
           >
             ✓ Mark as Resolved
           </button>
         </div>
 
         {/* ── Streamlined Meta Control Shelf ──────────────────────────────── */}
-        <div className="flex items-center gap-6 border-b border-slate-200 bg-slate-50/50 px-6 py-3.5 text-sm font-medium text-slate-600">
+        <div className="flex items-center gap-6 border-b px-6 py-3.5 text-sm font-medium" style={{ borderColor: 'var(--mv-divider)', background: 'var(--mv-bg)', color: 'var(--mv-ink-62)' }}>
           {/* Assigned To */}
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-wide text-slate-400">Assigned</span>
+            <span className="text-xs font-bold uppercase tracking-wide" style={{ color: 'var(--mv-ink-45)' }}>Assigned</span>
             <InlineSelect
               value={ticket.assigned_to || ''}
               onChange={v => patch.mutate({ assigned_to: v || null })}
@@ -916,7 +936,7 @@ export default function TicketDetailPage() {
 
           {/* Group */}
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-wide text-slate-400">Group</span>
+            <span className="text-xs font-bold uppercase tracking-wide" style={{ color: 'var(--mv-ink-45)' }}>Group</span>
             <InlineSelect
               value={ticket.group_name || ''}
               onChange={v => patch.mutate({ group_name: v || null })}
@@ -926,24 +946,29 @@ export default function TicketDetailPage() {
 
           {/* Priority — high-visibility colour-coded badge */}
           <div className="flex items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-wide text-slate-400">Priority</span>
-            <span className={`inline-flex items-center rounded-md border px-2.5 py-1 text-xs font-bold uppercase tracking-wide ${ticketBadgeClasses(ticket)}`}>
+            <span className="text-xs font-bold uppercase tracking-wide" style={{ color: 'var(--mv-ink-45)' }}>Priority</span>
+            <span
+              className={`inline-flex items-center rounded-md border px-2.5 py-1 text-xs font-bold uppercase tracking-wide ${ticketBadgeStyle(ticket).cls}`}
+              style={ticketBadgeStyle(ticket).style}
+            >
               {(PRIORITY_CFG[ticket.priority] || PRIORITY_CFG.medium).label}
             </span>
           </div>
 
           {/* SLA Target — live countdown, eye-catching highlight box */}
           <div className="ml-auto flex items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-wide text-slate-400">SLA Target</span>
+            <span className="text-xs font-bold uppercase tracking-wide" style={{ color: 'var(--mv-ink-45)' }}>SLA Target</span>
             {slaText ? (
-              <span className={`inline-flex items-center rounded-lg border px-3 py-1.5 text-sm font-bold tabular-nums ${
-                ticket.courier_sla_breached
-                  ? 'border-red-200 bg-red-50 text-red-700 animate-pulse'
-                  : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
+              <span
+                className={`inline-flex items-center rounded-lg border px-3 py-1.5 text-sm font-bold tabular-nums ${ticket.courier_sla_breached ? 'animate-pulse' : ''}`}
+                style={ticket.courier_sla_breached
+                  ? { borderColor: 'var(--mv-magenta-200)', background: 'var(--mv-magenta-100)', color: 'var(--mv-magenta-deep)' }
+                  : { borderColor: 'var(--mv-purple-200)', background: 'var(--mv-purple-100)', color: 'var(--mv-green-deep)' }}
+              >
                 {slaText}
               </span>
             ) : (
-              <span className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-semibold text-slate-400">
+              <span className="inline-flex items-center rounded-lg border px-3 py-1.5 text-sm font-semibold" style={{ borderColor: 'var(--mv-hairline)', background: 'var(--mv-surface)', color: 'var(--mv-ink-45)' }}>
                 No SLA set
               </span>
             )}
@@ -955,21 +980,21 @@ export default function TicketDetailPage() {
       <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
 
         {/* ── Left: parallel dual-track conversation + compose ── */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, overflow: 'hidden', background: '#F8FAFC' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0, overflow: 'hidden', background: 'var(--mv-bg)' }}>
 
           {/* Two lanes, side by side: Customer Face (Track A) + Courier Face (Track B).
               Billing/Technical tickets hide the courier lane for a clean CRM view. */}
           <div className={`grid min-h-0 flex-1 gap-0 overflow-hidden ${showCourierTab ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
 
             {/* Track A — Customer Face */}
-            <div className="flex min-h-0 flex-col border-r border-slate-200 bg-white">
-              <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-5 py-3">
-                <span className="text-xs font-extrabold uppercase tracking-wide text-blue-600">👤 Customer comms</span>
-                <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-bold text-blue-700">{customerEmails.length}</span>
+            <div className="flex min-h-0 flex-col border-r" style={{ borderColor: 'var(--mv-divider)', background: 'var(--mv-surface)' }}>
+              <div className="flex shrink-0 items-center justify-between border-b px-5 py-3" style={{ borderColor: 'var(--mv-hairline)' }}>
+                <span className="text-xs font-extrabold uppercase tracking-wide" style={{ color: 'var(--mv-teal)' }}>👤 Customer comms</span>
+                <span className="rounded-full px-2 py-0.5 text-xs font-bold" style={{ background: 'var(--mv-teal-100)', color: 'var(--mv-teal)' }}>{customerEmails.length}</span>
               </div>
               <div ref={messagesRef} className="min-h-0 flex-1 overflow-y-auto p-6">
                 {customerEmails.length === 0 ? (
-                  <div className="py-12 text-center text-sm text-slate-400">No customer messages yet</div>
+                  <div className="py-12 text-center text-sm" style={{ color: 'var(--mv-ink-45)' }}>No customer messages yet</div>
                 ) : customerEmails.map(email => (
                   <ThreadItem
                     key={email.id} email={email} queryId={id}
@@ -982,16 +1007,16 @@ export default function TicketDetailPage() {
 
             {/* Track B — Courier Face */}
             {showCourierTab && (
-              <div className="flex min-h-0 flex-col bg-white">
-                <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-5 py-3">
-                  <span className="text-xs font-extrabold uppercase tracking-wide text-amber-600">
+              <div className="flex min-h-0 flex-col" style={{ background: 'var(--mv-surface)' }}>
+                <div className="flex shrink-0 items-center justify-between border-b px-5 py-3" style={{ borderColor: 'var(--mv-hairline)' }}>
+                  <span className="text-xs font-extrabold uppercase tracking-wide" style={{ color: 'var(--mv-amber-deep)' }}>
                     🚚 Courier comms{ticket.courier_name ? ` · ${ticket.courier_name}` : ''}
                   </span>
-                  <span className="rounded-full bg-amber-50 px-2 py-0.5 text-xs font-bold text-amber-700">{courierEmails.length}</span>
+                  <span className="rounded-full px-2 py-0.5 text-xs font-bold" style={{ background: 'var(--mv-amber-100)', color: 'var(--mv-amber-deep)' }}>{courierEmails.length}</span>
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto p-6">
                   {courierEmails.length === 0 ? (
-                    <div className="py-12 text-center text-sm text-slate-400">No courier correspondence yet</div>
+                    <div className="py-12 text-center text-sm" style={{ color: 'var(--mv-ink-45)' }}>No courier correspondence yet</div>
                   ) : courierEmails.map(email => (
                     <ThreadItem
                       key={email.id} email={email} queryId={id}
@@ -1014,8 +1039,8 @@ export default function TicketDetailPage() {
 
         {/* ── Right sidebar ── */}
         <div style={{
-          width: 264, flexShrink: 0, background: '#fff',
-          borderLeft: '1px solid #E2E8F0',
+          width: 264, flexShrink: 0, background: 'var(--mv-surface)',
+          borderLeft: '1px solid var(--mv-divider)',
           overflowY: 'auto', padding: 0,
         }}>
 
@@ -1026,7 +1051,7 @@ export default function TicketDetailPage() {
             consignment ? (
               <button onClick={() => navigate(`/tracking?q=${encodeURIComponent(consignment)}`)}
                 style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700,
-                  color: '#6366F1', background: '#EEF2FF', border: '1px solid #C7D2FE',
+                  color: 'var(--mv-purple)', background: 'var(--mv-purple-100)', border: '1px solid var(--mv-purple-200)',
                   borderRadius: 6, padding: '3px 9px', cursor: 'pointer' }}>
                 <ExternalLink size={10} /> Track
               </button>
@@ -1038,17 +1063,17 @@ export default function TicketDetailPage() {
                 {(courierLogo || ticket.courier_name) && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                     {courierLogo && (
-                      <div style={{ width: 28, height: 28, borderRadius: 7, border: '1px solid #E2E8F0',
-                        background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      <div style={{ width: 28, height: 28, borderRadius: 7, border: '1px solid var(--mv-hairline)',
+                        background: 'var(--mv-surface)', display: 'flex', alignItems: 'center', justifyContent: 'center',
                         overflow: 'hidden', flexShrink: 0 }}>
                         <img src={courierLogo} alt="" style={{ width: '100%', objectFit: 'contain', padding: 3 }} />
                       </div>
                     )}
-                    <span style={{ fontSize: 12.5, fontWeight: 600, color: '#0F172A' }}>{ticket.courier_name}</span>
+                    <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--mv-ink)' }}>{ticket.courier_name}</span>
                     {parcel?.status && (
                       <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 700, textTransform: 'capitalize',
-                        color: parcel.status === 'delivered' ? '#166534' : '#92400E',
-                        background: parcel.status === 'delivered' ? '#F0FDF4' : '#FFFBEB',
+                        color: parcel.status === 'delivered' ? 'var(--mv-green-deep)' : 'var(--mv-amber-deep)',
+                        background: parcel.status === 'delivered' ? 'var(--mv-purple-100)' : 'var(--mv-amber-100)',
                         padding: '2px 8px', borderRadius: 20, border: '1px solid transparent', flexShrink: 0 }}>
                         {parcel.status.replace(/_/g, ' ')}
                       </span>
@@ -1056,12 +1081,12 @@ export default function TicketDetailPage() {
                   </div>
                 )}
                 {/* Consignment chip */}
-                <div style={{ fontFamily: 'monospace', fontSize: 12.5, fontWeight: 700, color: '#0F172A',
-                  background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: 8,
+                <div style={{ fontFamily: 'monospace', fontSize: 12.5, fontWeight: 700, color: 'var(--mv-ink)',
+                  background: 'var(--mv-bg)', border: '1px solid var(--mv-hairline)', borderRadius: 8,
                   padding: '8px 12px', marginBottom: 10, letterSpacing: '0.03em',
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <span>{consignment}</span>
-                  <span style={{ fontSize: 10, color: '#94A3B8', fontWeight: 400, cursor: 'pointer' }}
+                  <span style={{ fontSize: 10, color: 'var(--mv-ink-45)', fontWeight: 400, cursor: 'pointer' }}
                     onClick={() => navigator.clipboard?.writeText(consignment)}
                     title="Copy to clipboard">copy</span>
                 </div>
@@ -1077,35 +1102,35 @@ export default function TicketDetailPage() {
                 )}
                 {parcel?.delivered_at && (
                   <SbRow label="Delivered">
-                    <span style={{ fontSize: 12, fontWeight: 600, color: '#166534' }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--mv-green-deep)' }}>
                       {new Date(parcel.delivered_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                     </span>
                   </SbRow>
                 )}
                 {/* Tracking timeline — appears automatically when events exist */}
                 {trackEvents.length > 0 && (
-                  <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid #F1F5F9' }}>
+                  <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--mv-hairline)' }}>
                     <p style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
-                      textTransform: 'uppercase', color: '#94A3B8', marginBottom: 12 }}>
+                      textTransform: 'uppercase', color: 'var(--mv-ink-45)', marginBottom: 12 }}>
                       {trackEvents.length} event{trackEvents.length !== 1 ? 's' : ''}
                     </p>
                     <TrackingTimeline events={trackEvents} />
                   </div>
                 )}
                 {trackEvents.length === 0 && (
-                  <div style={{ marginTop: 10, padding: '8px 10px', background: '#F8FAFC',
-                    borderRadius: 7, border: '1px solid #F1F5F9', textAlign: 'center' }}>
-                    <p style={{ fontSize: 11, color: '#CBD5E1', margin: 0 }}>No tracking events yet</p>
+                  <div style={{ marginTop: 10, padding: '8px 10px', background: 'var(--mv-bg)',
+                    borderRadius: 7, border: '1px solid var(--mv-hairline)', textAlign: 'center' }}>
+                    <p style={{ fontSize: 11, color: 'var(--mv-ink-45)', margin: 0 }}>No tracking events yet</p>
                   </div>
                 )}
               </>
             ) : (
               /* No consignment linked */
-              <div style={{ padding: '16px 12px', background: '#F8FAFC', borderRadius: 10,
-                border: '1px dashed #E2E8F0', textAlign: 'center' }}>
+              <div style={{ padding: '16px 12px', background: 'var(--mv-bg)', borderRadius: 10,
+                border: '1px dashed var(--mv-hairline)', textAlign: 'center' }}>
                 <div style={{ fontSize: 24, marginBottom: 8 }}>📦</div>
-                <p style={{ fontSize: 12, fontWeight: 600, color: '#94A3B8', margin: '0 0 3px' }}>No parcel linked</p>
-                <p style={{ fontSize: 11, color: '#CBD5E1', margin: 0 }}>No consignment number on this ticket</p>
+                <p style={{ fontSize: 12, fontWeight: 600, color: 'var(--mv-ink-45)', margin: '0 0 3px' }}>No parcel linked</p>
+                <p style={{ fontSize: 11, color: 'var(--mv-ink-45)', margin: 0 }}>No consignment number on this ticket</p>
               </div>
             )}
           </SbSection>
@@ -1115,19 +1140,19 @@ export default function TicketDetailPage() {
             <SbSection title="Customer">
               {/* Avatar + name card */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14,
-                padding: '10px 12px', background: '#F8FAFC', borderRadius: 10, border: '1px solid #E2E8F0' }}>
-                <div style={{ width: 36, height: 36, borderRadius: '50%', background: '#DBEAFE',
-                  border: '2px solid #BFDBFE', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 14, fontWeight: 800, color: '#1D4ED8', flexShrink: 0, letterSpacing: '-0.02em' }}>
+                padding: '10px 12px', background: 'var(--mv-bg)', borderRadius: 10, border: '1px solid var(--mv-hairline)' }}>
+                <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--mv-teal-100)',
+                  border: '2px solid var(--mv-teal-200)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 14, fontWeight: 800, color: 'var(--mv-teal)', flexShrink: 0, letterSpacing: '-0.02em' }}>
                   {(ticket.customer_name || ticket.sender_email || '?')[0].toUpperCase()}
                 </div>
                 <div style={{ minWidth: 0 }}>
-                  <p style={{ fontSize: 13, fontWeight: 700, color: '#0F172A', margin: 0,
+                  <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--mv-ink)', margin: 0,
                     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {ticket.customer_name || ticket.sender_email}
                   </p>
                   {ticket.customer_name && ticket.sender_email && (
-                    <p style={{ fontSize: 11, color: '#94A3B8', margin: '2px 0 0',
+                    <p style={{ fontSize: 11, color: 'var(--mv-ink-45)', margin: '2px 0 0',
                       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {ticket.sender_email}
                     </p>
@@ -1137,8 +1162,8 @@ export default function TicketDetailPage() {
               {ticket.customer_id && (
                 <button onClick={() => navigate(`/customers/${ticket.customer_id}`)}
                   style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    gap: 5, padding: '7px 0', borderRadius: 8, border: '1px solid #C7D2FE',
-                    background: '#EEF2FF', color: '#4338CA', fontSize: 12, fontWeight: 600,
+                    gap: 5, padding: '7px 0', borderRadius: 8, border: '1px solid var(--mv-purple-200)',
+                    background: 'var(--mv-purple-100)', color: 'var(--mv-purple)', fontSize: 12, fontWeight: 600,
                     cursor: 'pointer' }}>
                   View account →
                 </button>
@@ -1151,18 +1176,18 @@ export default function TicketDetailPage() {
           <SbSection title="Claim">
             {/* Alert when no formal claim yet */}
             {!ticket.claim_number && (
-              <div style={{ background: '#FFF7ED', border: '1px solid #FED7AA', borderRadius: 10,
+              <div style={{ background: 'var(--mv-amber-100)', border: '1px solid var(--mv-amber-200)', borderRadius: 10,
                 padding: '10px 12px', marginBottom: 12 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                   <svg width="13" height="13" fill="none" viewBox="0 0 14 14">
-                    <path d="M7 2v4.5M7 9.5v.5" stroke="#C2410C" strokeWidth="1.5" strokeLinecap="round"/>
-                    <circle cx="7" cy="7" r="6" stroke="#C2410C" strokeWidth="1.4"/>
+                    <path d="M7 2v4.5M7 9.5v.5" style={{ stroke: 'var(--mv-amber-deep)' }} strokeWidth="1.5" strokeLinecap="round"/>
+                    <circle cx="7" cy="7" r="6" style={{ stroke: 'var(--mv-amber-deep)' }} strokeWidth="1.4"/>
                   </svg>
                   <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.07em',
-                    textTransform: 'uppercase', color: '#C2410C' }}>No claim raised yet</span>
+                    textTransform: 'uppercase', color: 'var(--mv-amber-deep)' }}>No claim raised yet</span>
                 </div>
                 {ticket.claim_amount && (
-                  <p style={{ fontSize: 11.5, color: '#9A3412', margin: 0, lineHeight: 1.5 }}>
+                  <p style={{ fontSize: 11.5, color: 'var(--mv-amber-deep)', margin: 0, lineHeight: 1.5 }}>
                     Indicated value: <strong>£{Number(ticket.claim_amount).toFixed(2)}</strong>
                   </p>
                 )}
@@ -1172,7 +1197,7 @@ export default function TicketDetailPage() {
               <span style={{ fontSize: 12, color: C.text, fontWeight: 600 }}>{ticket.claim_number}</span>
             </SbRow>}
             <SbRow label="Amount">
-              <span style={{ fontSize: 12, color: ticket.claim_amount ? '#0F172A' : C.muted, fontWeight: ticket.claim_amount ? 700 : 400 }}>
+              <span style={{ fontSize: 12, color: ticket.claim_amount ? 'var(--mv-ink)' : C.muted, fontWeight: ticket.claim_amount ? 700 : 400 }}>
                 {ticket.claim_amount ? `£${Number(ticket.claim_amount).toFixed(2)}` : '—'}
               </span>
             </SbRow>
@@ -1188,8 +1213,8 @@ export default function TicketDetailPage() {
             {!ticket.claim_number && (
               <button style={{ width: '100%', marginTop: 12, display: 'flex', alignItems: 'center',
                 justifyContent: 'center', gap: 6, padding: '8px 0', borderRadius: 9,
-                fontSize: 12.5, fontWeight: 700, color: '#C2410C', background: '#FFF7ED',
-                border: '1.5px solid #FED7AA', cursor: 'pointer' }}>
+                fontSize: 12.5, fontWeight: 700, color: 'var(--mv-amber-deep)', background: 'var(--mv-amber-100)',
+                border: '1.5px solid var(--mv-amber-200)', cursor: 'pointer' }}>
                 + Raise Formal Claim
               </button>
             )}

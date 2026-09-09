@@ -22,29 +22,29 @@ const api = axios.create({ baseURL: '/api' });
 // ─── Shared styles ────────────────────────────────────────────────────────────
 const inputSt = {
   width: '100%', boxSizing: 'border-box',
-  background: 'rgba(0,0,0,0.06)',
-  border: '1px solid rgba(0,0,0,0.10)',
-  borderRadius: 7, color: '#0F172A', fontSize: 12,
+  background: 'color-mix(in srgb, var(--mv-ink) 6%, transparent)',
+  border: '1px solid var(--mv-hairline)',
+  borderRadius: 7, color: 'var(--mv-ink)', fontSize: 12,
   padding: '7px 10px', outline: 'none',
 };
 const btnGreen = {
-  background: 'rgba(15,122,70,0.15)', border: '1px solid rgba(15,122,70,0.4)',
+  background: 'var(--mv-purple-100)', border: '1px solid var(--mv-purple-200)',
   borderRadius: 6, color: 'var(--mv-green)', padding: '7px 10px', cursor: 'pointer',
   fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5,
 };
 const btnRed = {
-  background: 'rgba(213,0,0,0.1)', border: '1px solid rgba(213,0,0,0.3)',
-  borderRadius: 6, color: '#FF5252', padding: '5px 8px', cursor: 'pointer',
+  background: 'var(--mv-magenta-100)', border: '1px solid var(--mv-magenta-200)',
+  borderRadius: 6, color: 'var(--mv-magenta)', padding: '5px 8px', cursor: 'pointer',
   fontSize: 12,
 };
 const btnGhost = {
-  background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.10)',
-  borderRadius: 6, color: '#64748B', padding: '5px 8px', cursor: 'pointer',
+  background: 'color-mix(in srgb, var(--mv-ink) 4%, transparent)', border: '1px solid var(--mv-hairline)',
+  borderRadius: 6, color: 'var(--mv-ink-52)', padding: '5px 8px', cursor: 'pointer',
   fontSize: 12,
 };
 const card = {
-  background: 'rgba(0,0,0,0.03)',
-  border: '1px solid rgba(0,0,0,0.08)',
+  background: 'color-mix(in srgb, var(--mv-ink) 3%, transparent)',
+  border: '1px solid var(--mv-hairline)',
   borderRadius: 10, padding: '18px 20px', marginBottom: 16,
 };
 
@@ -55,13 +55,13 @@ function FormulaBox({ divisor }) {
   const dimKg = divisor > 0 ? (vol / divisor).toFixed(2) : '—';
   return (
     <div style={{
-      background: 'rgba(15,122,70,0.06)', border: '1px solid rgba(15,122,70,0.2)',
-      borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#64748B',
+      background: 'color-mix(in srgb, var(--mv-green) 6%, transparent)', border: '1px solid var(--mv-purple-200)',
+      borderRadius: 8, padding: '10px 14px', fontSize: 12, color: 'var(--mv-ink-52)',
     }}>
       <span style={{ color: 'var(--mv-green)', fontWeight: 700 }}>Formula: </span>
       (L × W × H) ÷ {divisor > 0 ? divisor : '?'} = volumetric kg
       {divisor > 0 && (
-        <span style={{ marginLeft: 16, color: '#0F172A' }}>
+        <span style={{ marginLeft: 16, color: 'var(--mv-ink)' }}>
           Example: {eg_l} × {eg_w} × {eg_h} = {vol.toLocaleString()} cm³ ÷ {divisor} = <strong style={{ color: 'var(--mv-green)' }}>{dimKg} kg</strong>
         </span>
       )}
@@ -80,7 +80,7 @@ function RuleForm({ initial, onSave, onCancel }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 160px', gap: 10 }}>
         <div>
-          <label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 4 }}>
+          <label style={{ fontSize: 11, color: 'var(--mv-ink-52)', display: 'block', marginBottom: 4 }}>
             Rule Name
           </label>
           <input
@@ -91,7 +91,7 @@ function RuleForm({ initial, onSave, onCancel }) {
           />
         </div>
         <div>
-          <label style={{ fontSize: 11, color: '#64748B', display: 'block', marginBottom: 4 }}>
+          <label style={{ fontSize: 11, color: 'var(--mv-ink-52)', display: 'block', marginBottom: 4 }}>
             Divisor
           </label>
           <input
@@ -130,16 +130,16 @@ function ServiceBadge({ service, onRemove }) {
   return (
     <span style={{
       display: 'inline-flex', alignItems: 'center', gap: 5,
-      background: 'rgba(15,122,70,0.1)', border: '1px solid rgba(15,122,70,0.25)',
-      borderRadius: 9999, padding: '3px 10px', fontSize: 11, color: '#0F172A',
+      background: 'var(--mv-purple-100)', border: '1px solid var(--mv-purple-200)',
+      borderRadius: 9999, padding: '3px 10px', fontSize: 11, color: 'var(--mv-ink)',
     }}>
-      <span style={{ color: '#475569', fontSize: 10 }}>{service.carrier_name} /</span>
+      <span style={{ color: 'var(--mv-ink-62)', fontSize: 10 }}>{service.carrier_name} /</span>
       {service.name}
-      <span style={{ color: '#64748B', fontSize: 10 }}>({service.service_code})</span>
+      <span style={{ color: 'var(--mv-ink-52)', fontSize: 10 }}>({service.service_code})</span>
       {onRemove && (
         <button
           onClick={() => onRemove(service.id)}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#FF5252', padding: '0 0 0 2px', display: 'flex' }}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--mv-magenta)', padding: '0 0 0 2px', display: 'flex' }}
         >
           <X size={11} />
         </button>
@@ -175,9 +175,9 @@ function RuleCard({ rule, allServices, onUpdate, onDelete, onAssign, onUnassign 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <Divide size={16} color='var(--mv-green)' />
-          <span style={{ fontSize: 15, fontWeight: 700, color: '#0F172A' }}>{rule.name}</span>
+          <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--mv-ink)' }}>{rule.name}</span>
           <span style={{
-            background: 'rgba(15,122,70,0.12)', border: '1px solid rgba(15,122,70,0.3)',
+            background: 'var(--mv-purple-100)', border: '1px solid var(--mv-purple-200)',
             borderRadius: 6, padding: '2px 9px', fontSize: 12, color: 'var(--mv-green)', fontWeight: 700,
           }}>
             ÷ {rule.divisor.toLocaleString()}
@@ -217,12 +217,12 @@ function RuleCard({ rule, allServices, onUpdate, onDelete, onAssign, onUnassign 
 
       {/* Assigned services */}
       <div>
-        <div style={{ fontSize: 11, color: '#64748B', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        <div style={{ fontSize: 11, color: 'var(--mv-ink-52)', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
           Assigned Services ({rule.assigned_services.length})
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
           {rule.assigned_services.length === 0 ? (
-            <span style={{ fontSize: 12, color: '#64748B', fontStyle: 'italic' }}>No services assigned</span>
+            <span style={{ fontSize: 12, color: 'var(--mv-ink-52)', fontStyle: 'italic' }}>No services assigned</span>
           ) : (
             rule.assigned_services.map(svc => (
               <ServiceBadge
@@ -318,10 +318,10 @@ export default function VolumetricSettings() {
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: '#0F172A', margin: 0 }}>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--mv-ink)', margin: 0 }}>
             Volumetric Weight Rules
           </h1>
-          <p style={{ fontSize: 13, color: '#64748B', marginTop: 4 }}>
+          <p style={{ fontSize: 13, color: 'var(--mv-ink-52)', marginTop: 4 }}>
             Define named rules (divisor) and assign them to carrier services.
             The pricing engine uses volumetric weight when it exceeds actual weight.
           </p>
@@ -333,13 +333,13 @@ export default function VolumetricSettings() {
 
       {/* How it works box */}
       <div style={{
-        background: 'rgba(0,0,0,0.03)',
-        border: '1px solid rgba(0,0,0,0.08)',
+        background: 'color-mix(in srgb, var(--mv-ink) 3%, transparent)',
+        border: '1px solid var(--mv-hairline)',
         borderRadius: 8, padding: '12px 16px', marginBottom: 24,
-        fontSize: 12, color: '#64748B', lineHeight: 1.7,
+        fontSize: 12, color: 'var(--mv-ink-52)', lineHeight: 1.7,
       }}>
         <Package size={13} style={{ display: 'inline', marginRight: 6, color: 'var(--mv-green)' }} />
-        <strong style={{ color: '#0F172A' }}>How it works: </strong>
+        <strong style={{ color: 'var(--mv-ink)' }}>How it works: </strong>
         When a shipment arrives, the engine calculates volumetric weight as
         <span style={{ color: 'var(--mv-green)', fontFamily: 'monospace', margin: '0 4px' }}>(L × W × H) ÷ divisor</span>
         for each parcel. If the volumetric weight is greater than the declared weight, the volumetric
@@ -350,8 +350,8 @@ export default function VolumetricSettings() {
       {/* Error */}
       {error && (
         <div style={{
-          background: 'rgba(213,0,0,0.12)', border: '1px solid rgba(213,0,0,0.3)',
-          borderRadius: 7, padding: '10px 14px', marginBottom: 16, color: '#FF5252', fontSize: 12,
+          background: 'var(--mv-magenta-100)', border: '1px solid var(--mv-magenta-200)',
+          borderRadius: 7, padding: '10px 14px', marginBottom: 16, color: 'var(--mv-magenta)', fontSize: 12,
         }}>
           {error}
         </div>
@@ -359,7 +359,7 @@ export default function VolumetricSettings() {
 
       {/* Create form */}
       {showCreate && (
-        <div style={{ ...card, border: '1px solid rgba(15,122,70,0.25)', marginBottom: 24 }}>
+        <div style={{ ...card, border: '1px solid var(--mv-purple-200)', marginBottom: 24 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--mv-green)', marginBottom: 12 }}>
             Create New Volumetric Rule
           </div>
@@ -372,9 +372,9 @@ export default function VolumetricSettings() {
 
       {/* Rule list */}
       {isLoading ? (
-        <div style={{ color: '#64748B', fontSize: 13 }}>Loading...</div>
+        <div style={{ color: 'var(--mv-ink-52)', fontSize: 13 }}>Loading...</div>
       ) : data?.rules?.length === 0 ? (
-        <div style={{ ...card, textAlign: 'center', color: '#64748B', fontSize: 13, padding: 40 }}>
+        <div style={{ ...card, textAlign: 'center', color: 'var(--mv-ink-52)', fontSize: 13, padding: 40 }}>
           No volumetric rules defined yet. Create one above.
         </div>
       ) : (
