@@ -142,7 +142,7 @@ function TemplatesView() {
                   cursor: 'pointer',
                   border: '1px solid var(--mv-hairline)',
                   borderLeft: `3px solid ${isSel ? 'var(--mv-purple)' : 'transparent'}`,
-                  background: isSel ? '#FFFFFF' : 'transparent',
+                  background: isSel ? 'var(--mv-surface)' : 'transparent',
                   transition: 'background .12s',
                   fontFamily: 'inherit',
                 }}
@@ -181,7 +181,7 @@ function NewTemplateForm({ onCancel, onCreate, isPending }) {
   const [desc, setDesc] = useState('');
 
   return (
-    <div style={{ background: '#FFFFFF', padding: 14, border: '1px solid var(--mv-hairline)', marginBottom: 12 }}>
+    <div style={{ background: 'var(--mv-surface)', padding: 14, border: '1px solid var(--mv-hairline)', marginBottom: 12 }}>
       <div className="mv-field" style={{ marginBottom: 10 }}>
         <label className="mv-label">Template Name</label>
         <input
@@ -589,7 +589,7 @@ function TaskRowEditor({ task, comms, teams, onUpdate, onDelete }) {
 
   if (editing) {
     return (
-      <div style={{ background: '#FFFFFF', padding: 14, border: '1px solid var(--mv-purple)', marginTop: 4, marginBottom: 4 }}>
+      <div style={{ background: 'var(--mv-surface)', padding: 14, border: '1px solid var(--mv-purple)', marginTop: 4, marginBottom: 4 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
           <span className="mv-section" style={{ margin: 0, color: 'var(--mv-purple)' }}>Edit Task Details</span>
           <button className="mv-btn mv-btn--sm" onClick={() => setEditing(false)}><X size={12} /> Cancel</button>
@@ -685,7 +685,7 @@ function TaskRowEditor({ task, comms, teams, onUpdate, onDelete }) {
       alignItems: 'center',
       gap: 10,
       padding: '8px 12px',
-      background: '#FFFFFF',
+      background: 'var(--mv-surface)',
       border: '1px solid var(--mv-hairline)',
       borderLeft: `3px solid ${task.is_required ? 'var(--mv-purple)' : 'var(--mv-divider)'}`,
     }}>
@@ -819,7 +819,7 @@ function AddTaskRow({ stageId, comms, teams, onAdd }) {
   }
 
   return (
-    <div style={{ background: '#FFFFFF', padding: 14, border: '1px solid var(--mv-hairline)', marginTop: 8 }}>
+    <div style={{ background: 'var(--mv-surface)', padding: 14, border: '1px solid var(--mv-hairline)', marginTop: 8 }}>
       <div className="mv-section" style={{ marginBottom: 8, color: 'var(--mv-purple)' }}>Add New Task</div>
 
       <div className="mv-field" style={{ marginBottom: 10 }}>
@@ -962,7 +962,7 @@ function LibraryView() {
                   cursor: 'pointer',
                   border: '1px solid var(--mv-hairline)',
                   borderLeft: `3px solid ${isSel ? 'var(--mv-purple)' : 'transparent'}`,
-                  background: isSel ? '#FFFFFF' : 'transparent',
+                  background: isSel ? 'var(--mv-surface)' : 'transparent',
                   fontFamily: 'inherit',
                 }}
               >

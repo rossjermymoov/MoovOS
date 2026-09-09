@@ -58,6 +58,10 @@
   --mv-amber-deep:    #8A6200;
   --mv-amber-100:     #FFFAE6;
   --mv-amber-200:     #FFF2BF;
+  --mv-on-amber:      #171B2D;   /* text/icons on a solid --mv-amber fill — amber is
+                                     bright in BOTH themes (unlike --mv-purple/green,
+                                     which flip), so unlike --mv-on-brand this is a
+                                     constant, not theme-dependent */
 
   /* muted ink — use these, do not invent new opacities */
   --mv-ink-45:  rgba(23,27,45,.45);
@@ -102,6 +106,7 @@
   --mv-amber-deep:    #FECA00;
   --mv-amber-100:     rgba(254,202,0,.14);
   --mv-amber-200:     rgba(254,202,0,.4);
+  --mv-on-amber:      #171B2D;   /* constant — see :root definition */
 
   --mv-ink-45:  rgba(253,255,255,.45);
   --mv-ink-52:  rgba(253,255,255,.52);

@@ -389,7 +389,9 @@ function ClaimsTab({ data, consignment }) {
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
             width: '100%', padding: '12px 20px',
             background: statusColor,
-            color: statusColor === 'var(--mv-purple)' ? 'var(--mv-on-brand)' : '#FFFFFF',
+            color: statusColor === 'var(--mv-purple)' ? 'var(--mv-on-brand)'
+                 : statusColor === 'var(--mv-amber)'  ? 'var(--mv-on-amber)'
+                 : '#FFFFFF',
             borderRadius: 8,
             fontSize: 14, fontWeight: 700,
             textDecoration: 'none',
