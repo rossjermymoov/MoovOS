@@ -2294,7 +2294,7 @@ export default function QueriesPage() {
         <span style={{ fontSize: 22, fontWeight: 800, color: 'var(--mv-ink)', letterSpacing: '-0.03em' }}>Queries</span>
 
         {/* Workspace switcher — Unassigned / Assigned to me / All open */}
-        <div className="ml-2 inline-flex items-center gap-1 rounded-xl bg-slate-100 p-1">
+        <div className="ml-2 inline-flex items-center gap-1 rounded-xl p-1" style={{ background: 'var(--mv-bg)' }}>
           {[
             { key: 'unassigned', label: 'Unassigned',      count: stats?.unassigned },
             { key: 'mine',       label: 'Assigned to me',  count: stats?.assigned_to_me },
@@ -2305,13 +2305,24 @@ export default function QueriesPage() {
               <button
                 key={w.key}
                 onClick={() => setWorkspace(w.key)}
-                className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition
-                  ${active ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition"
+                style={{
+                  background: active ? 'var(--mv-surface)' : 'transparent',
+                  color: active ? 'var(--mv-ink)' : 'var(--mv-ink-52)',
+                  boxShadow: active ? '0 1px 2px color-mix(in srgb, var(--mv-ink) 10%, transparent)' : 'none',
+                }}
+                onMouseEnter={e => { if (!active) e.currentTarget.style.color = 'var(--mv-ink-78)'; }}
+                onMouseLeave={e => { if (!active) e.currentTarget.style.color = 'var(--mv-ink-52)'; }}
               >
                 {w.label}
                 {w.count != null && (
-                  <span className={`rounded-full px-1.5 text-xs font-semibold
-                    ${active ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-600'}`}>
+                  <span
+                    className="rounded-full px-1.5 text-xs font-semibold"
+                    style={{
+                      background: active ? 'var(--mv-ink)' : 'var(--mv-hairline-2)',
+                      color: active ? 'var(--mv-bg)' : 'var(--mv-ink-62)',
+                    }}
+                  >
                     {w.count}
                   </span>
                 )}
@@ -2340,7 +2351,10 @@ export default function QueriesPage() {
         <button
           onClick={() => navigate('/queries/simulator')}
           title="Open the automation simulator"
-          className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+          className="rounded-lg px-3 py-1.5 text-xs font-medium"
+          style={{ border: '1px solid var(--mv-hairline-2)', color: 'var(--mv-ink-62)', background: 'transparent' }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'var(--mv-bg)'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
         >
           🧪 Simulator
         </button>
@@ -2362,29 +2376,33 @@ export default function QueriesPage() {
       </div>
 
       {/* ── Threat Matrix — high-impact operational counters ───────────────── */}
-      <div className="grid shrink-0 grid-cols-2 gap-3 bg-slate-50 px-[18px] pb-3 pt-3.5 lg:grid-cols-4">
+      <div className="grid shrink-0 grid-cols-2 gap-3 px-[18px] pb-3 pt-3.5 lg:grid-cols-4" style={{ background: 'var(--mv-bg)' }}>
         {[
-          { key: 'urgent', label: '🚨 Critical Threats',     value: stats?.urgent_open,          accent: 'var(--mv-magenta)', ring: 'ring-red-200',    tint: 'bg-red-50',    text: 'text-red-700',
+          { key: 'urgent', label: '🚨 Critical Threats',     value: stats?.urgent_open,          accent: 'var(--mv-magenta)', tint: 'var(--mv-magenta-100)', text: 'var(--mv-magenta-deep)',
             onClick: () => setFilters(f => ({ ...f, priority: f.priority === 'urgent' ? '' : 'urgent', sla_breached: false, status: '', attention: false })), active: filters.priority === 'urgent' },
-          { key: 'high',   label: '⚠️ High Priority',         value: stats?.high_open,            accent: 'var(--mv-amber)', ring: 'ring-amber-200',  tint: 'bg-amber-50',  text: 'text-amber-700',
+          { key: 'high',   label: '⚠️ High Priority',         value: stats?.high_open,            accent: 'var(--mv-amber)', tint: 'var(--mv-amber-100)', text: 'var(--mv-amber-deep)',
             onClick: () => setFilters(f => ({ ...f, priority: f.priority === 'high' ? '' : 'high', sla_breached: false, status: '', attention: false })), active: filters.priority === 'high' },
-          { key: 'sla',    label: '⏳ Courier SLA Breaches',  value: stats?.courier_sla_breached, accent: 'var(--mv-purple)', ring: 'ring-purple-200', tint: 'bg-purple-50', text: 'text-purple-700',
+          { key: 'sla',    label: '⏳ Courier SLA Breaches',  value: stats?.courier_sla_breached, accent: 'var(--mv-purple)', tint: 'var(--mv-purple-100)', text: 'var(--mv-purple-700)',
             onClick: () => setFilters(f => ({ ...f, sla_breached: !f.sla_breached, priority: '', status: '', attention: false })), active: filters.sla_breached },
-          { key: 'auto',   label: '🤖 Autopilot Runs',        value: stats?.autopilot_runs,       accent: 'var(--mv-green-deep)', ring: 'ring-emerald-200', tint: 'bg-emerald-50', text: 'text-emerald-700',
+          { key: 'auto',   label: '🤖 Autopilot Runs',        value: stats?.autopilot_runs,       accent: 'var(--mv-green-deep)', tint: 'var(--mv-purple-100)', text: 'var(--mv-green-deep)',
             onClick: null, active: false },
         ].map(k => (
           <button
             key={k.key}
             onClick={k.onClick || undefined}
-            className={`flex flex-col items-start rounded-2xl border p-4 text-left transition
-              ${k.tint} ${k.active ? `ring-2 ${k.ring} shadow-sm` : 'border-transparent hover:shadow-sm'}
-              ${k.onClick ? 'cursor-pointer' : 'cursor-default'}`}
-            style={{ borderColor: k.active ? k.accent : 'transparent' }}
+            className={`flex flex-col items-start rounded-2xl border p-4 text-left transition ${k.onClick ? 'cursor-pointer' : 'cursor-default'}`}
+            style={{
+              background: k.tint,
+              borderColor: k.active ? k.accent : 'transparent',
+              boxShadow: k.active ? `0 0 0 2px color-mix(in srgb, ${k.accent} 35%, transparent)` : 'none',
+            }}
+            onMouseEnter={e => { if (!k.active) e.currentTarget.style.boxShadow = '0 1px 3px color-mix(in srgb, var(--mv-ink) 10%, transparent)'; }}
+            onMouseLeave={e => { if (!k.active) e.currentTarget.style.boxShadow = 'none'; }}
           >
             <span className="text-4xl font-extrabold leading-none" style={{ color: k.accent }}>
               {k.value ?? '—'}
             </span>
-            <span className={`mt-2 text-xs font-bold uppercase tracking-wide ${k.text}`}>{k.label}</span>
+            <span className="mt-2 text-xs font-bold uppercase tracking-wide" style={{ color: k.text }}>{k.label}</span>
           </button>
         ))}
       </div>

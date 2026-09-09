@@ -282,7 +282,7 @@ export default function ShipmentsPage() {
         {/* Tile 2: Awaiting Reconciliation */}
         <div className="mv-kpi">
           <div className="mv-kpi-label">Awaiting Reconciliation</div>
-          <div className="mv-kpi-value mv-num" style={{ color: awaitingCount > 0 ? 'var(--mv-orange, #d97706)' : undefined }}>
+          <div className="mv-kpi-value mv-num" style={{ color: awaitingCount > 0 ? 'var(--mv-amber-deep)' : undefined }}>
             {awaitingCount.toLocaleString('en-GB')}
           </div>
           <div className="mv-kpi-sub">Booked & verified by tracking</div>
@@ -478,7 +478,7 @@ export default function ShipmentsPage() {
                         )}
                       </div>
                     ) : (
-                      <span className="mv-chip" style={{ color: '#b91c1c', background: '#fef2f2', border: '1px solid #fecaca', fontSize: 11 }}>
+                      <span className="mv-chip" style={{ color: 'var(--mv-magenta-deep)', background: 'var(--mv-magenta-100)', border: '1px solid var(--mv-magenta-200)', fontSize: 11 }}>
                         Unpriced
                       </span>
                     )}
@@ -737,7 +737,7 @@ export default function ShipmentsPage() {
                       </tbody>
                     </table>
                   ) : (
-                    <div style={{ padding: 14, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 4, color: '#991b1b', fontSize: 12.5 }}>
+                    <div style={{ padding: 14, background: 'var(--mv-magenta-100)', border: '1px solid var(--mv-magenta-200)', borderRadius: 4, color: 'var(--mv-magenta-deep)', fontSize: 12.5 }}>
                       No charges currently generated for this shipment. Click <strong>"Re-calculate Pricing"</strong> above to apply customer rates.
                     </div>
                   )}

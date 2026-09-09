@@ -16,16 +16,16 @@ import {
 } from 'lucide-react';
 
 const C = {
-  bg:       '#F8FAFC',
-  surface:  '#10122A',
-  card:     '#141628',
-  border:   'rgba(0,0,0,0.07)',
+  bg:       'var(--mv-bg)',
+  surface:  'var(--mv-bg)',
+  card:     'var(--mv-surface)',
+  border:   'var(--mv-hairline)',
   amber:    'var(--mv-amber)',
   amberDim: 'var(--mv-amber-100)',
   green:    'var(--mv-green)',
   red:      'var(--mv-magenta)',
-  text:     '#F0F0FF',
-  muted:    '#8888AA',
+  text:     'var(--mv-ink)',
+  muted:    'var(--mv-ink-52)',
   cyan:     'var(--mv-teal)',
 };
 
@@ -86,7 +86,7 @@ function SourceCard({ source, onToggle, onDelete, onSync }) {
   return (
     <div style={{
       background: C.card,
-      border: `1px solid ${source.is_active ? 'rgba(245,158,11,0.2)' : C.border}`,
+      border: `1px solid ${source.is_active ? 'rgba(254,202,0,0.2)' : C.border}`,
       borderRadius: 10,
       overflow: 'hidden',
       transition: 'border-color 0.15s',
@@ -252,7 +252,7 @@ function AddSourceForm({ onClose, onCreate }) {
 
   return (
     <div style={{
-      background: C.card, border: `1px solid rgba(245,158,11,0.25)`,
+      background: C.card, border: `1px solid rgba(254,202,0,0.25)`,
       borderRadius: 12, padding: 20, marginBottom: 18,
     }}>
       <div style={{ fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 16 }}>
@@ -333,7 +333,7 @@ function AddSourceForm({ onClose, onCreate }) {
             style={{
               background: saving ? C.amberDim : `linear-gradient(135deg, ${C.amber}, var(--mv-amber-deep))`,
               border: 'none', borderRadius: 8, padding: '8px 20px',
-              fontSize: 13, fontWeight: 600, color: saving ? C.amber : '#0D0E24',
+              fontSize: 13, fontWeight: 600, color: saving ? C.amber : 'var(--mv-on-amber)',
               cursor: saving ? 'default' : 'pointer',
             }}
           >
@@ -387,9 +387,9 @@ export default function KatanaPage() {
           width: 44, height: 44, borderRadius: 12,
           background: `linear-gradient(135deg, ${C.amber}, var(--mv-amber-deep))`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          boxShadow: `0 0 20px rgba(245,158,11,0.3)`,
+          boxShadow: `0 0 20px rgba(254,202,0,0.3)`,
         }}>
-          <Sparkles size={22} color="#0D0E24" />
+          <Sparkles size={22} color="var(--mv-on-amber)" />
         </div>
         <div>
           <h1 style={{ margin: 0, fontSize: 22, fontWeight: 700, color: C.text }}>Katana</h1>
@@ -403,10 +403,10 @@ export default function KatanaPage() {
           style={{
             display: 'flex', alignItems: 'center', gap: 7,
             background: showForm ? C.amberDim : `linear-gradient(135deg, ${C.amber}, var(--mv-amber-deep))`,
-            border: showForm ? `1px solid rgba(245,158,11,0.3)` : 'none',
+            border: showForm ? `1px solid rgba(254,202,0,0.3)` : 'none',
             borderRadius: 9, padding: '9px 16px',
             fontSize: 13, fontWeight: 600,
-            color: showForm ? C.amber : '#0D0E24',
+            color: showForm ? C.amber : 'var(--mv-on-amber)',
             cursor: 'pointer',
           }}
         >
@@ -418,7 +418,7 @@ export default function KatanaPage() {
       {/* What is Katana callout */}
       {sources.length === 0 && !showForm && (
         <div style={{
-          background: C.amberDim, border: `1px solid rgba(245,158,11,0.2)`,
+          background: C.amberDim, border: `1px solid rgba(254,202,0,0.2)`,
           borderRadius: 12, padding: '16px 20px', marginBottom: 24,
           fontSize: 13, color: C.muted, lineHeight: 1.65,
         }}>
@@ -497,9 +497,9 @@ export default function KatanaPage() {
               display: 'flex', flexDirection: 'column', alignItems: 'center',
               justifyContent: 'center', padding: '50px 20px', color: C.muted,
             }}>
-              <Sparkles size={36} color="rgba(245,158,11,0.3)" style={{ marginBottom: 14 }} />
-              <div style={{ fontSize: 14, color: '#555577' }}>No knowledge sources yet</div>
-              <div style={{ fontSize: 12, marginTop: 6, color: '#444466' }}>
+              <Sparkles size={36} color="rgba(254,202,0,0.3)" style={{ marginBottom: 14 }} />
+              <div style={{ fontSize: 14, color: 'var(--mv-ink-52)' }}>No knowledge sources yet</div>
+              <div style={{ fontSize: 12, marginTop: 6, color: 'var(--mv-ink-45)' }}>
                 Add your first policy or URL to start teaching Katana
               </div>
             </div>
