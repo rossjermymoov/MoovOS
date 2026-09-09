@@ -11,6 +11,7 @@ import express from 'express';
 import { query } from '../db/index.js';
 import { fetchShipmentByReference, fetchShipmentById, requestTrackingUpdate } from '../services/voilaClient.js';
 import { processShipment, insertCharges } from '../services/pricingEngine.js';
+import { processShipmentCreatedWebhook } from './billing.js';
 // upsertEvent and normalisePayload are defined later in this file and used by bulk runner below
 
 const router = express.Router();
@@ -151,6 +152,18 @@ function pick(obj, ...keys) {
 //   A) Shipment-platform format: { json: { tracking_update: { parcels: [...] }, shipment: {...} } }
 //   B) Simple flat object or array of flat objects
 
+export function extractRequestShipment(obj) {
+  if (!obj) return {};
+  let req = obj.request_shipment || obj.shipment?.request_shipment || obj.shipment || obj;
+  if (typeof req === 'string') {
+    try { req = JSON.parse(req); } catch { req = {}; }
+  }
+  if (req && typeof req.request_shipment === 'string') {
+    try { req = JSON.parse(req.request_shipment); } catch {}
+  }
+  return (req && typeof req === 'object') ? req : {};
+}
+
 export function normalisePayload(body) {
   // Unwrap platform wrapper — some services POST { json: {...}, verify: false, ... }
   const payload = (body.json && typeof body.json === 'object') ? body.json : body;
@@ -159,6 +172,10 @@ export function normalisePayload(body) {
   if (payload.tracking_update && Array.isArray(payload.tracking_update.parcels)) {
     const tu       = payload.tracking_update;
     const shipment = payload.shipment || {};
+    const reqShip  = extractRequestShipment(shipment.request_shipment ? shipment : payload);
+    const shipTo   = reqShip.ship_to || {};
+    const reqParcels = reqShip.parcels || [];
+    const firstReqP = reqParcels[0] || {};
     const events   = [];
 
     for (const parcel of tu.parcels) {
@@ -174,29 +191,34 @@ export function normalisePayload(body) {
         return ta - tb;
       });
 
+      const streetLine1 = [shipTo.address_1, shipTo.address_2, shipTo.address_3].filter(Boolean).join(', ');
+      const streetLine2 = [shipTo.city, shipTo.county, shipTo.postcode].filter(Boolean).join(', ');
+      const fullAddr = [streetLine1, streetLine2].filter(Boolean).join(', ')
+        || shipment.ship_to_address
+        || [shipment.ship_to_address_1, shipment.ship_to_address_2, shipment.ship_to_address_3, shipment.ship_to_city, shipment.ship_to_county].filter(Boolean).join(', ')
+        || shipment.address
+        || tu.address_information?.address
+        || null;
+
+      const resolvedWeight = parcel.weight || firstReqP.weight || firstReqP._summed_item_weights || reqShip._summed_total_weight || shipment.weight || null;
+
       for (const ev of sorted) {
         events.push({
           _consignment:           consignment,
-          // platform_shipment_id is the unique Voila/DC shipment ID (e.g. 249492859).
-          // This is always unique per booking — unlike shipment.reference which is the
-          // customer's sender ref and can be shared across multiple consolidated parcels
-          // (e.g. two separate DPD bookings both using reference '472393').
-          // The backfill guard MUST use platform ID to avoid silently skipping the second
-          // booking when the first one already has a charge for the same reference.
           _platform_shipment_id:  shipment.id ? String(shipment.id) : null,
-          _shipment_reference:    shipment.reference || null,
-          _courier_name:       shipment.courier || null,
+          _shipment_reference:    shipment.reference || reqShip.reference || null,
+          _courier_name:       shipment.courier || reqShip.courier?.friendly_service_name || null,
           _courier_code:       shipment.courier ? shipment.courier.toLowerCase() : null,
-          _service_name:       shipment.friendly_service_name || null,
-          _customer_name:      shipment.account_name || null,
-          _customer_account:   shipment.account_number || null,
-          _recipient_name:     shipment.ship_to_name || shipment.ship_to_company_name || null,
-          _recipient_postcode: shipment.ship_to_postcode || tu.address_information?.postcode || null,
-          _recipient_address:  shipment.ship_to_address || null,
-          _weight_kg:          parcel.weight || null,
+          _service_name:       shipment.friendly_service_name || reqShip.courier?.friendly_service_name || null,
+          _customer_name:      shipment.account_name || reqShip.account_name || null,
+          _customer_account:   shipment.account_number || reqShip.account_number || null,
+          _recipient_name:     shipTo.name || shipment.ship_to_name || shipment.ship_to_company_name || shipment.recipient_name || tu.address_information?.name || null,
+          _recipient_postcode: shipTo.postcode || shipment.ship_to_postcode || tu.address_information?.postcode || shipment.postcode || null,
+          _recipient_address:  fullAddr,
+          _weight_kg:          resolvedWeight,
           _estimated_delivery: tu.expected_delivery || shipment.tracking_expected_delivery_date || null,
           _tracking_url:       parcel.tracking_url || parcel.trackingUrl || null,
-          _raw:                ev,
+          _raw:                payload, // Store the full complete webhook payload
           // Dispatch Cloud sends the numeric code in status_code (1-18)
           // and the verbatim courier description in status / status_description.
           // Use status_code for normalisation; fall back to status text if absent.
@@ -243,10 +265,10 @@ export async function upsertEvent(event, rawBody) {
   const serviceName    = event._service_name    || pick(event, 'service', 'service_name', 'serviceName', 'product', 'service_type');
   const customerName   = event._customer_name   || pick(event, 'customer.name', 'customer_name', 'customerName', 'sender', 'sender_name', 'account_name');
   const customerAccount= event._customer_account|| pick(event, 'customer.account_number', 'account_number', 'accountNumber', 'moov_account', 'moovAccount');
-  const recipientName  = event._recipient_name  || pick(event, 'recipient.name', 'recipient_name', 'recipientName', 'consignee', 'delivery_name');
-  const recipientPost  = event._recipient_postcode || pick(event, 'recipient.postcode', 'postcode', 'delivery_postcode', 'recipientPostcode', 'zip');
-  const recipientAddr  = event._recipient_address  || pick(event, 'recipient.address', 'address', 'delivery_address', 'recipientAddress');
-  const weightKg       = event._weight_kg       || pick(event, 'weight_kg', 'weightKg', 'weight', 'gross_weight');
+  const recipientName  = event._recipient_name  || pick(event, 'recipient.name', 'recipient_name', 'recipientName', 'consignee', 'delivery_name', 'ship_to_name');
+  const recipientPost  = event._recipient_postcode || pick(event, 'recipient.postcode', 'postcode', 'delivery_postcode', 'recipientPostcode', 'zip', 'ship_to_postcode');
+  const recipientAddr  = event._recipient_address  || pick(event, 'recipient.address', 'recipient.street', 'recipient_address', 'delivery_address', 'address', 'ship_to_address', 'street', 'address_1');
+  const weightKg       = event._weight_kg       || pick(event, 'weight_kg', 'weightKg', 'weight', 'gross_weight', 'declared_weight', 'actual_weight', 'weight_actual_kg');
   const estDelivery    = event._estimated_delivery || pick(event, 'estimated_delivery', 'estimatedDelivery', 'eta', 'due_date');
   const trackingUrl    = event._tracking_url    || pick(event, 'tracking_url', 'trackingUrl', 'track_url', 'parcel_tracking_url');
 
@@ -468,33 +490,42 @@ export async function upsertEvent(event, rawBody) {
         backfillInFlight.add(backfillKey);
         ;(async () => {
           try {
-            console.warn(`⚠️  Tracking backfill: no charges for consignment ${consignment} (key ${backfillKey}) — fetching from Voila API`);
+            // Check if rawBody already contains shipment/booking data
+            let autoIngested = false;
+            if (rawBody) {
+              const u = (rawBody.json && typeof rawBody.json === 'object') ? rawBody.json : rawBody;
+              if (u.shipment || u.request?.shipment || u.request_shipment) {
+                const shipId = await processShipmentCreatedWebhook(rawBody);
+                if (shipId) {
+                  await query(
+                    `UPDATE charges SET verified = true, status = 'verified', updated_at = NOW() WHERE shipment_id = $1`,
+                    [shipId]
+                  );
+                  console.log(`✅  Tracking auto-ingest: created + verified shipment ${shipId} for ${backfillKey}`);
+                  autoIngested = true;
+                }
+              }
+            }
 
-            // Prefer fetching by platform ID (exact, unique) over reference (may match
-            // the wrong shipment when two bookings share the same customer reference)
-            const payload = platformShipmentInt
-              ? await fetchShipmentById(String(platformShipmentInt))
-              : await fetchShipmentByReference(String(shipmentReference));
+            if (!autoIngested) {
+              console.warn(`⚠️  Tracking backfill: fetching from Voila API for ${backfillKey}`);
+              const payload = platformShipmentInt
+                ? await fetchShipmentById(String(platformShipmentInt))
+                : await fetchShipmentByReference(String(shipmentReference));
 
-            if (!payload) {
-              console.warn(`   Backfill: Voila API returned no shipment for key ${backfillKey}`);
-              return;
+              if (!payload) {
+                console.warn(`   Backfill: Voila API returned no shipment for key ${backfillKey}`);
+                return;
+              }
+              const shipId = await processShipmentCreatedWebhook(payload);
+              if (shipId) {
+                await query(
+                  `UPDATE charges SET verified = true, status = 'verified', updated_at = NOW() WHERE shipment_id = $1`,
+                  [shipId]
+                );
+                console.log(`✅  Tracking backfill: created + verified shipment ${shipId} for ${backfillKey}`);
+              }
             }
-            const { charges, errors } = await processShipment(payload);
-            if (!charges.length) {
-              console.warn(`   Backfill: processShipment produced no charges for ${backfillKey}`, errors);
-              return;
-            }
-            const inserted = await insertCharges(charges);
-            const insertedIds = inserted.map(c => c.id);
-            if (insertedIds.length) {
-              await query(
-                `UPDATE charges SET verified = true, status = 'verified', updated_at = NOW() WHERE id = ANY($1)`,
-                [insertedIds]
-              );
-            }
-            console.log(`✅  Tracking backfill: created + verified ${inserted.length} charge(s) for ${backfillKey} (consignment ${consignment})`);
-            if (errors.length) console.warn('   Backfill warnings:', errors);
           } catch (err) {
             console.error(`❌  Tracking backfill failed for ${backfillKey}:`, err.message);
           } finally {
@@ -669,7 +700,7 @@ router.get('/', async (req, res, next) => {
           p.id, p.consignment_number,
           p.courier_name, p.courier_code, p.service_name,
           p.customer_name, p.customer_account,
-          p.recipient_name, p.recipient_postcode,
+          p.recipient_name, p.recipient_postcode, p.recipient_address,
           p.status, p.status_description, p.last_location,
           p.last_event_at, p.estimated_delivery, p.delivered_at,
           p.weight_kg,
@@ -684,7 +715,10 @@ router.get('/', async (req, res, next) => {
     ]);
 
     res.json({
-      parcels: dataRes.rows,
+      parcels: dataRes.rows.map(p => ({
+        ...p,
+        country_code: detectCountryCode(p),
+      })),
       total:   countRes.rows[0].total,
       limit:   parseInt(limit),
       offset:  parseInt(offset),
@@ -694,6 +728,35 @@ router.get('/', async (req, res, next) => {
 
 // ─── GET /api/tracking/:consignment ─────────────────────────────────────────
 
+function detectCountryCode(parcel, charge) {
+  if (charge?.ship_to_country_iso) return charge.ship_to_country_iso.toUpperCase();
+  const addr = (parcel?.recipient_address || '').toUpperCase();
+  const postcode = (parcel?.recipient_postcode || '').trim().toUpperCase();
+  const service = (parcel?.service_name || '').toUpperCase();
+
+  if (/\b(USA|UNITED STATES|AMERICA|GEORGIA|CALIFORNIA|TEXAS|NEW YORK|FLORIDA)\b/.test(addr)) return 'US';
+  if (/\b(AUSTRALIA|AUS|NSW|VIC|QLD)\b/.test(addr)) return 'AU';
+  if (/\b(CANADA|CAN|ONTARIO|QUEBEC|BC)\b/.test(addr)) return 'CA';
+  if (/\b(GERMANY|DEUTSCHLAND)\b/.test(addr)) return 'DE';
+  if (/\b(FRANCE)\b/.test(addr)) return 'FR';
+  if (/\b(IRELAND|EIRE|REPUBLIC OF IRELAND|DUBLIN)\b/.test(addr)) return 'IE';
+  if (/\b(SPAIN|ESPANA|MADRID|BARCELONA)\b/.test(addr)) return 'ES';
+  if (/\b(ITALY|ITALIA|ROMA|MILANO)\b/.test(addr)) return 'IT';
+  if (/\b(NETHERLANDS|HOLLAND|AMSTERDAM)\b/.test(addr)) return 'NL';
+  if (/\b(BELGIUM|BELGIQUE|BRUSSELS)\b/.test(addr)) return 'BE';
+  if (/\b(NEW ZEALAND|AUCKLAND)\b/.test(addr)) return 'NZ';
+  if (/\b(SWITZERLAND|SCHWEIZ)\b/.test(addr)) return 'CH';
+
+  if (/^\d{5}(-\d{4})?$/.test(postcode)) return 'US';
+  if (/^[A-Z]{1,2}[0-9][A-Z0-9]?\s?[0-9][A-Z]{2}$/i.test(postcode)) return 'GB';
+
+  if (service.includes('INTL') || service.includes('INTERNATIONAL') || service.includes('AIR') || service.includes('EXPORT') || service.includes('GLOBAL') || service.includes('CLASSIC DDP')) {
+    return 'INTL';
+  }
+
+  return 'GB';
+}
+
 router.get('/:consignment', async (req, res, next) => {
   try {
     const parcelRes = await query(
@@ -702,15 +765,167 @@ router.get('/:consignment', async (req, res, next) => {
     );
     if (!parcelRes.rows.length) return res.status(404).json({ error: 'Parcel not found' });
 
+    const parcel = parcelRes.rows[0];
+
     const eventsRes = await query(
-      `SELECT id, event_code, status, description, location, event_at
+      `SELECT id, event_code, status, description, location, event_at, raw_payload
        FROM tracking_events
        WHERE consignment_number = $1
        ORDER BY event_at DESC`,
       [req.params.consignment]
     );
 
-    res.json({ ...parcelRes.rows[0], events: eventsRes.rows });
+    // Look up associated shipment record if available
+    let shipmentRecord = null;
+    try {
+      const shipRes = await query(
+        `SELECT id, tracking_codes, raw_payload, ship_to_address, ship_to_name, ship_to_postcode,
+                ship_to_country_iso, weight, total_weight, declared_weight
+         FROM shipments
+         WHERE $1 = ANY(tracking_codes)
+            OR tracking_codes @> ARRAY[$1]::text[]
+            OR reference = $1
+            OR voila_shipment_id = $1
+            OR raw_payload::text ILIKE '%' || $1 || '%'
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [req.params.consignment]
+      );
+      if (shipRes.rows.length) {
+        shipmentRecord = shipRes.rows[0];
+      }
+    } catch {
+      // Non-fatal if shipments query fails
+    }
+
+    // Look up associated charge if available
+    let charge = null;
+    try {
+      const chargeRes = await query(
+        `SELECT c.id, c.tracking_code, c.weight_actual_kg, c.weight_charged_kg, c.weight_dimensional_kg,
+                c.ship_to_country_iso, c.ship_to_postcode, c.ship_to_name, c.ship_to_address,
+                c.cost_price, c.sell_price, c.margin, c.despatch_date, c.raw_payload
+         FROM charges c
+         WHERE c.tracking_code = $1
+            OR c.voila_shipment_id = $1
+            OR c.order_id = $1
+            OR (c.raw_payload->'tracking_codes' IS NOT NULL AND c.raw_payload->'tracking_codes' ? $1)
+            OR c.raw_payload->>'consignment_number' = $1
+            OR c.raw_payload->>'tracking_number' = $1
+            OR c.raw_payload->'shipment'->>'reference' = $1
+            OR c.raw_payload->'request_shipment'->>'reference' = $1
+            OR c.raw_payload::text ILIKE '%' || $1 || '%'
+         ORDER BY c.created_at DESC
+         LIMIT 1`,
+        [req.params.consignment]
+      );
+      if (chargeRes.rows.length) {
+        charge = chargeRes.rows[0];
+      }
+    } catch {
+      // Non-fatal if charge lookup fails
+    }
+
+    // Scan all candidate payloads to find the richest request_shipment object
+    const candidatePayloads = [
+      ...eventsRes.rows.map(e => e.raw_payload),
+      charge?.raw_payload,
+      shipmentRecord?.raw_payload,
+    ].filter(Boolean);
+
+    let reqShip = {};
+    let matchedRaw = null;
+    for (const p of candidatePayloads) {
+      const extracted = extractRequestShipment(p);
+      if (extracted && (extracted.ship_to || (extracted.parcels && extracted.parcels.length) || extracted.account_name || extracted.reference)) {
+        reqShip = extracted;
+        matchedRaw = p;
+        break;
+      }
+    }
+    if (!matchedRaw && candidatePayloads.length) {
+      matchedRaw = candidatePayloads[0];
+      reqShip = extractRequestShipment(matchedRaw);
+    }
+
+    const shipTo = reqShip.ship_to || reqShip.recipient || {};
+    const reqParcels = reqShip.parcels || [];
+    const firstP = reqParcels[0] || {};
+
+    const dimL = parseFloat(firstP.dim_length || firstP.length || reqShip.dim_length) || null;
+    const dimW = parseFloat(firstP.dim_width || firstP.width || reqShip.dim_width) || null;
+    const dimH = parseFloat(firstP.dim_height || firstP.height || reqShip.dim_height) || null;
+
+    // Determine volumetric divisor from courier rules
+    const courierCode = (parcel.courier_code || reqShip.courier?.friendly_service_name || charge?.courier_code || '').toLowerCase();
+    const divisor = (courierCode.includes('dpd') || (reqShip.dc_service_id && String(reqShip.dc_service_id).toUpperCase().startsWith('DPD'))) ? 4000 : 5000;
+
+    let dimensionalWeightKg = charge?.weight_dimensional_kg ? Number(charge.weight_dimensional_kg) : null;
+    if (!dimensionalWeightKg && dimL && dimW && dimH) {
+      dimensionalWeightKg = Number(((dimL * dimW * dimH) / divisor).toFixed(2));
+    }
+
+    // Resolve recipient address lines
+    const streetLine1 = [shipTo.address_1, shipTo.address_2, shipTo.address_3].filter(Boolean).join(', ');
+    const streetLine2 = [shipTo.city, shipTo.county, shipTo.postcode].filter(Boolean).join(', ');
+    const recipientAddress = (streetLine1 && streetLine2)
+      ? `${streetLine1}, ${streetLine2}`
+      : (streetLine1 || streetLine2 || parcel.recipient_address || charge?.ship_to_address || shipmentRecord?.ship_to_address || null);
+
+    const country_code = (shipTo.country_iso || charge?.ship_to_country_iso || shipmentRecord?.ship_to_country_iso || detectCountryCode(parcel, charge || shipmentRecord)).toUpperCase();
+    const weight_kg = firstP.weight != null
+      ? parseFloat(firstP.weight)
+      : (firstP._summed_item_weights != null
+          ? parseFloat(firstP._summed_item_weights)
+          : (reqShip._summed_total_weight != null
+              ? parseFloat(reqShip._summed_total_weight)
+              : (parcel.weight_kg != null ? parcel.weight_kg : (charge?.weight_actual_kg || shipmentRecord?.weight || shipmentRecord?.total_weight || null))));
+    const is_international = country_code !== 'GB' && country_code !== 'UK';
+
+    // If delivered, filter out any redundant post-delivery technical noise
+    let filteredEvents = eventsRes.rows;
+    const deliveredIdx = filteredEvents.findIndex(e => String(e.status).toLowerCase() === 'delivered');
+    if (deliveredIdx !== -1) {
+      filteredEvents = filteredEvents.slice(deliveredIdx);
+    }
+
+    let parsedRawWebhook = matchedRaw || eventsRes.rows.find(e => e.raw_payload)?.raw_payload
+      || shipmentRecord?.raw_payload
+      || charge?.raw_payload
+      || {
+        parcel_record: parcel,
+        latest_event: eventsRes.rows[0] || null,
+        total_events: eventsRes.rows.length,
+      };
+
+    if (parsedRawWebhook && typeof parsedRawWebhook === 'object') {
+      parsedRawWebhook = {
+        ...parsedRawWebhook,
+        request_shipment_parsed: reqShip,
+      };
+    }
+
+    res.json({
+      ...parcel,
+      recipient_name: shipTo.name || parcel.recipient_name || charge?.ship_to_name || null,
+      recipient_postcode: shipTo.postcode || parcel.recipient_postcode || charge?.ship_to_postcode || null,
+      recipient_address: recipientAddress,
+      street_line_1: streetLine1 || null,
+      street_line_2: streetLine2 || null,
+      ship_to: shipTo,
+      customer_name: reqShip.account_name || parcel.customer_name,
+      customer_account: reqShip.account_number || parcel.customer_account,
+      service_name: reqShip.courier?.friendly_service_name || parcel.service_name,
+      weight_kg,
+      dimensional_weight_kg: dimensionalWeightKg,
+      dimensions: (dimL && dimW && dimH) ? { length: dimL, width: dimW, height: dimH, divisor } : null,
+      country_code,
+      is_international,
+      raw_webhook: parsedRawWebhook,
+      charge_raw_payload: charge?.raw_payload || null,
+      shipment_raw_payload: shipmentRecord?.raw_payload || null,
+      events: filteredEvents,
+    });
   } catch (err) { next(err); }
 });
 

@@ -156,30 +156,23 @@ export default function CountryPickerModal({ zone, onClose, onRefresh }) {
             >
               Add Countries
             </div>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                border: '1px solid #0F172A',
-                background: '#FFFFFF',
-                padding: '0 10px',
-                height: 36,
-              }}
-            >
-              <Search size={15} color="#64748B" style={{ marginRight: 8 }} />
+            <div className="mv-search" style={{ width: '100%', height: 36 }}>
+              <Search size={14} style={{ color: 'var(--mv-ink-45)', flexShrink: 0 }} />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search country name or 2-letter ISO code…"
                 autoFocus
-                style={{
-                  border: 'none',
-                  outline: 'none',
-                  width: '100%',
-                  fontSize: 13,
-                  background: 'transparent',
-                }}
               />
+              {search && (
+                <button
+                  onClick={() => setSearch('')}
+                  className="mv-search-clear"
+                  title="Clear search"
+                >
+                  <X size={13} />
+                </button>
+              )}
             </div>
           </div>
 

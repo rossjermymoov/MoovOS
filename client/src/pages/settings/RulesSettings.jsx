@@ -15,33 +15,29 @@ import axios from 'axios';
 
 const api = axios.create({ baseURL: '/api' });
 
-// ─── Settings sub-nav (shared with StaffSettings) ─────────────
+// ─── Settings sub-nav (shared across all Settings pages) ──────
 export function SettingsNav() {
   const { pathname } = useLocation();
   const tabs = [
-    { to: '/settings/staff',       label: 'Staff' },
-    { to: '/settings/automation-rules', label: 'Automation Rules' },
+    { to: '/settings/staff',                label: 'Staff' },
+    { to: '/settings/automation-rules',     label: 'Automation Rules' },
     { to: '/settings/onboarding-templates', label: 'Onboarding Templates' },
-    { to: '/settings/comms-templates', label: 'Comms Templates' },
-    { to: '/settings/volumetric',  label: 'Volumetric Weight' },
-    { to: '/settings/billing',     label: 'Billing' },
-    { to: '/settings/xero',        label: 'Xero' },
-    { to: '/settings/email',       label: 'Email' },
-    { to: '/settings/gmail',       label: 'Gmail' },
+    { to: '/settings/comms-templates',      label: 'Comms Templates' },
+    { to: '/settings/volumetric',           label: 'Volumetric Weight' },
+    { to: '/settings/billing',              label: 'Billing' },
+    { to: '/settings/xero',                 label: 'Xero' },
+    { to: '/settings/email',                label: 'Email' },
+    { to: '/settings/gmail',                label: 'Gmail' },
   ];
   return (
-    <div style={{ display: 'flex', gap: 0, marginBottom: 28, borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+    <div className="mv-tabs" style={{ marginBottom: 24, overflowX: 'auto', flexWrap: 'nowrap' }}>
       {tabs.map(t => {
         const active = pathname.startsWith(t.to);
         return (
           <NavLink
             key={t.to} to={t.to}
-            style={{
-              padding: '8px 22px', fontSize: 13, fontWeight: 600,
-              color: active ? '#00C853' : '#64748B',
-              borderBottom: active ? '2px solid #00C853' : '2px solid transparent',
-              textDecoration: 'none', transition: 'color 0.12s', marginBottom: -1,
-            }}
+            className={`mv-tab ${active ? 'is-active' : ''}`}
+            style={{ textDecoration: 'none', whiteSpace: 'nowrap' }}
           >
             {t.label}
           </NavLink>
@@ -357,148 +353,151 @@ export default function RulesSettings() {
   const hdr = { fontSize: 12.5, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.05em' };
 
   return (
-    <div style={{ maxWidth: 1080, margin: '0 auto' }}>
-      <SettingsNav />
+    <div className="mv-page">
+      <div className="mv-page-inner">
+        <SettingsNav />
 
-      {/* ═══ SLA TARGETS ═══════════════════════════════════════ */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
-        <div style={{ display: 'flex', gap: 12 }}>
-          <div style={{ width: 38, height: 38, borderRadius: 10, background: '#EFF6FF', border: '1px solid #BFDBFE',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <Target size={18} color="#2563EB" />
-          </div>
+        {/* ═══ SLA TARGETS ═══════════════════════════════════════ */}
+        <div className="mv-head">
           <div>
-            <h2 style={{ fontSize: 19, fontWeight: 800, color: '#0F172A', margin: 0 }}>SLA Targets</h2>
-            <p style={{ fontSize: 12.5, color: '#64748B', marginTop: 4, maxWidth: 620, lineHeight: 1.5 }}>
+            <div className="mv-kicker">Settings &amp; Policies</div>
+            <h1 className="mv-title">SLA Targets</h1>
+            <p className="mv-blurb">
               Named SLA profiles. Each profile sets response and resolution time targets across the four priorities.
             </p>
           </div>
-        </div>
-        <button onClick={() => { setShowPolForm(v => !v); setEditPolId(null); }} style={btnGreen}>
-          <Plus size={15} /> New Policy
-        </button>
-      </div>
-
-      {showPolForm && !editPolId && (
-        <div style={{ ...card, border: '1px solid #BFDBFE' }}>
-          <PolicyForm onSave={form => savePolicy(form, null)} onCancel={() => setShowPolForm(false)} saving={createPol.isPending} />
-        </div>
-      )}
-
-      {polLoad && <div style={{ ...card, padding: 28, textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>Loading policies…</div>}
-      {!polLoad && policies.length === 0 && (
-        <div style={{ ...card, padding: 28, textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>
-          No SLA targets yet. Click <strong>New Policy</strong> to create your first profile.
-        </div>
-      )}
-
-      {policies.map(p => (
-        <div key={p.id} style={card}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderBottom: editPolId === p.id ? '1px solid #EEF2F6' : 'none' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-              <span style={{ fontSize: 14.5, fontWeight: 700, color: '#0F172A' }}>{p.name}</span>
-              {p.description && <span style={{ fontSize: 12, color: '#94A3B8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.description}</span>}
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-              <ActivePill active={p.is_active} onToggle={() => updatePol.mutate({ id: p.id, is_active: !p.is_active })} />
-              <button onClick={() => { setEditPolId(id => id === p.id ? null : p.id); setShowPolForm(false); }} style={btnGhost}>
-                {editPolId === p.id ? 'Close' : 'Edit'}
-              </button>
-              <button onClick={() => { if (window.confirm(`Delete policy "${p.name}"? Triggers linked to it will lose their SLA clock.`)) deletePol.mutate(p.id); }}
-                style={{ background: 'none', border: 'none', color: '#F87171', cursor: 'pointer', padding: 4 }}>
-                <Trash2 size={15} />
-              </button>
-            </div>
-          </div>
-
-          {editPolId === p.id ? (
-            <PolicyForm initial={p} onSave={form => savePolicy(form, p.id)} onCancel={() => setEditPolId(null)} saving={updatePol.isPending} />
-          ) : (
-            // Compact read-only grid summary
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 0, padding: '4px 18px 16px' }}>
-              {PRIORITIES.map(pr => {
-                const t = (p.targets || []).find(x => x.priority === pr.value) || {};
-                return (
-                  <div key={pr.value} style={{ padding: '10px 12px', borderRight: pr.value !== 'low' ? '1px solid #F1F5F9' : 'none' }}>
-                    <PriBadge priority={pr.value} />
-                    <div style={{ marginTop: 8, fontSize: 12, color: '#475569' }}>
-                      <div>Response: <strong style={{ color: '#0F172A' }}>{t.response_hours != null ? `${t.response_hours}h` : '—'}</strong></div>
-                      <div style={{ marginTop: 2 }}>Resolution: <strong style={{ color: '#0F172A' }}>{t.resolution_hours != null ? `${t.resolution_hours}h` : '—'}</strong></div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      ))}
-
-      {/* ═══ SLA TRIGGERS ══════════════════════════════════════ */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', margin: '38px 0 16px' }}>
-        <div style={{ display: 'flex', gap: 12 }}>
-          <div style={{ width: 38, height: 38, borderRadius: 10, background: '#FEF3C7', border: '1px solid #FDE68A',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <Zap size={18} color="#D97706" />
-          </div>
-          <div>
-            <h2 style={{ fontSize: 19, fontWeight: 800, color: '#0F172A', margin: 0 }}>SLA Triggers</h2>
-            <p style={{ fontSize: 12.5, color: '#64748B', marginTop: 4, maxWidth: 620, lineHeight: 1.5 }}>
-              IF / THEN routing rules. On ingest, triggers run highest-weight first; the first match sets the ticket priority and starts the linked policy's SLA clock.
-            </p>
+          <div className="mv-actions">
+            <button onClick={() => { setShowPolForm(v => !v); setEditPolId(null); }} className="mv-btn-primary">
+              <Plus size={14} /> New Policy
+            </button>
           </div>
         </div>
-        <button onClick={() => { setShowTrigForm(v => !v); setEditTrigId(null); }} style={btnGreen}>
-          <Plus size={15} /> New Trigger
-        </button>
-      </div>
 
-      {showTrigForm && !editTrigId && (
-        <div style={{ ...card, border: '1px solid #FDE68A' }}>
-          <TriggerForm policies={policies} onSave={form => saveTrigger(form, null)} onCancel={() => setShowTrigForm(false)} saving={createTrig.isPending} />
-        </div>
-      )}
+        <div className="mv-rule" />
 
-      {trigLoad && <div style={{ ...card, padding: 28, textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>Loading triggers…</div>}
-      {!trigLoad && triggers.length === 0 && (
-        <div style={{ ...card, padding: 28, textAlign: 'center', color: '#94A3B8', fontSize: 13 }}>
-          No triggers yet. Create one to auto-route incoming tickets by subject, sender, courier or body text.
-        </div>
-      )}
+        {showPolForm && !editPolId && (
+          <div style={{ background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)', padding: 18, marginBottom: 16 }}>
+            <PolicyForm onSave={form => savePolicy(form, null)} onCancel={() => setShowPolForm(false)} saving={createPol.isPending} />
+          </div>
+        )}
 
-      {triggers.map(t => (
-        <div key={t.id} style={card}>
-          {editTrigId === t.id ? (
-            <TriggerForm initial={t} policies={policies} onSave={form => saveTrigger(form, t.id)} onCancel={() => setEditTrigId(null)} saving={updateTrig.isPending} />
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px' }}>
-              <span style={{ fontSize: 11, fontWeight: 800, color: '#64748B', background: '#F1F5F9', borderRadius: 6, padding: '3px 8px', flexShrink: 0 }} title="Execution weight">
-                {t.priority}
-              </span>
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: '#0F172A', marginBottom: 6 }}>{t.name}</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 12.5, color: '#475569' }}>
-                  <span style={{ fontSize: 9.5, fontWeight: 800, color: '#2563EB', background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: 5, padding: '1px 6px' }}>IF</span>
-                  <span><strong style={{ color: '#0F172A' }}>{lbl(CONDITION_FIELDS, t.condition_field)}</strong> {lbl(OPERATORS, t.operator)?.toLowerCase()} </span>
-                  <code style={{ fontSize: 11.5, color: '#0F172A', background: '#F1F5F9', padding: '2px 7px', borderRadius: 5 }}>{t.match_value}</code>
-                  <ArrowRight size={13} color="#CBD5E1" />
-                  <span style={{ fontSize: 9.5, fontWeight: 800, color: '#059669', background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: 5, padding: '1px 6px' }}>THEN</span>
-                  {t.set_priority && <PriBadge priority={t.set_priority} />}
-                  {t.policy_name && <span>SLA: <strong style={{ color: '#D97706' }}>{t.policy_name}</strong></span>}
-                  {!t.set_priority && !t.policy_name && <span style={{ color: '#94A3B8' }}>no action</span>}
+        {polLoad && <div style={{ padding: 28, textAlign: 'center', color: 'var(--mv-ink-52)', fontSize: 13 }}>Loading policies…</div>}
+        {!polLoad && policies.length === 0 && (
+          <div style={{ padding: 28, textAlign: 'center', color: 'var(--mv-ink-52)', fontSize: 13 }}>
+            No SLA targets yet. Click <strong>New Policy</strong> to create your first profile.
+          </div>
+        )}
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 32 }}>
+          {policies.map(p => (
+            <div key={p.id} style={{ background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderBottom: editPolId === p.id ? '1px solid var(--mv-hairline-2)' : 'none' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+                  <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--mv-ink)' }}>{p.name}</span>
+                  {p.description && <span style={{ fontSize: 12, color: 'var(--mv-ink-52)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.description}</span>}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                  <ActivePill active={p.is_active} onToggle={() => updatePol.mutate({ id: p.id, is_active: !p.is_active })} />
+                  <button onClick={() => { setEditPolId(id => id === p.id ? null : p.id); setShowPolForm(false); }} className="mv-btn-ghost" style={{ padding: '4px 10px', fontSize: 12 }}>
+                    {editPolId === p.id ? 'Close' : 'Edit'}
+                  </button>
+                  <button onClick={() => { if (window.confirm(`Delete policy "${p.name}"? Triggers linked to it will lose their SLA clock.`)) deletePol.mutate(p.id); }}
+                    className="mv-icon-btn">
+                    <Trash2 size={14} />
+                  </button>
                 </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-                <ActivePill active={t.is_active} onToggle={() => updateTrig.mutate({ id: t.id, is_active: !t.is_active })} />
-                <button onClick={() => { setEditTrigId(id => id === t.id ? null : t.id); setShowTrigForm(false); }} style={btnGhost}>Edit</button>
-                <button onClick={() => { if (window.confirm(`Delete trigger "${t.name}"?`)) deleteTrig.mutate(t.id); }}
-                  style={{ background: 'none', border: 'none', color: '#F87171', cursor: 'pointer', padding: 4 }}>
-                  <Trash2 size={15} />
-                </button>
-              </div>
+
+              {editPolId === p.id ? (
+                <PolicyForm initial={p} onSave={form => savePolicy(form, p.id)} onCancel={() => setEditPolId(null)} saving={updatePol.isPending} />
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 0, padding: '8px 18px 14px', background: 'var(--mv-bg)' }}>
+                  {PRIORITIES.map(pr => {
+                    const t = (p.targets || []).find(x => x.priority === pr.value) || {};
+                    return (
+                      <div key={pr.value} style={{ padding: '8px 12px', borderRight: pr.value !== 'low' ? '1px solid var(--mv-hairline-2)' : 'none' }}>
+                        <PriBadge priority={pr.value} />
+                        <div style={{ marginTop: 8, fontSize: 12, color: 'var(--mv-ink-62)' }}>
+                          <div>Response: <strong className="mv-num" style={{ color: 'var(--mv-ink)' }}>{t.response_hours != null ? `${t.response_hours}h` : '—'}</strong></div>
+                          <div style={{ marginTop: 2 }}>Resolution: <strong className="mv-num" style={{ color: 'var(--mv-ink)' }}>{t.resolution_hours != null ? `${t.resolution_hours}h` : '—'}</strong></div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-          )}
+          ))}
         </div>
-      ))}
+
+        {/* ═══ SLA TRIGGERS ══════════════════════════════════════ */}
+        <div className="mv-head" style={{ marginTop: 20 }}>
+          <div>
+            <div className="mv-kicker">Routing &amp; Ingest</div>
+            <h2 className="mv-title" style={{ fontSize: 20 }}>SLA Triggers</h2>
+            <p className="mv-blurb">
+              IF / THEN routing rules. On ingest, triggers run highest-weight first; the first match sets the ticket priority and starts the linked policy SLA clock.
+            </p>
+          </div>
+          <div className="mv-actions">
+            <button onClick={() => { setShowTrigForm(v => !v); setEditTrigId(null); }} className="mv-btn-primary">
+              <Plus size={14} /> New Trigger
+            </button>
+          </div>
+        </div>
+
+        <div className="mv-rule" />
+
+        {showTrigForm && !editTrigId && (
+          <div style={{ background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)', padding: 18, marginBottom: 16 }}>
+            <TriggerForm policies={policies} onSave={form => saveTrigger(form, null)} onCancel={() => setShowTrigForm(false)} saving={createTrig.isPending} />
+          </div>
+        )}
+
+        {trigLoad && <div style={{ padding: 28, textAlign: 'center', color: 'var(--mv-ink-52)', fontSize: 13 }}>Loading triggers…</div>}
+        {!trigLoad && triggers.length === 0 && (
+          <div style={{ padding: 28, textAlign: 'center', color: 'var(--mv-ink-52)', fontSize: 13 }}>
+            No triggers yet. Create one to auto-route incoming tickets by subject, sender, courier or body text.
+          </div>
+        )}
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {triggers.map(t => (
+            <div key={t.id} style={{ background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)' }}>
+              {editTrigId === t.id ? (
+                <TriggerForm initial={t} policies={policies} onSave={form => saveTrigger(form, t.id)} onCancel={() => setEditTrigId(null)} saving={updateTrig.isPending} />
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 18px' }}>
+                  <span className="mv-num" style={{ fontSize: 11, fontWeight: 800, color: 'var(--mv-ink-52)', background: 'var(--mv-bg)', border: '1px solid var(--mv-hairline-2)', padding: '3px 8px', flexShrink: 0 }} title="Execution weight">
+                    {t.priority}
+                  </span>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--mv-ink)', marginBottom: 6 }}>{t.name}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', fontSize: 12.5, color: 'var(--mv-ink-62)' }}>
+                      <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--mv-purple)', background: 'var(--mv-purple-100)', padding: '1px 6px' }}>IF</span>
+                      <span><strong style={{ color: 'var(--mv-ink)' }}>{lbl(CONDITION_FIELDS, t.condition_field)}</strong> {lbl(OPERATORS, t.operator)?.toLowerCase()} </span>
+                      <code style={{ fontSize: 11.5, color: 'var(--mv-ink)', background: 'var(--mv-bg)', border: '1px solid var(--mv-hairline-2)', padding: '2px 7px' }}>{t.match_value}</code>
+                      <ArrowRight size={13} color="var(--mv-ink-45)" />
+                      <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--mv-green)', background: 'var(--mv-green-100)', padding: '1px 6px' }}>THEN</span>
+                      {t.set_priority && <PriBadge priority={t.set_priority} />}
+                      {t.policy_name && <span>SLA: <strong style={{ color: 'var(--mv-purple)' }}>{t.policy_name}</strong></span>}
+                      {!t.set_priority && !t.policy_name && <span style={{ color: 'var(--mv-ink-45)' }}>no action</span>}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                    <ActivePill active={t.is_active} onToggle={() => updateTrig.mutate({ id: t.id, is_active: !t.is_active })} />
+                    <button onClick={() => { setEditTrigId(id => id === t.id ? null : t.id); setShowTrigForm(false); }} className="mv-btn-ghost" style={{ padding: '4px 10px', fontSize: 12 }}>Edit</button>
+                    <button onClick={() => { if (window.confirm(`Delete trigger "${t.name}"?`)) deleteTrig.mutate(t.id); }}
+                      className="mv-icon-btn">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

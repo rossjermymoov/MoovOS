@@ -579,10 +579,10 @@ function InternationalBody({ service, customerId, onRateUpdate, onPerKgUpdate })
       <p className="mv-blurb" style={{ marginTop: 0 }}>This service quotes {rates.length.toLocaleString('en-GB')} rates across {totalZones} destinations. Search for the one you need rather than scrolling for it.</p>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 30, margin: '14px 0 18px', flexWrap: 'wrap' }}>
         <div style={{ flex: '1 1 360px', minWidth: 280 }}>
-          <div className="mv-search" style={{ width: '100%' }}>
+          <div className="mv-search" style={{ width: '100%', height: 36 }}>
             <Search size={14} style={{ color: 'var(--mv-ink-45)', flexShrink: 0 }} />
             <input ref={searchRef} value={searchText} onChange={e => setSearchText(e.target.value)} placeholder={'e.g. "1kg to Jamaica"'} />
-            {searchText && <button onClick={() => setSearchText('')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--mv-ink-45)', display: 'flex' }}><X size={13} /></button>}
+            {searchText && <button onClick={() => setSearchText('')} className="mv-search-clear" title="Clear search"><X size={13} /></button>}
           </div>
           {hasSearch && (parsed.zoneTerm || parsed.weightKg != null) && (
             <div className="mv-kpi-label" style={{ marginTop: 8 }}>{parsed.zoneTerm ? `Destination ${titleCase(parsed.zoneTerm)}` : ''}{parsed.zoneTerm && parsed.weightKg != null ? ' · ' : ''}{parsed.weightKg != null ? `Weight ${parsed.weightKg} kg` : ''}</div>
