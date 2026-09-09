@@ -1879,34 +1879,39 @@ function QuickViewModal({ card, onClose, onDispatched }) {
     } finally { setSending(false); }
   }
 
-  const panel = 'flex min-h-0 flex-col rounded-xl border border-slate-200 bg-white overflow-hidden';
-  const head  = 'border-b border-slate-100 px-4 py-2.5 text-xs font-extrabold uppercase tracking-wide';
+  const panel = 'flex min-h-0 flex-col rounded-xl overflow-hidden';
+  const panelStyle = { border: '1px solid var(--mv-hairline)', background: 'var(--mv-surface)' };
+  const head  = 'px-4 py-2.5 text-xs font-extrabold uppercase tracking-wide';
+  const headStyle = { borderBottom: '1px solid var(--mv-hairline)' };
 
   return (
-    <div className="fixed inset-0 z-[999] flex items-center justify-center bg-slate-900/60 p-6 backdrop-blur-sm" onClick={onClose}>
-      <div className="flex max-h-[88vh] w-full max-w-7xl flex-col rounded-xl bg-white shadow-2xl" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[999] flex items-center justify-center p-6 backdrop-blur-sm"
+      style={{ background: 'color-mix(in srgb, var(--mv-ink) 60%, transparent)' }} onClick={onClose}>
+      <div className="flex max-h-[88vh] w-full max-w-7xl flex-col rounded-xl shadow-2xl" style={{ background: 'var(--mv-surface)' }} onClick={e => e.stopPropagation()}>
         {/* Header */}
-        <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-6 py-4">
+        <div className="flex items-center justify-between gap-3 border-b px-6 py-4" style={{ borderColor: 'var(--mv-hairline)' }}>
           <div className="flex min-w-0 items-center gap-3">
-            <span className={`inline-flex shrink-0 items-center justify-center rounded-md border px-2.5 py-1 text-xs font-bold uppercase tracking-wide ${rowBadgeClasses(card)}`}>
+            <span className="inline-flex shrink-0 items-center justify-center rounded-md border px-2.5 py-1 text-xs font-bold uppercase tracking-wide" style={rowBadgeClasses(card)}>
               #M-{card.ticket_number}
             </span>
-            <span className="truncate text-base font-bold tracking-tight text-slate-800">
+            <span className="truncate text-base font-bold tracking-tight" style={{ color: 'var(--mv-ink)' }}>
               {card.customer_name || card.subject || 'Ticket'}
             </span>
-            {pchip && <span className={`shrink-0 rounded-md border px-2 py-0.5 text-xs font-bold ${pchip[1]}`}>{pchip[0]}</span>}
+            {pchip && <span className="shrink-0 rounded-md border px-2 py-0.5 text-xs font-bold" style={pchip[1]}>{pchip[0]}</span>}
           </div>
-          <button onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700">✕</button>
+          <button onClick={onClose} className="rounded-lg p-1.5" style={{ color: 'var(--mv-ink-45)' }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'var(--mv-bg)'; e.currentTarget.style.color = 'var(--mv-ink-78)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--mv-ink-45)'; }}>✕</button>
         </div>
 
         {/* Closure → AI suggestion intercept (no draft, no email) */}
         {isClosure ? (
           <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto p-8">
-            <div className="w-full max-w-lg rounded-2xl border border-emerald-200 bg-emerald-50/50 p-8 text-center">
-              <div className="text-lg font-black text-slate-900">🤖 We believe this ticket should be resolved.</div>
-              <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4 text-left">
-                <div className="mb-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">Customer message snippet</div>
-                <p className="line-clamp-6 whitespace-pre-wrap text-sm leading-relaxed text-slate-600">
+            <div className="w-full max-w-lg rounded-2xl border p-8 text-center" style={{ borderColor: 'var(--mv-purple-200)', background: 'var(--mv-purple-100)' }}>
+              <div className="text-lg font-black" style={{ color: 'var(--mv-ink)' }}>🤖 We believe this ticket should be resolved.</div>
+              <div className="mt-4 rounded-xl border p-4 text-left" style={{ borderColor: 'var(--mv-hairline)', background: 'var(--mv-surface)' }}>
+                <div className="mb-1 text-[10px] font-bold uppercase tracking-wide" style={{ color: 'var(--mv-ink-45)' }}>Customer message snippet</div>
+                <p className="line-clamp-6 whitespace-pre-wrap text-sm leading-relaxed" style={{ color: 'var(--mv-ink-62)' }}>
                   {cleanIncoming(card.incoming_text)?.slice(0, 400) || card.subject || '—'}
                 </p>
               </div>
@@ -1916,70 +1921,70 @@ function QuickViewModal({ card, onClose, onDispatched }) {
         /* Three-panel cockpit */
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-hidden p-4 lg:grid-cols-3">
           {/* Panel 1 — inbound trigger */}
-          <div className={panel}>
-            <div className={`${head} text-red-600`}>📥 Inbound Trigger</div>
-            <div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap p-4 text-sm leading-relaxed text-slate-700">
+          <div className={panel} style={panelStyle}>
+            <div className={head} style={{ ...headStyle, color: 'var(--mv-magenta)' }}>📥 Inbound Trigger</div>
+            <div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap p-4 text-sm leading-relaxed" style={{ color: 'var(--mv-ink-78)' }}>
               {cleanIncoming(card.incoming_text) || card.subject || 'No incoming message text on file.'}
             </div>
           </div>
 
           {/* Panel 2 — customer response draft */}
-          <div className={panel}>
-            <div className={`${head} text-blue-600`}>👤 Customer Response Draft</div>
+          <div className={panel} style={panelStyle}>
+            <div className={head} style={{ ...headStyle, color: 'var(--mv-teal)' }}>👤 Customer Response Draft</div>
             {card.customer_email_id ? (
               <>
                 <textarea value={custBody} onChange={e => setCustBody(e.target.value)}
-                  className="min-h-0 flex-1 resize-none p-4 text-sm leading-relaxed text-slate-800 outline-none" />
-                <div className="border-t border-slate-100 p-3">
+                  className="min-h-0 flex-1 resize-none p-4 text-sm leading-relaxed outline-none" style={{ color: 'var(--mv-ink)' }} />
+                <div className="border-t p-3" style={{ borderColor: 'var(--mv-hairline)' }}>
                   <div className="flex gap-2">
                     <input value={custFb} onChange={e => setCustFb(e.target.value)}
                       placeholder="🛠️ Refine the customer voice…"
-                      className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-xs outline-none focus:border-slate-400" />
+                      className="min-w-0 flex-1 rounded-lg border px-3 py-2 text-xs outline-none" style={{ borderColor: 'var(--mv-hairline)' }} />
                     <button onClick={() => refine('customer')} disabled={!custFb.trim() || refining === 'customer'}
-                      className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white disabled:opacity-40">
+                      className="rounded-lg px-3 py-2 text-xs font-bold disabled:opacity-40" style={{ background: 'var(--mv-ink)', color: 'var(--mv-bg)' }}>
                       {refining === 'customer' ? '…' : 'Refine'}
                     </button>
                   </div>
                 </div>
               </>
             ) : (
-              <div className="flex flex-1 items-center justify-center p-6 text-center text-sm text-slate-400">No customer draft on this ticket.</div>
+              <div className="flex flex-1 items-center justify-center p-6 text-center text-sm" style={{ color: 'var(--mv-ink-45)' }}>No customer draft on this ticket.</div>
             )}
           </div>
 
           {/* Panel 3 — courier inquiry draft (conditional) */}
-          <div className={panel}>
-            <div className={`${head} text-amber-600`}>🚚 Courier Inquiry Draft</div>
+          <div className={panel} style={panelStyle}>
+            <div className={head} style={{ ...headStyle, color: 'var(--mv-amber)' }}>🚚 Courier Inquiry Draft</div>
             {hasCourier ? (
               <>
                 <textarea value={courBody} onChange={e => setCourBody(e.target.value)}
-                  className="min-h-0 flex-1 resize-none p-4 text-sm leading-relaxed text-slate-800 outline-none" />
-                <div className="border-t border-slate-100 p-3">
+                  className="min-h-0 flex-1 resize-none p-4 text-sm leading-relaxed outline-none" style={{ color: 'var(--mv-ink)' }} />
+                <div className="border-t p-3" style={{ borderColor: 'var(--mv-hairline)' }}>
                   <div className="flex gap-2">
                     <input value={courFb} onChange={e => setCourFb(e.target.value)}
                       placeholder="🛠️ Refine the courier urgency…"
-                      className="min-w-0 flex-1 rounded-lg border border-slate-200 px-3 py-2 text-xs outline-none focus:border-slate-400" />
+                      className="min-w-0 flex-1 rounded-lg border px-3 py-2 text-xs outline-none" style={{ borderColor: 'var(--mv-hairline)' }} />
                     <button onClick={() => refine('courier')} disabled={!courFb.trim() || refining === 'courier'}
-                      className="rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white disabled:opacity-40">
+                      className="rounded-lg px-3 py-2 text-xs font-bold disabled:opacity-40" style={{ background: 'var(--mv-ink)', color: 'var(--mv-bg)' }}>
                       {refining === 'courier' ? '…' : 'Refine'}
                     </button>
                   </div>
                 </div>
               </>
             ) : card.missing_variables ? (
-              <div className="flex flex-1 flex-col items-center justify-center gap-2 bg-amber-50/60 p-6 text-center">
-                <div className="text-sm font-bold text-amber-700">⚠️ Carrier escalation on standby</div>
-                <div className="text-xs font-medium text-amber-700">
+              <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center" style={{ background: 'var(--mv-amber-100)' }}>
+                <div className="text-sm font-bold" style={{ color: 'var(--mv-amber-deep)' }}>⚠️ Carrier escalation on standby</div>
+                <div className="text-xs font-medium" style={{ color: 'var(--mv-amber-deep)' }}>
                   Awaiting customer clarification for: {card.missing_variables.split(/[,;]+/).map(v => v.trim().replace(/_/g, ' ')).filter(Boolean).join(', ')}.
                 </div>
               </div>
             ) : card.triage_intent === 'ticket_closure' ? (
-              <div className="flex flex-1 flex-col items-center justify-center gap-2 bg-emerald-50/60 p-6 text-center">
-                <div className="text-sm font-bold text-emerald-700">✅ Issue Resolved / Suspended</div>
-                <div className="text-xs font-medium text-emerald-700">No carrier intervention required for this query state.</div>
+              <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center" style={{ background: 'var(--mv-purple-100)' }}>
+                <div className="text-sm font-bold" style={{ color: 'var(--mv-green-deep)' }}>✅ Issue Resolved / Suspended</div>
+                <div className="text-xs font-medium" style={{ color: 'var(--mv-green-deep)' }}>No carrier intervention required for this query state.</div>
               </div>
             ) : (
-              <div className="flex flex-1 items-center justify-center bg-slate-50/60 p-6 text-center text-sm font-medium text-slate-400">
+              <div className="flex flex-1 items-center justify-center p-6 text-center text-sm font-medium" style={{ background: 'var(--mv-bg)', color: 'var(--mv-ink-45)' }}>
                 No carrier outreach required for this query type.
               </div>
             )}
@@ -1988,19 +1993,28 @@ function QuickViewModal({ card, onClose, onDispatched }) {
         )}
 
         {/* Footer — closure confirm, or dual-dispatch */}
-        <div className="flex items-center justify-end gap-3 border-t border-slate-100 px-6 py-4">
+        <div className="flex items-center justify-end gap-3 border-t px-6 py-4" style={{ borderColor: 'var(--mv-hairline)' }}>
           <button onClick={onClose}
-            className="rounded-lg border border-slate-200 px-5 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50">
+            className="rounded-lg border px-5 py-2.5 text-sm font-semibold"
+            style={{ borderColor: 'var(--mv-hairline)', color: 'var(--mv-ink-62)' }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'var(--mv-bg)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
             Cancel / Close
           </button>
           {isClosure ? (
             <button onClick={confirmClose} disabled={sending}
-              className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm shadow-emerald-100 transition hover:bg-emerald-700 disabled:opacity-50">
+              className="rounded-lg px-5 py-2.5 text-sm font-bold shadow-sm transition disabled:opacity-50"
+              style={{ background: 'var(--mv-green)', color: 'var(--mv-on-brand)', boxShadow: '0 1px 2px var(--mv-purple-100)' }}
+              onMouseEnter={e => { if (!sending) e.currentTarget.style.background = 'var(--mv-green-deep)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'var(--mv-green)'; }}>
               {sending ? 'Closing…' : '✓ Confirmed - Close Ticket'}
             </button>
           ) : (
             <button onClick={dispatch} disabled={sending}
-              className="rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm shadow-emerald-100 transition hover:bg-emerald-700 disabled:opacity-50">
+              className="rounded-lg px-5 py-2.5 text-sm font-bold shadow-sm transition disabled:opacity-50"
+              style={{ background: 'var(--mv-green)', color: 'var(--mv-on-brand)', boxShadow: '0 1px 2px var(--mv-purple-100)' }}
+              onMouseEnter={e => { if (!sending) e.currentTarget.style.background = 'var(--mv-green-deep)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'var(--mv-green)'; }}>
               {sending ? 'Dispatching…' : '✓ Approve & Send Balanced Strategy'}
             </button>
           )}
@@ -2055,89 +2069,101 @@ function AutopilotQABay({ refreshKey, onChanged }) {
   }
 
   return (
-    <div className="flex h-full flex-col rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+    <div className="flex h-full flex-col rounded-2xl shadow-sm" style={{ border: '1px solid var(--mv-hairline)', background: 'var(--mv-surface)' }}>
+      <div className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: 'var(--mv-hairline)' }}>
         <div className="flex items-center gap-2">
           <span className="text-base">🤖</span>
-          <span className="text-sm font-bold text-slate-900">Autopilot QA Guardrails</span>
+          <span className="text-sm font-bold" style={{ color: 'var(--mv-ink)' }}>Autopilot QA Guardrails</span>
         </div>
-        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-700">
+        <span className="rounded-full px-2 py-0.5 text-xs font-bold" style={{ background: 'var(--mv-purple-100)', color: 'var(--mv-green-deep)' }}>
           {cards.length} ticket{cards.length === 1 ? '' : 's'}
         </span>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
-        {loading && <div className="p-6 text-center text-xs text-slate-400">Loading drafts…</div>}
+        {loading && <div className="p-6 text-center text-xs" style={{ color: 'var(--mv-ink-45)' }}>Loading drafts…</div>}
         {!loading && cards.length === 0 && (
           <div className="p-8 text-center">
             <div className="mb-2 text-3xl">✓</div>
-            <div className="text-sm font-semibold text-slate-600">Queue clear</div>
-            <div className="text-xs text-slate-400">No tickets waiting for QA.</div>
+            <div className="text-sm font-semibold" style={{ color: 'var(--mv-ink-62)' }}>Queue clear</div>
+            <div className="text-xs" style={{ color: 'var(--mv-ink-45)' }}>No tickets waiting for QA.</div>
           </div>
         )}
         {cards.map(c => (
           c.kind === 'paused' ? (
-            <div key={`p-${c.query_id}`} className="mb-3 rounded-xl border border-amber-200 bg-amber-50 p-3 last:mb-0">
+            <div key={`p-${c.query_id}`} className="mb-3 rounded-xl p-3 last:mb-0" style={{ border: '1px solid var(--mv-amber-200)', background: 'var(--mv-amber-100)' }}>
               <div className="mb-2 flex items-center gap-2">
                 <button onClick={() => navigate(`/queries/${c.query_id}`)}
-                  className={`inline-flex items-center justify-center rounded border px-2 py-0.5 text-xs font-bold uppercase ${rowBadgeClasses(c)}`}>
+                  className="inline-flex items-center justify-center rounded border px-2 py-0.5 text-xs font-bold uppercase" style={rowBadgeClasses(c)}>
                   M-{c.ticket_number}
                 </button>
-                <span className="truncate text-xs font-medium text-amber-700">{c.customer_name || c.subject}</span>
+                <span className="truncate text-xs font-medium" style={{ color: 'var(--mv-amber-deep)' }}>{c.customer_name || c.subject}</span>
               </div>
-              <p className="mb-3 text-sm font-semibold leading-snug text-amber-800">
+              <p className="mb-3 text-sm font-semibold leading-snug" style={{ color: 'var(--mv-amber-deep)' }}>
                 🤖 Autopilot Paused: Manual review required for this complex query.
               </p>
               <button onClick={() => navigate(`/queries/${c.query_id}`)}
-                className="w-full rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-bold text-amber-800 transition hover:bg-amber-100">
+                className="w-full rounded-lg px-3 py-2 text-xs font-bold transition"
+                style={{ border: '1px solid var(--mv-amber-200)', background: 'var(--mv-surface)', color: 'var(--mv-amber-deep)' }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'var(--mv-amber-100)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'var(--mv-surface)'; }}>
                 Open &amp; review →
               </button>
             </div>
           ) : c.kind === 'closure' ? (
-            <div key={`c-${c.query_id}`} className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 last:mb-0">
+            <div key={`c-${c.query_id}`} className="mb-3 rounded-xl p-3 last:mb-0" style={{ border: '1px solid var(--mv-purple-200)', background: 'var(--mv-purple-100)' }}>
               <div className="mb-2 flex items-center gap-2">
                 <button onClick={() => navigate(`/queries/${c.query_id}`)}
-                  className={`inline-flex items-center justify-center rounded border px-2 py-0.5 text-xs font-bold uppercase ${rowBadgeClasses(c)}`}>
+                  className="inline-flex items-center justify-center rounded border px-2 py-0.5 text-xs font-bold uppercase" style={rowBadgeClasses(c)}>
                   M-{c.ticket_number}
                 </button>
-                <span className="truncate text-xs font-medium text-emerald-700">{c.customer_name || c.subject}</span>
+                <span className="truncate text-xs font-medium" style={{ color: 'var(--mv-green-deep)' }}>{c.customer_name || c.subject}</span>
               </div>
-              <p className="mb-3 text-sm font-semibold leading-snug text-emerald-800">
+              <p className="mb-3 text-sm font-semibold leading-snug" style={{ color: 'var(--mv-green-deep)' }}>
                 🤖 AI suggests this ticket can be resolved.
               </p>
               <button onClick={() => setViewing(c)}
-                className="w-full rounded-lg border border-emerald-300 bg-white px-3 py-2 text-xs font-bold text-emerald-800 transition hover:bg-emerald-100">
+                className="w-full rounded-lg px-3 py-2 text-xs font-bold transition"
+                style={{ border: '1px solid var(--mv-purple-200)', background: 'var(--mv-surface)', color: 'var(--mv-green-deep)' }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'var(--mv-purple-100)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'var(--mv-surface)'; }}>
                 👁️ Review &amp; close →
               </button>
             </div>
           ) : (
-            <div key={c.query_id} className="mb-3 rounded-xl border border-slate-200 p-3 last:mb-0">
+            <div key={c.query_id} className="mb-3 rounded-xl p-3 last:mb-0" style={{ border: '1px solid var(--mv-hairline)' }}>
               <div className="mb-2 flex items-center gap-2">
                 <button onClick={() => navigate(`/queries/${c.query_id}`)}
-                  className={`inline-flex items-center justify-center rounded border px-2 py-0.5 text-xs font-bold uppercase ${rowBadgeClasses(c)}`}>
+                  className="inline-flex items-center justify-center rounded border px-2 py-0.5 text-xs font-bold uppercase" style={rowBadgeClasses(c)}>
                   M-{c.ticket_number}
                 </button>
-                <span className="truncate text-xs font-medium text-slate-500">{c.customer_name || c.subject}</span>
+                <span className="truncate text-xs font-medium" style={{ color: 'var(--mv-ink-52)' }}>{c.customer_name || c.subject}</span>
                 {/* Draft channel chips */}
-                {c.customer_email_id && <span className="shrink-0 rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-blue-700">👤 Cust</span>}
-                {c.courier_email_id  && <span className="shrink-0 rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold text-amber-700">🚚 Courier</span>}
+                {c.customer_email_id && <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ background: 'var(--mv-teal-100)', color: 'var(--mv-teal)' }}>👤 Cust</span>}
+                {c.courier_email_id  && <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ background: 'var(--mv-amber-100)', color: 'var(--mv-amber-deep)' }}>🚚 Courier</span>}
               </div>
 
               {(c.consecutive_approvals ?? 0) >= AUTOPILOT_THRESHOLD && (
-                <div className="mb-2 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-bold text-emerald-700">
+                <div className="mb-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold" style={{ background: 'var(--mv-purple-100)', color: 'var(--mv-green-deep)' }}>
                   🎯 Automation Stable — Autopilot Ready
                 </div>
               )}
 
-              <p className="mb-3 line-clamp-3 text-sm leading-snug text-slate-700">{intentLine(c)}</p>
+              <p className="mb-3 line-clamp-3 text-sm leading-snug" style={{ color: 'var(--mv-ink-78)' }}>{intentLine(c)}</p>
 
               <div className="flex flex-wrap gap-2">
                 <button onClick={() => quickApprove(c)} disabled={busyId === c.query_id}
-                  className="flex-1 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-emerald-700 disabled:opacity-50">
+                  className="flex-1 rounded-lg px-3 py-2 text-xs font-bold transition disabled:opacity-50"
+                  style={{ background: 'var(--mv-green)', color: 'var(--mv-on-brand)' }}
+                  onMouseEnter={e => { if (busyId !== c.query_id) e.currentTarget.style.background = 'var(--mv-green-deep)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'var(--mv-green)'; }}>
                   {busyId === c.query_id ? 'Sending…' : '✓ Quick Approve'}
                 </button>
                 <button onClick={() => setViewing(c)}
-                  className="flex items-center gap-1 rounded-md bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-200">
+                  className="flex items-center gap-1 rounded-md px-3 py-2 text-xs font-semibold"
+                  style={{ background: 'var(--mv-bg)', color: 'var(--mv-ink-78)' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'var(--mv-hairline-2)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'var(--mv-bg)'; }}>
                   👁️ Quick View
                 </button>
               </div>
@@ -2457,7 +2483,7 @@ export default function QueriesPage() {
 
         {/* Columns 1 & 2 — Live Traffic Queue */}
         <div className="flex min-h-0 flex-col xl:col-span-2">
-          <div className="min-h-0 flex-1 overflow-auto rounded-2xl border border-slate-200 bg-white">
+          <div className="min-h-0 flex-1 overflow-auto rounded-2xl" style={{ border: '1px solid var(--mv-hairline)', background: 'var(--mv-surface)' }}>
             {loading && <div style={{ padding: 40, textAlign: 'center', color: C.muted, fontSize: 12 }}>Loading…</div>}
             {!loading && displayQueries.length === 0 && (
               <div style={{ padding: 60, textAlign: 'center' }}>
@@ -2501,30 +2527,34 @@ export default function QueriesPage() {
 
       {/* ── Pagination footer ──────────────────────────────────────────────── */}
       {total > 0 && (
-        <div className="flex shrink-0 items-center justify-between border-t border-slate-200 bg-white px-5 py-3">
-          <span className="text-sm text-slate-500">
+        <div className="flex shrink-0 items-center justify-between border-t px-5 py-3" style={{ borderColor: 'var(--mv-hairline)', background: 'var(--mv-surface)' }}>
+          <span className="text-sm" style={{ color: 'var(--mv-ink-52)' }}>
             Showing {startIdx}-{endIdx} of {total} entries
           </span>
           <div className="inline-flex items-center gap-1">
             <button
               onClick={() => setPage(p => Math.max(1, p - 1))}
               disabled={page <= 1}
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600
-                         transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-40"
+              style={{ border: '1px solid var(--mv-hairline)', color: 'var(--mv-ink-62)' }}
+              onMouseEnter={e => { if (page > 1) e.currentTarget.style.background = 'var(--mv-bg)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
             >
               Previous
             </button>
             {pageNumbers.map((n, i) =>
               n === '…' ? (
-                <span key={`e${i}`} className="px-2 text-sm text-slate-400">…</span>
+                <span key={`e${i}`} className="px-2 text-sm" style={{ color: 'var(--mv-ink-45)' }}>…</span>
               ) : (
                 <button
                   key={n}
                   onClick={() => setPage(n)}
-                  className={`min-w-[36px] rounded-lg border px-3 py-1.5 text-sm font-medium transition
-                    ${n === page
-                      ? 'border-slate-900 bg-slate-900 text-white'
-                      : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+                  className="min-w-[36px] rounded-lg px-3 py-1.5 text-sm font-medium transition"
+                  style={n === page
+                    ? { border: '1px solid var(--mv-ink)', background: 'var(--mv-ink)', color: 'var(--mv-bg)' }
+                    : { border: '1px solid var(--mv-hairline)', color: 'var(--mv-ink-62)' }}
+                  onMouseEnter={e => { if (n !== page) e.currentTarget.style.background = 'var(--mv-bg)'; }}
+                  onMouseLeave={e => { if (n !== page) e.currentTarget.style.background = 'transparent'; }}
                 >
                   {n}
                 </button>
@@ -2533,8 +2563,10 @@ export default function QueriesPage() {
             <button
               onClick={() => setPage(p => Math.min(totalPages, p + 1))}
               disabled={page >= totalPages}
-              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm font-medium text-slate-600
-                         transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              className="rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-40"
+              style={{ border: '1px solid var(--mv-hairline)', color: 'var(--mv-ink-62)' }}
+              onMouseEnter={e => { if (page < totalPages) e.currentTarget.style.background = 'var(--mv-bg)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
             >
               Next
             </button>
@@ -2546,20 +2578,25 @@ export default function QueriesPage() {
 
       {/* 🎓 Smart-nudge toast — surfaced when the system auto-learns a behaviour */}
       {nudge && (
-        <div className="fixed bottom-6 right-6 z-[1000] w-96 rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl">
+        <div className="fixed bottom-6 right-6 z-[1000] w-96 rounded-2xl p-4 shadow-2xl" style={{ border: '1px solid var(--mv-hairline)', background: 'var(--mv-surface)' }}>
           <div className="flex items-start justify-between gap-2">
-            <div className="text-sm font-bold text-slate-900">🎓 System Learned New Behavior</div>
-            <button onClick={dismissNudge} className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700">✕</button>
+            <div className="text-sm font-bold" style={{ color: 'var(--mv-ink)' }}>🎓 System Learned New Behavior</div>
+            <button onClick={dismissNudge} className="rounded p-1" style={{ color: 'var(--mv-ink-45)' }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'var(--mv-bg)'; e.currentTarget.style.color = 'var(--mv-ink-78)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--mv-ink-45)'; }}>✕</button>
           </div>
-          <p className="mt-1 text-xs leading-relaxed text-slate-600">
+          <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--mv-ink-62)' }}>
             We've recorded your phrasing preference for this scenario
-            {nudge.scenario_trigger ? <> (<span className="font-semibold text-slate-700">{nudge.scenario_trigger.replace(/_/g, ' ')}</span>)</> : null}.
+            {nudge.scenario_trigger ? <> (<span className="font-semibold" style={{ color: 'var(--mv-ink-78)' }}>{nudge.scenario_trigger.replace(/_/g, ' ')}</span>)</> : null}.
             We found <strong>{nudge.match_count}</strong> other pending ticket{nudge.match_count === 1 ? '' : 's'} matching this profile.
           </p>
           <button
             onClick={applyNudge}
             disabled={nudgeBusy}
-            className="mt-3 w-full rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white transition hover:bg-slate-800 disabled:opacity-50"
+            className="mt-3 w-full rounded-lg px-3 py-2 text-xs font-bold transition disabled:opacity-50"
+            style={{ background: 'var(--mv-ink)', color: 'var(--mv-bg)' }}
+            onMouseEnter={e => { if (!nudgeBusy) e.currentTarget.style.background = 'color-mix(in srgb, var(--mv-ink) 85%, transparent)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'var(--mv-ink)'; }}
           >
             {nudgeBusy ? 'Updating…' : `🔄 Update Remaining Drafts (${nudge.match_count})`}
           </button>
