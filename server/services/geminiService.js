@@ -11,7 +11,7 @@ import { ISSUE_TYPES } from './courierTemplates.js';
 
 // v1beta — required for JSON mode (responseMimeType); v1 rejects it with a 400.
 const GEMINI_URL =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+  'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent';
 
 // Generic Gemini 1.5 Flash text generation (REST — Node-18 safe). Replaces the
 // legacy Anthropic /v1/messages calls. Throws if the key is missing or the call
@@ -208,7 +208,7 @@ export async function extractTriage(subject, body, { trackingExamples = '' } = {
 
   // Tier 1 — Gemini
   if (process.env.GEMINI_API_KEY) {
-    try { return normalizeTriage(await callGemini(prompt), 'gemini-2.5-flash'); }
+    try { return normalizeTriage(await callGemini(prompt), 'gemini-3.6-flash'); }
     catch (e) { console.warn('[Triage] Tier 1 Gemini failed → trying Anthropic:', e.message); }
   }
 

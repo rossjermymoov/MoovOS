@@ -11,7 +11,7 @@ import { google } from 'googleapis';
 // heuristics if the API key is missing or the call fails, so the sync never
 // hard-crashes.
 const GEMINI_GENERATE_URL =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+  'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent';
 
 function triageFallback(subject, body) {
   const text = `${subject || ''} ${body || ''}`.toLowerCase();
