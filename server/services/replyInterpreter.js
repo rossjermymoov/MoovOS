@@ -69,22 +69,36 @@ async function getLatestInboundCourierEmailId(queryId) {
   return r.rows[0]?.id || null;
 }
 
-async function stampClassification(queryId, classification) {
+// isConsistent: null = not checked (hard-rule paths never call Gemini so have
+// nothing to report here), true/false = the consistency-check verdict from the
+// classification call (WISMO Phase 3, MOS-6).
+async function stampClassification(queryId, classification, isConsistent = null) {
   const emailId = await getLatestInboundCourierEmailId(queryId);
   if (emailId) {
-    await query(`UPDATE query_emails SET reply_classification = $2 WHERE id = $1`, [emailId, classification]);
+    await query(
+      `UPDATE query_emails SET reply_classification = $2, is_consistent = $3 WHERE id = $1`,
+      [emailId, classification, isConsistent],
+    );
   }
 }
 
+// Consistency check (WISMO Phase 3, MOS-6 — deliberately deferred from Phase 2)
+// folded into this same call rather than a second Gemini round-trip: the shared
+// 20-req/min free-tier quota (discovered during Phase 2 testing) makes every extra
+// call a real reliability cost, and the model already has the full thread in front
+// of it for the classification itself.
 const INTERPRET_SYSTEM =
   'You are reviewing a courier\'s reply on an open customer support ticket. ' +
-  'Given the thread history and the courier\'s latest reply, decide: ' +
-  'RESOLVED — clearly answers with a concrete status/outcome (a specific fact: ' +
-  'status, date, reason, location); ' +
-  'NEEDS_MORE_INFO — acknowledges but gives no concrete new fact (boilerplate, ' +
-  '"investigating", no detail); ' +
-  'AMBIGUOUS — unclear, off-topic, or contradicts the thread. ' +
-  'Return STRICT JSON only: {"classification":"RESOLVED"|"NEEDS_MORE_INFO"|"AMBIGUOUS","reasoning":string}.';
+  'Given the thread history and the courier\'s latest reply, decide TWO things: ' +
+  '1. classification — RESOLVED (clearly answers with a concrete status/outcome: a ' +
+  'specific fact like status, date, reason, or location), NEEDS_MORE_INFO ' +
+  '(acknowledges but gives no concrete new fact — boilerplate, "investigating", no ' +
+  'detail), or AMBIGUOUS (unclear, off-topic, or contradicts the thread). ' +
+  '2. is_consistent — does this reply logically follow from the thread history (not ' +
+  'about a different parcel, not contradicting earlier facts, not clearly misrouted)? ' +
+  'If the thread history is too short to judge (e.g. only 1-2 prior messages), return ' +
+  'true by default — never manufacture a false inconsistency from thin history. ' +
+  'Return STRICT JSON only: {"classification":"RESOLVED"|"NEEDS_MORE_INFO"|"AMBIGUOUS","is_consistent":true|false,"reasoning":string}.';
 
 function buildPrompt(history, newReply) {
   const thread = history.map(h => `[${h.direction}] ${(h.body_text || '').slice(0, 1000)}`).join('\n\n');
@@ -103,9 +117,9 @@ async function getThreadHistory(queryId) {
 
 // ── Branch handlers ───────────────────────────────────────────────────────────
 
-async function handleResolved(queryId, body) {
+async function handleResolved(queryId, body, isConsistent = null) {
   const result = await draftCustomerUpdateFromCourier(queryId, body);
-  await stampClassification(queryId, 'resolved');
+  await stampClassification(queryId, 'resolved', isConsistent);
   return { status: 'resolved', ...result };
 }
 
@@ -136,7 +150,7 @@ async function handleGdprRequest(queryId, ticket) {
   return { status: 'gdpr_address_confirmed' };
 }
 
-async function handleNeedsMoreInfo(queryId, ticket, reason) {
+async function handleNeedsMoreInfo(queryId, ticket, reason, isConsistent = null) {
   const tpl = await getCourierTemplates(ticket.courier_code);
   const vars = { customer_name: ticket.customer_name || 'the customer', tracking_code: ticket.consignment_number };
   const middle =
@@ -154,25 +168,66 @@ async function handleNeedsMoreInfo(queryId, ticket, reason) {
     `UPDATE queries SET internal_automation_state = 'awaiting_courier_response', updated_at = NOW() WHERE id = $1`,
     [queryId],
   );
-  await stampClassification(queryId, reason);
+  await stampClassification(queryId, reason, isConsistent);
   return { status: reason };
 }
 
-async function handleAmbiguous(queryId, reasoning) {
+async function escalate(queryId, reasoning, escalationSource, defaultReason) {
   await query(
     `UPDATE queries
         SET requires_attention = true,
             attention_reason = $2,
+            escalation_source = $3,
             internal_automation_state = 'action_required',
             updated_at = NOW()
       WHERE id = $1`,
-    [queryId, reasoning || 'Courier reply does not clearly answer the query — needs human review.'],
+    [queryId, reasoning || defaultReason, escalationSource],
   );
+}
+
+async function handleAmbiguous(queryId, reasoning) {
+  await escalate(queryId, reasoning, 'ambiguous_reply', 'Courier reply does not clearly answer the query — needs human review.');
   await stampClassification(queryId, 'ambiguous');
   return { status: 'ambiguous', reasoning: reasoning || null };
 }
 
+// Consistency-check failure (WISMO Phase 3, MOS-6) overrides whatever classification
+// the model returned — a reply that doesn't logically fit the thread shouldn't be
+// trusted even if it separately claimed to "resolve" something (safety net for
+// DPD's habit of fragmenting one case across multiple email threads).
+async function handleInconsistent(queryId, reasoning) {
+  await escalate(queryId, reasoning, 'inconsistent_reply', 'Courier reply does not appear to match this ticket\'s conversation history — needs human review.');
+  await stampClassification(queryId, 'ambiguous', false);
+  return { status: 'inconsistent', reasoning: reasoning || null };
+}
+
 // ── Entry point ────────────────────────────────────────────────────────────────
+
+// ── Pure classification (no DB writes, no drafting) ─────────────────────────────
+// Exported separately so the WISMO Phase 3 (MOS-6) calibration script
+// (server/scripts/calibratePhase3.js) can run the EXACT same decision logic
+// read-only against historical tickets, with zero risk of drafting or sending
+// anything — single source of truth for the prompt/rules, not a duplicate copy.
+export async function classifyCourierReply(ticket, body, history) {
+  if (isGdprAddressRequest(body)) return { kind: 'gdpr' };
+
+  const patterns = await getGenericPatterns(ticket.courier_code);
+  const lower = body.toLowerCase();
+  if (patterns.some(p => lower.includes(p.toLowerCase()))) {
+    return { kind: 'generic_non_answer' };
+  }
+
+  try {
+    const raw = await geminiGenerate(buildPrompt(history, body), {
+      system: INTERPRET_SYSTEM, json: true, maxTokens: 500, temperature: 0.2,
+    });
+    const parsed = JSON.parse(raw);
+    return { kind: 'gemini', classification: parsed.classification, is_consistent: parsed.is_consistent, reasoning: parsed.reasoning };
+  } catch (e) {
+    console.warn('[ReplyInterpreter] classification failed:', e.message);
+    return { kind: 'gemini_failed' };
+  }
+}
 
 export async function interpretCourierReply(queryId, body) {
   const tRes = await query(
@@ -182,26 +237,16 @@ export async function interpretCourierReply(queryId, body) {
   if (!tRes.rows.length) return { status: 'error', reason: 'ticket not found' };
   const ticket = tRes.rows[0];
 
-  if (isGdprAddressRequest(body)) return handleGdprRequest(queryId, ticket);
-
-  const patterns = await getGenericPatterns(ticket.courier_code);
-  const lower = body.toLowerCase();
-  if (patterns.some(p => lower.includes(p.toLowerCase()))) {
-    return handleNeedsMoreInfo(queryId, ticket, 'generic_non_answer');
-  }
-
   const history = await getThreadHistory(queryId);
-  let parsed = null;
-  try {
-    const raw = await geminiGenerate(buildPrompt(history, body), {
-      system: INTERPRET_SYSTEM, json: true, maxTokens: 500, temperature: 0.2,
-    });
-    parsed = JSON.parse(raw);
-  } catch (e) {
-    console.warn('[ReplyInterpreter] classification failed:', e.message);
-  }
+  const result = await classifyCourierReply(ticket, body, history);
 
-  if (parsed?.classification === 'RESOLVED')        return handleResolved(queryId, body);
-  if (parsed?.classification === 'NEEDS_MORE_INFO') return handleNeedsMoreInfo(queryId, ticket, 'needs_more_info');
-  return handleAmbiguous(queryId, parsed?.reasoning);   // default on any failure/uncertainty
+  if (result.kind === 'gdpr')               return handleGdprRequest(queryId, ticket);
+  if (result.kind === 'generic_non_answer') return handleNeedsMoreInfo(queryId, ticket, 'generic_non_answer');
+
+  // Consistency check overrides classification — checked before branching on it.
+  if (result.kind === 'gemini' && result.is_consistent === false) return handleInconsistent(queryId, result.reasoning);
+
+  if (result.classification === 'RESOLVED')        return handleResolved(queryId, body, true);
+  if (result.classification === 'NEEDS_MORE_INFO') return handleNeedsMoreInfo(queryId, ticket, 'needs_more_info', true);
+  return handleAmbiguous(queryId, result.reasoning);   // default on any failure/uncertainty
 }
