@@ -53,7 +53,12 @@ export function AuthProvider({ children }) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
     });
-    const data = await res.json();
+    let data = {};
+    try {
+      data = await res.json();
+    } catch {
+      throw new Error(res.status === 502 || res.status === 504 ? 'Backend server is not reachable' : `Server returned empty response (${res.status})`);
+    }
     if (!res.ok) throw new Error(data.error || 'Login failed');
     localStorage.setItem(TOKEN_KEY, data.token);
     setUser(data.user);

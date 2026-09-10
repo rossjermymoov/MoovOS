@@ -75,7 +75,7 @@ export async function triageAndSummarize(subject, body) {
       summary: (parsed.summary || subject || 'Customer enquiry').toString().slice(0, 400),
       courier: parsed.courier || null,
       tracking_number: isLikelyTracking(parsed.tracking_number) ? String(parsed.tracking_number).trim() : null,
-      source: 'gemini-2.5-flash',
+      source: 'gemini-3.6-flash',
     };
   } catch (e) {
     console.warn('[Gemini triage] failed:', e.message);
