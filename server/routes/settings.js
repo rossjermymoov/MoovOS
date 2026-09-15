@@ -90,14 +90,15 @@ router.get('/workflow-trust', async (req, res, next) => {
   try {
     const r = await query(`SELECT * FROM workflow_trust ORDER BY courier_code, intent`);
     const cap = TRUST_CAP;
-    res.json(r.rows.map(w => ({
+    const rows = await Promise.all(r.rows.map(async w => ({
       ...w,
       cap,
       ready: w.consecutive_clean_approvals >= cap,
-      locked: isLockedCategory(w.intent, null),
+      locked: await isLockedCategory(w.intent, null, w.courier_code),
       stage: w.autopilot_enabled ? 'full_autopilot'
            : w.consecutive_clean_approvals >= cap ? 'autopilot_ready' : 'probation',
     })));
+    res.json(rows);
   } catch (err) { next(err); }
 });
 
@@ -108,7 +109,7 @@ router.put('/workflow-trust/:courier/:intent/toggle', async (req, res, next) => 
     const intent  = (req.params.intent || '').toLowerCase();
     const enable  = req.body.enabled === true || req.body.enabled === 'true';
 
-    if (enable && isLockedCategory(intent, null)) {
+    if (enable && await isLockedCategory(intent, null, courier)) {
       return res.status(400).json({ error: 'Claims / complaints cannot run on Autopilot.' });
     }
     if (enable) {

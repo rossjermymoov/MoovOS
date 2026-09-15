@@ -910,14 +910,14 @@ router.get('/:id/auto-remind', async (req, res, next) => {
     );
     if (!t.rows.length) return res.status(404).send('Ticket not found');
     const tk = t.rows[0];
-    const ref = tk.courier_reference_id || `Moov-${tk.ticket_number}`;
-    const body =
-      `Following up on our earlier query (Ref ${ref}) regarding consignment ${tk.consignment_number || '(n/a)'}. ` +
-      `We have not yet received a response and the SLA window has now passed — please provide an urgent update.`;
+    // Shared with the scheduled auto-chase scanner (WISMO Phase 3, MOS-6) so the
+    // manual button and the automated cadence draft the same wording.
+    const { composeChaseEmail } = await import('../services/loopController.js');
+    const { subject, body } = composeChaseEmail(tk, 1);
     await query(
       `INSERT INTO query_emails (query_id, direction, subject, body_text, from_address, is_ai_draft, created_at)
        VALUES ($1, 'outbound_courier'::email_direction, $2, $3, 'service@moovparcel.co.uk', true, NOW())`,
-      [req.params.id, `[Ref: ${ref}] Reminder — ${tk.courier_name || 'courier'}`, body],
+      [req.params.id, subject, body],
     );
     await query(
       `INSERT INTO audit_logs (action_type, query_id, actor, metadata)
@@ -1162,6 +1162,45 @@ router.get('/drafts', async (req, res, next) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// GET /api/queries/spot-checks — unreviewed autopilot spot-check samples
+// (WISMO Phase 3, MOS-6). API only for this phase — no dedicated UI yet.
+// PATCH /api/queries/spot-checks/:id — record a reviewer's outcome.
+// Registered before '/:id'.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/spot-checks', async (req, res, next) => {
+  try {
+    const reviewed = req.query.reviewed === 'true';
+    const r = await query(`
+      SELECT s.*, q.ticket_number, q.subject, q.customer_name
+        FROM spot_check_samples s
+        JOIN queries q ON q.id = s.query_id
+       WHERE s.reviewed_at IS ${reviewed ? 'NOT NULL' : 'NULL'}
+       ORDER BY s.sampled_at DESC
+       LIMIT 200
+    `);
+    res.json(r.rows);
+  } catch (err) { next(err); }
+});
+
+router.patch('/spot-checks/:id', async (req, res, next) => {
+  try {
+    const { outcome, notes, reviewer_id } = req.body || {};
+    if (!['ok', 'issue_found'].includes(outcome)) {
+      return res.status(400).json({ error: "outcome must be 'ok' or 'issue_found'" });
+    }
+    const r = await query(
+      `UPDATE spot_check_samples
+          SET outcome = $2, notes = $3, reviewer_id = $4, reviewed_at = NOW()
+        WHERE id = $1
+        RETURNING *`,
+      [req.params.id, outcome, notes || null, reviewer_id || null],
+    );
+    if (!r.rows.length) return res.status(404).json({ error: 'Spot-check sample not found' });
+    res.json(r.rows[0]);
+  } catch (err) { next(err); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET /api/queries/:id
 // Single query with full email thread, evidence, and notifications
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1244,6 +1283,11 @@ router.post('/', async (req, res, next) => {
     );
     const slaHours = slaRes.rows[0]?.sla_hours || null;
 
+    // Whole-case SLA clock (WISMO Phase 3, MOS-6) — set once here too, so a
+    // manually-created ticket gets the same clock as a Gmail-ingested one.
+    const automationSettings = await query(`SELECT whole_case_sla_hours FROM automation_settings WHERE id = 1`);
+    const wholeCaseHours = automationSettings.rows[0]?.whole_case_sla_hours || 48;
+
     const result = await query(`
       INSERT INTO queries (
         parcel_id, consignment_number, customer_id, customer_name,
@@ -1252,8 +1296,9 @@ router.post('/', async (req, res, next) => {
         courier_email, sla_hours,
         sender_email, sender_matched,
         freshdesk_ticket_id, freshdesk_ticket_number,
-        created_by
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)
+        created_by, whole_case_sla_deadline
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,
+                NOW() + ($20 || ' hours')::INTERVAL)
       RETURNING *
     `, [
       parcel_id, consignment_number, customer_id, customer_name,
@@ -1262,7 +1307,7 @@ router.post('/', async (req, res, next) => {
       courierEmail, slaHours,
       sender_email, !!customer_id,
       freshdesk_ticket_id, freshdesk_ticket_number,
-      created_by || null,
+      created_by || null, wholeCaseHours,
     ]);
 
     const newQuery = result.rows[0];

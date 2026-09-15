@@ -9,9 +9,16 @@
 
 import { ISSUE_TYPES } from './courierTemplates.js';
 
+// Single source of truth for which Gemini model the whole app calls — every other
+// file (gmailSync.js, routes/katana.js) imports this instead of hardcoding its own
+// model string. Override via the GEMINI_MODEL env var to swap models (e.g. when
+// Google deprecates/renames one, or a rotated API key only has newer models
+// enabled) without a code change or deploy.
+export const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
+
 // v1beta — required for JSON mode (responseMimeType); v1 rejects it with a 400.
 const GEMINI_URL =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent';
+  `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 // Generic Gemini 1.5 Flash text generation (REST — Node-18 safe). Replaces the
 // legacy Anthropic /v1/messages calls. Throws if the key is missing or the call
@@ -208,7 +215,7 @@ export async function extractTriage(subject, body, { trackingExamples = '' } = {
 
   // Tier 1 — Gemini
   if (process.env.GEMINI_API_KEY) {
-    try { return normalizeTriage(await callGemini(prompt), 'gemini-3.6-flash'); }
+    try { return normalizeTriage(await callGemini(prompt), GEMINI_MODEL); }
     catch (e) { console.warn('[Triage] Tier 1 Gemini failed → trying Anthropic:', e.message); }
   }
 
