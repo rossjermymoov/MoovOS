@@ -5,13 +5,13 @@
 
 import { google } from 'googleapis';
 
-// ─── AI triage + summary via Gemini 1.5 Flash (REST — Node-18 safe) ──────────
+// ─── AI triage + summary via Gemini (REST via geminiGenerate — Node-18 safe) ──
 // Returns strict JSON: { ticket_type, summary, courier, tracking_number }.
 // ticket_type ∈ ['query','claim','billing','technical']. Falls back to regex
 // heuristics if the API key is missing or the call fails, so the sync never
-// hard-crashes.
-const GEMINI_GENERATE_URL =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+// hard-crashes. Reuses the shared geminiGenerate()/GEMINI_MODEL from
+// geminiService.js rather than its own REST call, so there's one place to
+// change the model — this file used to duplicate that call entirely.
 
 function triageFallback(subject, body) {
   const text = `${subject || ''} ${body || ''}`.toLowerCase();
@@ -38,8 +38,7 @@ function triageFallback(subject, body) {
 }
 
 export async function triageAndSummarize(subject, body) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return triageFallback(subject, body);
+  if (!process.env.GEMINI_API_KEY) return triageFallback(subject, body);
 
   const trackingExamples = await getAllTrackingExamples();
   const trackingGuide = trackingExamples
@@ -58,24 +57,15 @@ export async function triageAndSummarize(subject, body) {
     `\nSubject: ${subject || '(none)'}\nBody: ${(body || '').slice(0, 2000)}`;
 
   try {
-    const resp = await fetch(`${GEMINI_GENERATE_URL}?key=${encodeURIComponent(apiKey)}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0, responseMimeType: 'application/json' },
-      }),
-    });
-    if (!resp.ok) { console.warn('[Gemini triage] non-OK:', resp.status); return triageFallback(subject, body); }
-    const json = await resp.json();
-    const parsed = JSON.parse(json.candidates?.[0]?.content?.parts?.[0]?.text || '{}');
+    const raw = await geminiGenerate(prompt, { json: true, temperature: 0 });
+    const parsed = JSON.parse(raw || '{}');
     const allowed = ['query', 'claim', 'billing', 'technical'];
     return {
       ticket_type: allowed.includes(parsed.ticket_type) ? parsed.ticket_type : 'query',
       summary: (parsed.summary || subject || 'Customer enquiry').toString().slice(0, 400),
       courier: parsed.courier || null,
       tracking_number: isLikelyTracking(parsed.tracking_number) ? String(parsed.tracking_number).trim() : null,
-      source: 'gemini-2.5-flash',
+      source: GEMINI_MODEL,
     };
   } catch (e) {
     console.warn('[Gemini triage] failed:', e.message);
@@ -104,7 +94,7 @@ import { getAuthedClient, getConfig, updateLastSync } from './gmailService.js';
 import { query } from '../db/index.js';
 import { evaluateAutomationRules } from './automationEngine.js';
 import { triagePriority } from './triageEngine.js';
-import { isLikelyTracking } from './geminiService.js';
+import { isLikelyTracking, geminiGenerate, GEMINI_MODEL } from './geminiService.js';
 import { identifyCourierByTracking, getAllTrackingExamples } from './courierAutomation.js';
 import { interpretCourierReply } from './replyInterpreter.js';
 
