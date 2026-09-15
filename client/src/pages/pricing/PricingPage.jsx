@@ -502,7 +502,7 @@ function ReviewModal({ approval, onClose, onDone, staffList }) {
   );
 }
 
-// ─── Prospect Card ────────────────────────────────────────────────────────────
+// ─── Prospect Row ─────────────────────────────────────────────────────────────
 
 function ProspectRow({ prospect, staffList, navigate }) {
   const [expanded, setExpanded]     = useState(false);
@@ -752,8 +752,6 @@ function ProspectRow({ prospect, staffList, navigate }) {
     </div>
   );
 }
-
-// ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function PricingPage() {
   const qc = useQueryClient();

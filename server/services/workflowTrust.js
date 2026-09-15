@@ -11,11 +11,35 @@ import { query } from '../db/index.js';
 
 export const TRUST_CAP = 20;
 
-// Categories that can never run on autopilot (require human validation).
-export function isLockedCategory(intent, groupName) {
+// Claims/complaints lockout scope (WISMO Phase 3, MOS-6): previously a hardcoded
+// permanent lockout; now a per-category setting (workflow_trust.claims_lockout_scope).
+//   full_lockout    — today's behaviour: the whole conversation stays human-only.
+//   final_step_only — only the closing/resolution step is gated; earlier hops (the
+//                     initial courier inquiry drafted here) may autopilot. The finer
+//                     "is THIS specific draft the final step" check lives at the call
+//                     site that drafts a courier-RESOLVED customer update
+//                     (courierAutomation.js's draftCustomerUpdateFromCourier), not
+//                     here — this function only knows the category, not which draft
+//                     is about to be sent.
+// courierCode is optional; when omitted (or no row exists) this defaults to the safe
+// full_lockout behaviour, matching pre-Phase-3 semantics exactly.
+export async function isLockedCategory(intent, groupName, courierCode = null) {
   const i = String(intent || '').toLowerCase();
   const g = String(groupName || '').toLowerCase();
-  return i === 'claim' || i === 'complaint' || g === 'claims';
+  const isClaimsCategory = i === 'claim' || i === 'complaint' || g === 'claims';
+  if (!isClaimsCategory) return false;
+  if (!courierCode) return true;   // no category to look up scope for → safe default
+
+  try {
+    const r = await query(
+      `SELECT claims_lockout_scope FROM workflow_trust WHERE courier_code = $1 AND intent = $2`,
+      [String(courierCode).toLowerCase(), i],
+    );
+    const scope = r.rows[0]?.claims_lockout_scope || 'full_lockout';
+    return scope !== 'final_step_only';
+  } catch {
+    return true;   // lookup failed → safe default, stay locked
+  }
 }
 
 function norm(courierCode, intent) {

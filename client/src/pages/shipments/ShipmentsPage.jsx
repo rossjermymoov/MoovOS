@@ -14,6 +14,7 @@ export default function ShipmentsPage() {
   const [customerFilter, setCustomerFilter] = useState('');
   const [customers, setCustomers] = useState([]);
   const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(50);
   const [pagination, setPagination] = useState({ total: 0, pages: 1 });
   const [summaryStats, setSummaryStats] = useState(null);
   
@@ -32,7 +33,7 @@ export default function ShipmentsPage() {
 
   useEffect(() => {
     fetchShipments();
-  }, [page, search, courierFilter, customerFilter]);
+  }, [page, limit, search, courierFilter, customerFilter]);
 
   async function fetchCustomers() {
     try {
@@ -51,7 +52,7 @@ export default function ShipmentsPage() {
     try {
       const params = new URLSearchParams({
         page,
-        limit: 50,
+        limit,
         search,
         courier: courierFilter,
         customer_id: customerFilter,
@@ -67,6 +68,24 @@ export default function ShipmentsPage() {
       console.error('Failed to load shipments', e);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleReprocessAll() {
+    setRepricingAll(true);
+    try {
+      const res = await fetch('/api/shipments/reprocess-all', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        alert(`Reprocessed ${data.repriced || 0} shipments from stored webhooks!`);
+        fetchShipments();
+      } else {
+        alert(data.error || 'Failed to reprocess webhooks');
+      }
+    } catch (e) {
+      alert('Error reprocessing webhooks: ' + e.message);
+    } finally {
+      setRepricingAll(false);
     }
   }
 
@@ -172,6 +191,22 @@ export default function ShipmentsPage() {
     }
   }
 
+  async function handlePurgeGhosts() {
+    if (!confirm('Purge all empty ghost shipments (records with no tracking codes, customer, or recipient address)?')) return;
+    try {
+      const res = await fetch('/api/shipments/purge-ghosts', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok) {
+        alert(`Purged ${data.deleted || 0} ghost shipments!`);
+        fetchShipments();
+      } else {
+        alert(data.error || 'Failed to purge ghost shipments');
+      }
+    } catch (e) {
+      alert('Error purging ghost shipments: ' + e.message);
+    }
+  }
+
   async function handleClearSimulated() {
     if (!confirm('Clear all simulated test shipments?')) return;
     try {
@@ -227,21 +262,30 @@ export default function ShipmentsPage() {
 
         <div style={{ display: 'flex', gap: 10 }}>
           <button
+            onClick={handleReprocessAll}
+            disabled={repricingAll}
+            className="mv-btn-primary"
+            style={{ padding: '8px 14px', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}
+            title="Scan all stored webhook logs and re-ingest all shipments"
+          >
+            <RefreshCw size={14} className={repricingAll ? 'spin' : ''} /> {repricingAll ? 'Reprocessing...' : 'Reprocess Webhooks'}
+          </button>
+          <button
             onClick={handleRepriceAll}
             disabled={repricingAll}
             className="mv-btn-ghost"
             style={{ padding: '8px 14px', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}
             title="Recalculate prices for all unpriced shipments using the latest rate cards"
           >
-            <Calculator size={14} /> {repricingAll ? 'Repricing...' : 'Reprice All'}
+            <Calculator size={14} /> Reprice All
           </button>
           <button
-            onClick={handlePurgePriorToToday}
+            onClick={handlePurgeGhosts}
             className="mv-btn-danger"
             style={{ padding: '8px 14px', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}
-            title="Delete all historical shipments recorded before today"
+            title="Delete all empty ghost shipments"
           >
-            <Trash2 size={14} /> Purge Prior to Today
+            <Trash2 size={14} /> Purge Ghost Records
           </button>
           {simulatedCount > 0 && (
             <button
@@ -324,19 +368,26 @@ export default function ShipmentsPage() {
           <Search size={14} style={{ position: 'absolute', left: 12, top: 10, color: 'var(--mv-ink-45)' }} />
           <input
             type="text"
-            placeholder="Search tracking, reference, customer, service..."
+            placeholder="Search tracking, reference, customer, service…"
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(1); }}
-            className="mv-input"
-            style={{ width: '100%', paddingLeft: 34, height: 36, fontSize: 13 }}
           />
+          {search && (
+            <button
+              onClick={() => { setSearch(''); setPage(1); }}
+              className="mv-search-clear"
+              title="Clear search"
+            >
+              ✕
+            </button>
+          )}
         </div>
 
         <select
           value={courierFilter}
           onChange={e => { setCourierFilter(e.target.value); setPage(1); }}
-          className="mv-input"
-          style={{ width: 160, height: 36, fontSize: 13 }}
+          className="pill-select"
+          style={{ width: 160, height: 36 }}
         >
           <option value="">All Couriers</option>
           <option value="DPD">DPD</option>
@@ -351,8 +402,8 @@ export default function ShipmentsPage() {
         <select
           value={customerFilter}
           onChange={e => { setCustomerFilter(e.target.value); setPage(1); }}
-          className="mv-input"
-          style={{ width: 220, height: 36, fontSize: 13 }}
+          className="pill-select"
+          style={{ width: 220, height: 36 }}
         >
           <option value="">All Customers</option>
           {customers.map(c => (
@@ -393,23 +444,46 @@ export default function ShipmentsPage() {
             <tr>
               <td colSpan={13} style={{ textAlign: 'center', padding: '48px 0', color: 'var(--mv-ink-52)' }}>
                 <Package size={24} style={{ display: 'block', margin: '0 auto 8px', opacity: 0.4 }} />
-                No shipments found. New webhooks will appear here automatically.
+                <div style={{ fontWeight: 600, color: 'var(--mv-ink)', marginBottom: 4 }}>No shipments displayed currently</div>
+                <div style={{ fontSize: 12, color: 'var(--mv-ink-50)', marginBottom: 14 }}>
+                  New webhooks will appear here automatically, or you can re-ingest past webhooks from storage.
+                </div>
+                <button
+                  onClick={handleReprocessAll}
+                  disabled={repricingAll}
+                  className="mv-btn-primary"
+                  style={{ fontSize: 12, padding: '7px 14px', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                >
+                  <RefreshCw size={13} className={repricingAll ? 'spin' : ''} /> {repricingAll ? 'Reprocessing...' : 'Reprocess Stored Webhooks'}
+                </button>
               </td>
             </tr>
           ) : (
             shipments.map(s => {
-              const mainCharge = s.charges?.[0];
-              const isSim = Boolean(s.raw_payload?.simulated);
-              const costVal = mainCharge?.cost_price != null ? Number(mainCharge.cost_price) : null;
-              const sellVal = mainCharge?.price != null ? Number(mainCharge.price) : null;
+              const baseCharge = s.charges?.find(c => c.charge_type === 'courier') || s.charges?.[0];
+              const surcharges = (s.charges || []).filter(c => c.charge_type === 'surcharge');
+              
+              const totalSell = (s.charges || []).reduce((sum, c) => sum + (Number(c.price) || 0), 0);
+              const totalCost = (s.charges || []).reduce((sum, c) => sum + (Number(c.cost_price) || 0), 0);
+              
+              const baseSell = baseCharge?.price != null ? Number(baseCharge.price) : null;
+              const baseCost = baseCharge?.cost_price != null ? Number(baseCharge.cost_price) : null;
+              const surchargesSell = surcharges.reduce((sum, c) => sum + (Number(c.price) || 0), 0);
+              const surchargesCost = surcharges.reduce((sum, c) => sum + (Number(c.cost_price) || 0), 0);
+
+              const hasPricing = totalSell > 0 || baseSell != null;
+              const sellVal = hasPricing ? totalSell : null;
+              const costVal = hasPricing ? totalCost : null;
               const margin = (sellVal != null && costVal != null) ? (sellVal - costVal) : null;
+              const marginPct = (sellVal && margin != null) ? ((margin / sellVal) * 100).toFixed(1) : null;
+              const isSim = Boolean(s.raw_payload?.simulated);
 
               return (
                 <tr key={s.id}>
                   <td>
                     <span
-                      className={`mv-state ${s.cancelled ? 'attention' : (mainCharge && sellVal > 0) ? 'settled' : 'waiting'}`}
-                      title={s.cancelled ? 'Cancelled' : (mainCharge && sellVal > 0) ? 'Rated & Priced' : 'Unpriced'}
+                      className={`mv-state ${s.cancelled ? 'attention' : (hasPricing && sellVal > 0) ? 'settled' : 'waiting'}`}
+                      title={s.cancelled ? 'Cancelled' : (hasPricing && sellVal > 0) ? 'Rated & Priced' : 'Unpriced'}
                     />
                   </td>
                   <td className="mv-num" style={{ fontSize: 12.5, whiteSpace: 'nowrap' }}>
@@ -465,15 +539,29 @@ export default function ShipmentsPage() {
                     )}
                   </td>
                   <td className="tar mv-num" style={{ fontWeight: 500 }}>
-                    {costVal != null ? `£${costVal.toFixed(2)}` : <span style={{ color: 'var(--mv-ink-45)' }}>—</span>}
+                    {costVal != null ? (
+                      <div>
+                        <div>£{costVal.toFixed(2)}</div>
+                        {surchargesCost > 0 && (
+                          <div style={{ fontSize: 10.5, color: 'var(--mv-ink-50)' }}>
+                            Base £{baseCost?.toFixed(2)} + Sur £{surchargesCost.toFixed(2)}
+                          </div>
+                        )}
+                      </div>
+                    ) : <span style={{ color: 'var(--mv-ink-45)' }}>—</span>}
                   </td>
                   <td className="tar mv-num" style={{ fontWeight: 700 }}>
                     {sellVal != null ? (
                       <div>
                         <div>£{sellVal.toFixed(2)}</div>
+                        {surcharges.length > 0 && (
+                          <div style={{ fontSize: 10.5, color: 'var(--mv-ink-50)', fontWeight: 500 }}>
+                            Base £{baseSell?.toFixed(2)} + {surcharges.length} surcharges (£{surchargesSell.toFixed(2)})
+                          </div>
+                        )}
                         {margin != null && (
                           <div style={{ fontSize: 10.5, color: margin >= 0 ? 'var(--mv-green)' : 'var(--mv-red)' }}>
-                            {margin >= 0 ? '+' : ''}£{margin.toFixed(2)}
+                            {margin >= 0 ? '+' : ''}£{margin.toFixed(2)} {marginPct ? `(${marginPct}%)` : ''}
                           </div>
                         )}
                       </div>
@@ -509,6 +597,57 @@ export default function ShipmentsPage() {
           )}
         </tbody>
       </table>
+ 
+       {/* ── Pagination Controls ────────────────────────────────────────── */}
+       <div style={{
+         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+         padding: '12px 16px', borderTop: '1px solid var(--mv-border)',
+         background: 'var(--mv-surface)', marginTop: 8, borderRadius: '0 0 6px 6px'
+       }}>
+         <div style={{ fontSize: 12.5, color: 'var(--mv-ink-60)' }}>
+           Showing {pagination.total > 0 ? ((page - 1) * limit + 1) : 0}–{Math.min(page * limit, pagination.total)} of {pagination.total.toLocaleString('en-GB')} shipments
+         </div>
+
+         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: 'var(--mv-ink-60)' }}>
+             <span>Per page:</span>
+             <select
+               value={limit}
+               onChange={e => { setLimit(Number(e.target.value)); setPage(1); }}
+               className="mv-input"
+               style={{ height: 28, fontSize: 12, padding: '2px 8px' }}
+             >
+               <option value={25}>25</option>
+               <option value={50}>50</option>
+               <option value={100}>100</option>
+             </select>
+           </div>
+
+           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+             <button
+               onClick={() => setPage(p => Math.max(1, p - 1))}
+               disabled={page <= 1 || loading}
+               className="mv-btn-ghost"
+               style={{ padding: '4px 10px', fontSize: 12 }}
+             >
+               Previous
+             </button>
+             
+             <span style={{ fontSize: 12.5, padding: '0 8px', fontWeight: 600 }}>
+               Page {page} of {Math.max(1, pagination.pages || 1)}
+             </span>
+
+             <button
+               onClick={() => setPage(p => Math.min(pagination.pages || 1, p + 1))}
+               disabled={page >= (pagination.pages || 1) || loading}
+               className="mv-btn-ghost"
+               style={{ padding: '4px 10px', fontSize: 12 }}
+             >
+               Next
+             </button>
+           </div>
+         </div>
+       </div>
 
       {/* ── Inject Sample Modal ─────────────────────────────────────────── */}
       {showInjectModal && (

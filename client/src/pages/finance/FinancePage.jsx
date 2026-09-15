@@ -981,6 +981,15 @@ function AwaitingReconciliationTab({ customers, gbp, fmt, getCourierLogo }) {
               borderRadius: 8, color: 'var(--mv-ink)', fontSize: 13,
             }}
           />
+          {search && (
+            <button
+              onClick={() => { setSearch(''); setOffset(0); }}
+              className="mv-search-clear"
+              title="Clear search"
+            >
+              ✕
+            </button>
+          )}
         </div>
         <select
           value={custFilter}

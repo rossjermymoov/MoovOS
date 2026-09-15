@@ -119,10 +119,10 @@ export default function CustomerList() {
             <button key={s.key} className={'mv-chip' + (activeSeg === s.key ? ' is-on' : '')} onClick={() => pickSegment(s.key)}>{s.label}</button>
           ))}
           <span style={{ flex: 1 }} />
-          <div className="mv-search" style={{ width: 230 }}>
+          <div className="mv-search" style={{ width: 240, height: 34 }}>
             <Search size={14} style={{ color: 'var(--mv-ink-45)', flexShrink: 0 }} />
             <input value={filters.search} onChange={e => setFilter({ search: e.target.value })} placeholder="Name, number, email, contact" />
-            {filters.search && <button onClick={() => setFilter({ search: '' })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--mv-ink-45)', display: 'flex' }}><X size={13} /></button>}
+            {filters.search && <button onClick={() => setFilter({ search: '' })} className="mv-search-clear" title="Clear search"><X size={13} /></button>}
           </div>
           <span className="mv-num" style={{ fontSize: 11.5, color: 'var(--mv-ink-52)', whiteSpace: 'nowrap' }}>{shownFrom.toLocaleString('en-GB')}–{shownTo.toLocaleString('en-GB')} of {total.toLocaleString('en-GB')}</span>
         </div>

@@ -8,6 +8,8 @@
 import express from 'express';
 import { query } from '../db/index.js';
 import { processShipment, insertCharges } from '../services/pricingEngine.js';
+import { processShipmentCreatedWebhook } from './billing.js';
+import { createOrUpdateShipment } from './webhooks.js';
 
 const router = express.Router();
 
@@ -60,6 +62,15 @@ router.get('/', async (req, res, next) => {
         EXISTS (SELECT 1 FROM unnest(s.tracking_codes) tc WHERE tc ILIKE $${pIdx})
       )`);
     }
+
+    // Exclude empty ghost records (no tracking codes, no customer, no destination postcode/name, no real reference)
+    conditions.push(`NOT (
+      (s.ship_to_postcode IS NULL OR s.ship_to_postcode = '')
+      AND (s.ship_to_name IS NULL OR s.ship_to_name = '')
+      AND (s.customer_id IS NULL)
+      AND (s.reference IS NULL OR s.reference = 'REF' OR s.reference = '' OR s.reference = '—')
+      AND (s.tracking_codes IS NULL OR s.tracking_codes = '{}' OR s.tracking_codes = '{""}')
+    )`);
 
     const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
@@ -120,7 +131,7 @@ router.get('/', async (req, res, next) => {
         s.platform_shipment_id,
         s.event_type,
         s.customer_id,
-        COALESCE(c.business_name, c.trading_name, c.company_name, s.customer_name, s.customer_account, 'Unassigned') AS customer_display_name,
+        COALESCE(c.business_name, s.customer_name, s.customer_account, 'Unassigned') AS customer_display_name,
         COALESCE(c.account_number, s.customer_account) AS customer_account,
         s.courier,
         s.dc_service_id,
@@ -142,8 +153,10 @@ router.get('/', async (req, res, next) => {
           SELECT json_agg(json_build_object(
             'id', ch.id,
             'charge_type', ch.charge_type,
+            'service_name', ch.service_name,
             'price', ch.price,
             'cost_price', ch.cost_price,
+            'price_failure_reason', ch.price_failure_reason,
             'verified', ch.verified,
             'billed', ch.billed
           ))
@@ -420,81 +433,96 @@ router.delete('/:id', async (req, res, next) => {
   }
 });
 
-// ─── POST /api/shipments/delete-before-today ──────────────────────────────────
-router.post('/delete-before-today', async (req, res, next) => {
+// ─── POST /api/shipments/purge-ghosts ─────────────────────────────────────────
+router.post('/purge-ghosts', async (req, res, next) => {
   try {
-    const today = new Date().toISOString().split('T')[0];
-    
-    // Delete charges created before today or associated with shipments created before today
-    const chargesRes = await query(
-      `DELETE FROM charges WHERE (created_at < $1::date) OR (shipment_id IN (SELECT id FROM shipments WHERE created_at < $1::date)) RETURNING id`,
-      [today]
-    );
+    const deletedRes = await query(`
+      DELETE FROM shipments
+      WHERE (
+        (ship_to_postcode IS NULL OR ship_to_postcode = '')
+        AND (ship_to_name IS NULL OR ship_to_name = '')
+        AND (customer_id IS NULL)
+        AND (reference IS NULL OR reference = 'REF' OR reference = '' OR reference = '—')
+        AND (tracking_codes IS NULL OR tracking_codes = '{}' OR tracking_codes = '{""}')
+      )
+      RETURNING id
+    `);
 
-    const shipRes = await query(
-      `DELETE FROM shipments WHERE created_at < $1::date RETURNING id`,
-      [today]
-    );
-
-    console.log(`[shipments] Purged prior to today (${today}): deleted ${shipRes.rows.length} shipments and ${chargesRes.rows.length} charges.`);
-
-    res.json({
-      success: true,
-      deleted_shipments: shipRes.rows.length,
-      deleted_charges: chargesRes.rows.length,
-      cutoff_date: today
-    });
+    console.log(`[shipments] Purged ${deletedRes.rows.length} ghost shipments.`);
+    res.json({ success: true, deleted: deletedRes.rows.length });
   } catch (err) {
     next(err);
   }
 });
 
-// ─── POST /api/shipments/reprice-all ──────────────────────────────────────────
-router.post('/reprice-all', async (req, res, next) => {
+// ─── POST /api/shipments/reprocess-all & /reprice-all ──────────────────────────
+router.post(['/reprocess-all', '/reprice-all'], async (req, res, next) => {
   try {
-    const listRes = await query(`
-      SELECT s.id, s.raw_payload, s.customer_id, s.dc_service_id, s.tracking_codes
-      FROM shipments s
-      ORDER BY s.created_at DESC
-      LIMIT 200
-    `);
+    // Clean up empty ghost rows that have no tracking, no reference, and no recipient
+    await query(`
+      DELETE FROM shipments
+      WHERE (
+        (ship_to_postcode IS NULL OR ship_to_postcode = '')
+        AND (ship_to_name IS NULL OR ship_to_name = '')
+        AND (customer_id IS NULL)
+        AND (reference IS NULL OR reference = 'REF' OR reference = '' OR reference = '—')
+        AND (tracking_codes IS NULL OR tracking_codes = '{}' OR tracking_codes = '{""}')
+      )
+    `).catch(() => {});
+
+    // 1. Gather all raw payloads across tracking_events, charges, and shipments
+    const [eventsPayloads, chargesPayloads, shipmentsPayloads] = await Promise.all([
+      query(`SELECT raw_payload FROM tracking_events WHERE raw_payload IS NOT NULL ORDER BY id DESC LIMIT 1000`).catch(e => { console.error('Events payload fetch error:', e); return { rows: [] }; }),
+      query(`SELECT raw_payload FROM charges WHERE raw_payload IS NOT NULL ORDER BY id DESC LIMIT 1000`).catch(e => { console.error('Charges payload fetch error:', e); return { rows: [] }; }),
+      query(`SELECT raw_payload FROM shipments WHERE raw_payload IS NOT NULL ORDER BY id DESC LIMIT 1000`).catch(e => { console.error('Shipments payload fetch error:', e); return { rows: [] }; }),
+    ]);
+
+    const allPayloads = [
+      ...shipmentsPayloads.rows.map(r => r.raw_payload),
+      ...chargesPayloads.rows.map(r => r.raw_payload),
+      ...eventsPayloads.rows.map(r => r.raw_payload),
+    ].filter(Boolean);
+
     let repriced = 0;
-    let errors = [];
+    const processedKeys = new Set();
+    const errors = [];
 
-    for (const shipRow of listRes.rows) {
-      if (!shipRow.raw_payload) continue;
-      let payload = typeof shipRow.raw_payload === 'string' ? JSON.parse(shipRow.raw_payload) : shipRow.raw_payload;
+    for (const raw of allPayloads) {
+      let p = raw;
+      if (typeof p === 'string') {
+        try { p = JSON.parse(p); } catch { continue; }
+      }
+      if (!p) continue;
 
-      // Pass existing customer_id if present
-      if (shipRow.customer_id) payload.customerId = shipRow.customer_id;
+      const unwrapped = (p.json && typeof p.json === 'object') ? p.json : p;
+      const ship = unwrapped.shipment || unwrapped.request?.shipment || unwrapped;
+      let reqShip = unwrapped.request?.shipment || {};
+      if (typeof reqShip === 'string') {
+        try { reqShip = JSON.parse(reqShip); } catch { reqShip = {}; }
+      }
+
+      const platformId = parseInt(ship.id || unwrapped.shipment_id || reqShip.id || unwrapped.request_log_id || unwrapped.request_log?.id, 10) || null;
+      const ref = ship.reference || reqShip.reference || unwrapped.reference || null;
+      const trackingCode = ship.create_label_parcels?.[0]?.tracking_code || unwrapped.response?.tracking_codes?.[0] || reqShip.billing?.tracking_code || unwrapped.tracking_update?.parcels?.[0]?.tracking_code || null;
+
+      // Skip payloads that have no platform ID, no reference, and no tracking code
+      if (!platformId && !ref && !trackingCode) {
+        continue;
+      }
+
+      const dedupKey = platformId ? `id_${platformId}` : (trackingCode ? `tc_${trackingCode}` : `ref_${ref}`);
+      if (processedKeys.has(dedupKey)) continue;
+      processedKeys.add(dedupKey);
 
       try {
-        const result = await processShipment(payload);
-        const charges = result.charges || [];
-        const customerId = charges[0]?.customer_id || null;
-
-        // Update customer_id, customer_name, and customer_account on shipment
-        if (customerId) {
-          const custRes = await query('SELECT business_name, account_number FROM customers WHERE id = $1', [customerId]);
-          const bName = custRes.rows[0]?.business_name;
-          const acct = custRes.rows[0]?.account_number;
-          await query(
-            'UPDATE shipments SET customer_id = $1, customer_name = COALESCE($2, customer_name), customer_account = COALESCE($3, customer_account) WHERE id = $4',
-            [customerId, bName, acct, shipRow.id]
-          );
-        }
-
-        if (charges.length) {
-          await query('DELETE FROM charges WHERE shipment_id = $1 AND status != $2', [shipRow.id, 'invoiced']);
-          await insertCharges(charges, shipRow.id);
-          repriced++;
-        }
+        const shipmentId = await processShipmentCreatedWebhook(p);
+        if (shipmentId) repriced++;
       } catch (err) {
-        errors.push({ id: shipRow.id, error: err.message });
+        errors.push({ key: dedupKey, error: err.message });
       }
     }
 
-    res.json({ success: true, repriced, errors });
+    res.json({ success: true, repriced, totalCandidates: processedKeys.size, errors });
   } catch (err) {
     next(err);
   }
@@ -511,29 +539,18 @@ router.post('/:id/reprice', async (req, res, next) => {
     let payload = typeof shipRow.raw_payload === 'string' ? JSON.parse(shipRow.raw_payload) : shipRow.raw_payload;
     if (!payload) return res.status(400).json({ error: 'No raw payload available' });
 
-    if (shipRow.customer_id) payload.customerId = shipRow.customer_id;
+    const shipmentId = await processShipmentCreatedWebhook(payload);
+    
+    // Fetch newly calculated charges
+    const chargesRes = await query(`
+      SELECT
+        id, charge_type, service_name, price, cost_price, price_failure_reason, verified, billed, status
+      FROM charges
+      WHERE shipment_id = $1
+      ORDER BY created_at ASC
+    `, [shipRow.id]);
 
-    const result = await processShipment(payload);
-    const charges = result.charges || [];
-    const customerId = charges[0]?.customer_id || null;
-
-    if (customerId) {
-      const custRes = await query('SELECT business_name, account_number FROM customers WHERE id = $1', [customerId]);
-      const bName = custRes.rows[0]?.business_name;
-      const acct = custRes.rows[0]?.account_number;
-      await query(
-        'UPDATE shipments SET customer_id = $1, customer_name = COALESCE($2, customer_name), customer_account = COALESCE($3, customer_account) WHERE id = $4',
-        [customerId, bName, acct, shipRow.id]
-      );
-    }
-
-    if (charges.length) {
-      await query('DELETE FROM charges WHERE shipment_id = $1 AND status != $2', [shipRow.id, 'invoiced']);
-      const inserted = await insertCharges(charges, shipRow.id);
-      return res.json({ success: true, charges: inserted, errors: result.errors });
-    }
-
-    res.json({ success: false, message: 'No charges generated', errors: result.errors });
+    res.json({ success: true, charges: chargesRes.rows });
   } catch (err) {
     next(err);
   }

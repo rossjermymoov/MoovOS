@@ -15,19 +15,19 @@ import axios from 'axios';
 
 const api = axios.create({ baseURL: '/api' });
 
-// ─── Settings sub-nav (shared with StaffSettings) ─────────────
+// ─── Settings sub-nav (shared across all Settings pages) ──────
 export function SettingsNav() {
   const { pathname } = useLocation();
   const tabs = [
-    { to: '/settings/staff',       label: 'Staff' },
-    { to: '/settings/automation-rules', label: 'Automation Rules' },
+    { to: '/settings/staff',                label: 'Staff' },
+    { to: '/settings/automation-rules',     label: 'Automation Rules' },
     { to: '/settings/onboarding-templates', label: 'Onboarding Templates' },
-    { to: '/settings/comms-templates', label: 'Comms Templates' },
-    { to: '/settings/volumetric',  label: 'Volumetric Weight' },
-    { to: '/settings/billing',     label: 'Billing' },
-    { to: '/settings/xero',        label: 'Xero' },
-    { to: '/settings/email',       label: 'Email' },
-    { to: '/settings/gmail',       label: 'Gmail' },
+    { to: '/settings/comms-templates',      label: 'Comms Templates' },
+    { to: '/settings/volumetric',           label: 'Volumetric Weight' },
+    { to: '/settings/billing',              label: 'Billing' },
+    { to: '/settings/xero',                 label: 'Xero' },
+    { to: '/settings/email',                label: 'Email' },
+    { to: '/settings/gmail',                label: 'Gmail' },
   ];
   return (
     <div style={{ display: 'flex', gap: 0, marginBottom: 28, borderBottom: '1px solid color-mix(in srgb, var(--mv-ink) 6%, transparent)' }}>

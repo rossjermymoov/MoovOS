@@ -1,13 +1,12 @@
 /**
  * KatanaWidget — floating AI assistant chat widget
- * Fixed bottom-right, amber/gold Katana branding.
- * Sends natural-language questions to /api/katana/chat which
- * uses Anthropic tool-use + live DB queries to answer anything
- * about customers, pricing, tickets, invoices, etc.
+ * Styled strictly to docs/design-rules.md and moov.css:
+ * Zero radius, Moov purple (#7B2FBE), Archivo typography, sharp structural rules.
  */
 
 import { useState, useRef, useEffect } from 'react';
 import { X, Send, Sparkles, RefreshCw, ChevronDown, Mic, MicOff } from 'lucide-react';
+
 
 // ─── Colours ──────────────────────────────────────────────────────────────────
 const C = {

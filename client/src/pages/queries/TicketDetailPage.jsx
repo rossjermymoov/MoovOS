@@ -20,7 +20,6 @@ const api = axios.create({ baseURL: '/api' });
 // Values now point at the app-wide mv- design tokens (client/src/styles/moov.css)
 // instead of hardcoded hex, so this screen follows light/dark theme switching.
 const C = {
-  bg:       'var(--mv-bg)',
   card:     'var(--mv-surface)',
   border:   'var(--mv-hairline)',
   green:    'var(--mv-green-deep)',
@@ -38,28 +37,28 @@ const C = {
 
 // ── Status / priority config ──────────────────────────────────────────────────
 const STATUS_CFG = {
-  open:                    { label: 'Open',              color: C.blue,  bg: C.blueDim  },
-  awaiting_customer_info:  { label: 'Awaiting customer', color: C.amber, bg: C.amberDim },
-  info_received:           { label: 'Info received',     color: C.green, bg: C.greenDim },
-  drafting:                { label: 'Drafting',          color: C.green, bg: C.greenDim },
-  awaiting_courier:        { label: 'Awaiting courier',  color: C.amber, bg: C.amberDim },
-  courier_replied:         { label: 'Courier replied',   color: C.green, bg: C.greenDim },
-  courier_investigating:   { label: 'Investigating',     color: C.amber, bg: C.amberDim },
-  awaiting_customer:       { label: 'Awaiting customer', color: C.amber, bg: C.amberDim },
-  claim_raised:            { label: 'Claim raised',      color: C.red,   bg: C.redDim   },
-  awaiting_claim_docs:     { label: 'Awaiting docs',     color: C.red,   bg: C.redDim   },
-  claim_submitted:         { label: 'Claim submitted',   color: C.amber, bg: C.amberDim },
-  resolved:                { label: 'Resolved',          color: C.green, bg: C.greenDim },
-  resolved_claim_approved: { label: 'Claim approved',    color: C.green, bg: C.greenDim },
-  resolved_claim_rejected: { label: 'Claim rejected',    color: C.red,   bg: C.redDim   },
-  escalated:               { label: 'Escalated',         color: C.red,   bg: C.redDim   },
+  open:                    { label: 'Open',              kind: 'flight' },
+  awaiting_customer_info:  { label: 'Awaiting Customer', kind: 'waiting' },
+  info_received:           { label: 'Info Received',     kind: 'settled' },
+  drafting:                { label: 'Drafting',          kind: 'flight' },
+  awaiting_courier:        { label: 'Awaiting Courier',  kind: 'waiting' },
+  courier_replied:         { label: 'Courier Replied',   kind: 'settled' },
+  courier_investigating:   { label: 'Investigating',     kind: 'flight' },
+  awaiting_customer:       { label: 'Awaiting Customer', kind: 'waiting' },
+  claim_raised:            { label: 'Claim Raised',      kind: 'attention' },
+  awaiting_claim_docs:     { label: 'Awaiting Docs',     kind: 'attention' },
+  claim_submitted:         { label: 'Claim Submitted',   kind: 'waiting' },
+  resolved:                { label: 'Resolved',          kind: 'settled' },
+  resolved_claim_approved: { label: 'Claim Approved',    kind: 'settled' },
+  resolved_claim_rejected: { label: 'Claim Rejected',    kind: 'attention' },
+  escalated:               { label: 'Escalated',         kind: 'attention' },
 };
 
 const PRIORITY_CFG = {
-  urgent: { label: 'Urgent', color: C.red   },
-  high:   { label: 'High',   color: C.amber },
-  medium: { label: 'Medium', color: C.blue  },
-  low:    { label: 'Low',    color: C.muted },
+  urgent: { label: 'Urgent', color: '#E91E8C' },
+  high:   { label: 'High',   color: '#D97706' },
+  medium: { label: 'Medium', color: '#7B2FBE' },
+  low:    { label: 'Low',    color: 'var(--mv-ink-52)' },
 };
 
 const GROUPS = ['Claims', 'Queries', 'Billing', 'Technical'];
@@ -878,11 +877,12 @@ export default function TicketDetailPage() {
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: C.bg, overflow: 'hidden' }}>
+    <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: 'var(--mv-bg)', overflow: 'hidden' }}>
 
       {/* ── Header ── */}
       <div style={{ flexShrink: 0 }}>
 
+        {/* ── Unified Command Banner ──────────────────────────────────────── */}
         {/* ── Unified Command Banner ──────────────────────────────────────── */}
         <div className="flex w-full items-center justify-between border-b p-6" style={{ borderColor: 'var(--mv-divider)', background: 'var(--mv-surface)' }}>
           {/* Left — back + identity */}

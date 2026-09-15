@@ -11,11 +11,16 @@
 
 import express from 'express';
 import { query } from '../db/index.js';
+import { GEMINI_MODEL } from '../services/geminiService.js';
 
 const router = express.Router();
 
+// Uses its own fetch call (not geminiGenerate()) because it needs Gemini's
+// function-calling (tools/systemInstruction/raw contents), which geminiGenerate()
+// doesn't support — but shares the same GEMINI_MODEL so there's still only one
+// place to change the model.
 const GEMINI_URL =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+  `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 // ─── DB schema description for Katana's system prompt ────────────────────────
 const DB_SCHEMA = `

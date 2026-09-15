@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Mail, CheckCircle, AlertCircle, RefreshCw, LogOut, ExternalLink } from 'lucide-react';
+import { Mail, CheckCircle, RefreshCw, LogOut } from 'lucide-react';
 import axios from 'axios';
+import { SettingsNav } from './RulesSettings';
 
 const api = axios.create({ baseURL: '/api' });
 

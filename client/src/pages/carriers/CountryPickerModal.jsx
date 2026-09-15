@@ -172,14 +172,16 @@ export default function CountryPickerModal({ zone, onClose, onRefresh }) {
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search country name or 2-letter ISO code…"
                 autoFocus
-                style={{
-                  border: 'none',
-                  outline: 'none',
-                  width: '100%',
-                  fontSize: 13,
-                  background: 'transparent',
-                }}
               />
+              {search && (
+                <button
+                  onClick={() => setSearch('')}
+                  className="mv-search-clear"
+                  title="Clear search"
+                >
+                  <X size={13} />
+                </button>
+              )}
             </div>
           </div>
 

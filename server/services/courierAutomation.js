@@ -21,16 +21,18 @@ const SUPPORT_FROM = 'service@moovparcel.co.uk';
 const CLAIM_ISSUES = new Set(['DAMAGED', 'LOST', 'RETURN_TO_SENDER']);
 
 export async function insertDraft(queryId, direction, subject, body, toAddress = null) {
-  await query(
+  const r = await query(
     `INSERT INTO query_emails
        (query_id, direction, subject, body_text, from_address, to_address, is_ai_draft, reply_to_message_id, created_at)
      VALUES ($1, $2::email_direction, $3, $4, $5, $6, true,
        (SELECT id FROM query_emails
          WHERE query_id = $1 AND direction IN ('inbound_customer','inbound_courier')
          ORDER BY COALESCE(received_at, created_at) DESC LIMIT 1),
-       NOW())`,
+       NOW())
+     RETURNING id`,
     [queryId, direction, subject, body, SUPPORT_FROM, toAddress],
   );
+  return r.rows[0]?.id || null;
 }
 
 // Default Top-and-Tail boilerplate, used when a courier has no custom row.
@@ -395,31 +397,54 @@ export async function processCustomerEmail(queryId, { subject = '', body = '' } 
     [queryId, expiresAt, courierCode, ref],
   );
 
-  // ── Full Autopilot ──────────────────────────────────────────────────────────
-  // If this category (courier + intent) is calibrated and toggled live — and not
-  // a locked category (claims/complaints) — dispatch both faces autonomously: mark
-  // sent, flip tracks, and log a true autopilot_dispatch (no QA stop).
+  // ── Full Autopilot (WISMO Phase 3, MOS-6) ───────────────────────────────────
+  // Two independent gates before anything sends for real: AUTOPILOT_LIVE_SEND_ENABLED
+  // (infra-level kill switch, Railway env var, off by default) AND the category's
+  // own trust state (product-level, toggled per courier+intent in Settings). Either
+  // gate being off means this falls through to the normal 'drafted' return below —
+  // identical to today's behaviour. Previously this block only flipped is_ai_draft
+  // in the DB without ever actually sending — see MOS-6 for why that was a no-op.
   const intent = 'courier_chase';
-  if (autopilotMode === 'full' && !isLockedCategory(intent, ticket.group_name) && await isAutopilotEnabled(courierCode, intent)) {
-    await query(
-      `UPDATE query_emails SET is_ai_draft = false, ai_draft_edited = false,
-              ai_draft_approved_at = NOW(), sent_at = NOW()
-        WHERE query_id = $1 AND is_ai_draft = true AND sent_at IS NULL`,
+  const AUTOPILOT_LIVE = process.env.AUTOPILOT_LIVE_SEND_ENABLED === 'true';
+  if (
+    AUTOPILOT_LIVE &&
+    autopilotMode === 'full' &&
+    !(await isLockedCategory(intent, ticket.group_name, courierCode)) &&
+    await isAutopilotEnabled(courierCode, intent)
+  ) {
+    const { sendQueryEmail } = await import('./sendGateway.js');
+    const drafts = await query(
+      `SELECT id FROM query_emails WHERE query_id = $1 AND is_ai_draft = true AND sent_at IS NULL`,
       [queryId],
     );
-    await query(
-      `UPDATE queries SET status = 'awaiting_courier'::query_status,
-              track_a_status = 'Sent', track_b_status = 'Sent', updated_at = NOW()
-        WHERE id = $1`,
-      [queryId],
-    );
-    await query(
-      `INSERT INTO audit_logs (action_type, query_id, actor, metadata)
-       VALUES ('autopilot_dispatch', $1, 'system', '{"mode":"full_autopilot"}'::jsonb)`,
-      [queryId],
-    );
-    console.log(`[Autopilot] auto-dispatched dual-track for ticket ${queryId} (${courierCode}/${intent})`);
-    return { status: 'autopilot_dispatched', courier: template.courierName, issue_type: triage.issue_type };
+    const sentIds = [];
+    for (const row of drafts.rows) {
+      try { await sendQueryEmail(row.id, { sentBy: 'autopilot' }); sentIds.push(row.id); }
+      catch (e) { console.warn(`[Autopilot] send failed for email ${row.id}:`, e.message); }
+    }
+
+    if (sentIds.length) {
+      await query(
+        `UPDATE query_emails SET is_ai_draft = false, ai_draft_edited = false, ai_draft_approved_at = NOW()
+          WHERE id = ANY($1)`,
+        [sentIds],
+      );
+      await query(
+        `UPDATE queries SET status = 'awaiting_courier'::query_status,
+                track_a_status = 'Sent', track_b_status = 'Sent', updated_at = NOW()
+          WHERE id = $1`,
+        [queryId],
+      );
+      await query(
+        `INSERT INTO audit_logs (action_type, query_id, actor, metadata)
+         VALUES ('autopilot_dispatch', $1, 'system', $2::jsonb)`,
+        [queryId, JSON.stringify({ mode: 'full_autopilot', sent_email_ids: sentIds })],
+      );
+      console.log(`[Autopilot] auto-dispatched dual-track for ticket ${queryId} (${courierCode}/${intent})`);
+      return { status: 'autopilot_dispatched', courier: template.courierName, issue_type: triage.issue_type };
+    }
+    // Every send failed — fall through to the normal 'drafted' return so the
+    // drafts stay in QA Bay for a human, rather than silently vanishing.
   }
 
   return {

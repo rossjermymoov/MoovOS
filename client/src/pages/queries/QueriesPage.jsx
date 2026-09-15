@@ -43,34 +43,36 @@ const C = {
   blueDim:  'var(--mv-teal-100)',
 };
 
+// Shape (kind: 'settled'|'flight'|'attention'|'waiting') feeds the shared
+// mv-state/mv-mark four-mark status language used by StatusBadge below.
 const STATUS_CFG = {
-  open:                    { label: 'Open',              color: 'var(--mv-teal-deep)', bg: 'var(--mv-teal-100)', border: 'var(--mv-teal-200)' },
-  awaiting_customer_info:  { label: 'Awaiting customer', color: 'var(--mv-amber-deep)', bg: 'var(--mv-amber-100)', border: 'var(--mv-amber-200)' },
-  info_received:           { label: 'Info received',     color: 'var(--mv-green-deep)', bg: 'var(--mv-purple-100)', border: 'var(--mv-purple-200)' },
-  drafting:                { label: 'Drafting',          color: 'var(--mv-green-deep)', bg: 'var(--mv-purple-100)', border: 'var(--mv-purple-200)' },
-  awaiting_courier:        { label: 'Awaiting courier',  color: 'var(--mv-amber-deep)', bg: 'var(--mv-amber-100)', border: 'var(--mv-amber-200)' },
-  courier_replied:         { label: 'Courier replied',   color: 'var(--mv-green-deep)', bg: 'var(--mv-purple-100)', border: 'var(--mv-purple-200)' },
-  courier_investigating:   { label: 'Investigating',     color: 'var(--mv-teal-deep)', bg: 'var(--mv-teal-100)', border: 'var(--mv-teal-200)' },
-  awaiting_customer:       { label: 'Awaiting customer', color: 'var(--mv-amber-deep)', bg: 'var(--mv-amber-100)', border: 'var(--mv-amber-200)' },
-  claim_raised:            { label: 'Claim raised',      color: 'var(--mv-magenta-deep)', bg: 'var(--mv-magenta-100)', border: 'var(--mv-magenta-200)' },
-  awaiting_claim_docs:     { label: 'Awaiting docs',     color: 'var(--mv-magenta-deep)', bg: 'var(--mv-magenta-100)', border: 'var(--mv-magenta-200)' },
-  claim_submitted:         { label: 'Claim submitted',   color: 'var(--mv-amber-deep)', bg: 'var(--mv-amber-100)', border: 'var(--mv-amber-200)' },
-  resolved:                { label: 'Resolved',          color: 'var(--mv-green-deep)', bg: 'var(--mv-purple-100)', border: 'var(--mv-purple-200)' },
-  resolved_claim_approved: { label: 'Claim approved',    color: 'var(--mv-green-deep)', bg: 'var(--mv-purple-100)', border: 'var(--mv-purple-200)' },
-  resolved_claim_rejected: { label: 'Claim rejected',    color: 'var(--mv-magenta-deep)', bg: 'var(--mv-magenta-100)', border: 'var(--mv-magenta-200)' },
-  escalated:               { label: 'Escalated',         color: 'var(--mv-magenta-deep)', bg: 'var(--mv-magenta-100)', border: 'var(--mv-magenta-200)' },
+  open:                    { label: 'Open',              kind: 'flight' },
+  awaiting_customer_info:  { label: 'Awaiting Customer', kind: 'waiting' },
+  info_received:           { label: 'Info Received',     kind: 'settled' },
+  drafting:                { label: 'Drafting',          kind: 'flight' },
+  awaiting_courier:        { label: 'Awaiting Courier',  kind: 'waiting' },
+  courier_replied:         { label: 'Courier Replied',   kind: 'settled' },
+  courier_investigating:   { label: 'Investigating',     kind: 'flight' },
+  awaiting_customer:       { label: 'Awaiting Customer', kind: 'waiting' },
+  claim_raised:            { label: 'Claim Raised',      kind: 'attention' },
+  awaiting_claim_docs:     { label: 'Awaiting Docs',     kind: 'attention' },
+  claim_submitted:         { label: 'Claim Submitted',   kind: 'waiting' },
+  resolved:                { label: 'Resolved',          kind: 'settled' },
+  resolved_claim_approved: { label: 'Claim Approved',    kind: 'settled' },
+  resolved_claim_rejected: { label: 'Claim Rejected',    kind: 'attention' },
+  escalated:               { label: 'Escalated',         kind: 'attention' },
 };
 
 const TYPE_CFG = {
-  whereabouts:    { label: 'WISMO',           color: C.blue },
-  not_delivered:  { label: 'Not Delivered',   color: C.red },
-  wrong_address:  { label: 'Wrong Address',   color: C.red },
-  damaged:        { label: 'Damaged',         color: C.red },
-  missing_items:  { label: 'Missing Items',   color: C.red },
-  failed_delivery:{ label: 'Failed Delivery', color: C.amber },
-  returned:       { label: 'Returned',        color: C.amber },
-  delay:          { label: 'Delay',           color: C.amber },
-  other:          { label: 'Other',           color: C.muted },
+  whereabouts:    { label: 'WISMO',           color: '#7B2FBE' },
+  not_delivered:  { label: 'Not Delivered',   color: '#E91E8C' },
+  wrong_address:  { label: 'Wrong Address',   color: '#E91E8C' },
+  damaged:        { label: 'Damaged',         color: '#E91E8C' },
+  missing_items:  { label: 'Missing Items',   color: '#E91E8C' },
+  failed_delivery:{ label: 'Failed Delivery', color: '#D97706' },
+  returned:       { label: 'Returned',        color: '#D97706' },
+  delay:          { label: 'Delay',           color: '#D97706' },
+  other:          { label: 'Other',           color: 'var(--mv-ink-52)' },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -79,8 +81,8 @@ function Badge({ label, color, bg, small }) {
   return (
     <span style={{
       display: 'inline-block',
-      padding: small ? '2px 7px' : '3px 10px',
-      borderRadius: 4,
+      padding: small ? '2px 6px' : '3px 8px',
+      borderRadius: 0,
       fontSize: small ? 10 : 11,
       fontWeight: 600,
       background: bg || `color-mix(in srgb, ${color} 13%, transparent)`,
@@ -92,26 +94,17 @@ function Badge({ label, color, bg, small }) {
 }
 
 function StatusBadge({ status, small }) {
-  const cfg = STATUS_CFG[status] || { label: status, color: 'var(--mv-ink-52)', bg: 'var(--mv-bg)', border: 'var(--mv-hairline)' };
+  const cfg = STATUS_CFG[status] || { label: status || 'Unknown', kind: 'waiting' };
   return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: 4,
-      fontSize: small ? 10 : 11, fontWeight: 600,
-      padding: small ? '2px 7px' : '3px 9px',
-      borderRadius: 20,
-      background: cfg.bg,
-      color: cfg.color,
-      border: `1px solid ${cfg.border}`,
-      whiteSpace: 'nowrap',
-    }}>
-      <span style={{ width: 5, height: 5, borderRadius: '50%', background: cfg.color, display: 'inline-block', flexShrink: 0 }} />
-      {cfg.label}
+    <span className={`mv-state mv-state--${cfg.kind}`} style={{ fontSize: small ? 10.5 : 12 }}>
+      <span className={`mv-mark mv-mark--${cfg.kind}`} />
+      <span className="mv-state-label">{cfg.label}</span>
     </span>
   );
 }
 
 function TypeBadge({ type, small }) {
-  const cfg = TYPE_CFG[type] || { label: type, color: C.muted };
+  const cfg = TYPE_CFG[type] || { label: type, color: 'var(--mv-ink-52)' };
   return <Badge label={cfg.label} color={cfg.color} small={small} />;
 }
 
@@ -128,13 +121,14 @@ function GroupBadge({ group }) {
   return (
     <span style={{
       display: 'inline-block',
-      fontSize: 11, fontWeight: 600,
-      padding: '3px 9px',
-      borderRadius: 6,
-      background: cfg.bg,
+      fontSize: 10.5, fontWeight: 700,
+      padding: '2px 7px',
+      borderRadius: 0,
+      background: 'var(--mv-bg)',
       color: cfg.color,
-      border: `1px solid ${cfg.border}`,
+      border: '1px solid var(--mv-hairline-2)',
       whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+      textTransform: 'uppercase', letterSpacing: '0.05em',
     }}>{group}</span>
   );
 }
@@ -556,7 +550,6 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
   }
 
   const logoUrl      = q.courier_code ? getCourierLogo(q.courier_code) : null;
-  const statusCfg    = STATUS_CFG[q.status] || { label: q.status, color: C.muted, bg: 'color-mix(in srgb, var(--mv-ink-52) 10%, transparent)' };
   const humanName    = staffList.find(s => s.id === q.assigned_to)?.full_name;
   // No human owner + a staged AI draft → owned by the AI agent "Katana" (never "Unassigned").
   const isKatana     = !humanName && (parseInt(q.pending_drafts) || 0) > 0;
@@ -613,12 +606,12 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
       onClick={onClick}
       onMouseLeave={() => { setHoverPos(null); setAssignOpen(false); }}
       className="relative flex cursor-pointer flex-col gap-4 overflow-visible rounded-xl border p-5 shadow-sm transition-all hover:shadow-md"
-      style={{ borderLeft: `4px solid ${priorityBar}`, borderTop: '1px solid var(--mv-hairline-2)', borderRight: '1px solid var(--mv-hairline-2)', borderBottom: '1px solid var(--mv-hairline-2)', background: 'var(--mv-surface)' }}
+      style={{ borderLeft: `4px solid ${priorityBar || 'var(--mv-hairline-2)'}`, borderTop: '1px solid var(--mv-hairline-2)', borderRight: '1px solid var(--mv-hairline-2)', borderBottom: '1px solid var(--mv-hairline-2)', background: 'var(--mv-surface)' }}
     >
       {/* ── Line 1: metadata shelf ────────────────────────────────────────── */}
       <div className="flex w-full items-center justify-between pb-3" style={{ borderBottom: '1px solid var(--mv-hairline)' }}>
         {/* Left: priority badge (#M-ID + Urgent) · customer identity */}
-        <div className="flex min-w-0 items-center gap-2">
+        <div style={{ display: 'flex', minWidth: 0, alignItems: 'center', gap: 8 }}>
           {(hasNewReply || unread > 0) && (
             <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: 'var(--mv-teal)' }} />
           )}
@@ -638,23 +631,18 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
         </div>
 
         {/* Right: status badge · time · assign */}
-        <div className="flex shrink-0 items-center gap-3 pl-4">
+        <div style={{ display: 'flex', flexShrink: 0, alignItems: 'center', gap: 12, paddingLeft: 16 }}>
           {q.courier_sla_breached && (
-            <span className="inline-flex shrink-0 items-center gap-1 rounded-md border px-2 py-0.5 text-xs font-semibold" style={{ borderColor: 'var(--mv-magenta-200)', background: 'var(--mv-magenta-100)', color: 'var(--mv-magenta-deep)' }}>
-              <AlertTriangle size={11} /> SLA Breached
+            <span className="mv-state mv-state--attention">
+              <span className="mv-mark mv-mark--attention" />
+              <span className="mv-state-label">SLA Breached</span>
             </span>
           )}
-          <span style={{
-            fontSize: 12, fontWeight: 500, borderRadius: 20, padding: '4px 11px',
-            display: 'inline-block', whiteSpace: 'nowrap',
-            background: statusCfg.bg || `color-mix(in srgb, ${statusCfg.color} 9%, transparent)`, color: statusCfg.color,
-          }}>
-            {statusCfg.label}
-          </span>
+          <StatusBadge status={q.status} />
           <span className="whitespace-nowrap text-sm" style={{ color: 'var(--mv-ink-45)' }}>{timeAgo(actTime)}</span>
 
-          {/* Assign avatar (kept for inline assignment) — Katana pill when AI-owned */}
-          <div className="relative shrink-0">
+          {/* Assign avatar */}
+          <div style={{ position: 'relative', flexShrink: 0 }}>
             {isKatana ? (
               <div
                 onClick={e => { e.stopPropagation(); setAssignOpen(v => !v); }}
@@ -674,7 +662,7 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
                   fontSize: 11, fontWeight: 600, color: initials ? 'var(--mv-purple-700)' : C.muted,
                   cursor: 'pointer', outline: assignOpen ? '2px solid var(--mv-purple)' : 'none',
                 }}>
-                {assigning ? '…' : (initials || <User size={13} color={C.muted} />)}
+                {assigning ? '…' : (initials || <User size={12} color="var(--mv-ink-52)" />)}
               </div>
             )}
             {assignOpen && (
@@ -2200,8 +2188,6 @@ export default function QueriesPage() {
     sla_breached: false, search: '',
     assigned_to: '', query_type: '', priority: '', group_name: '', courier: '',
   });
-  const [autoDrafting,  setAutoDrafting]  = useState(false);
-  const [autoDraftResult, setAutoDraftResult] = useState(null);
 
   useEffect(() => {
     fetchStats(user?.id).then(setStats).catch(console.error);
@@ -2213,67 +2199,42 @@ export default function QueriesPage() {
     : 'all';
   const setWorkspace = (key) => setFilters(f => ({
     ...f,
-    status: '',
     assigned_to: key === 'unassigned' ? 'unassigned' : key === 'mine' ? (user?.id || '') : '',
   }));
 
-  useEffect(() => {
-    api.get('/staff').then(r => setStaffList(r.data)).catch(() => {});
-  }, []);
-
-  const PAGE_SIZE = 50;
-
-  const paramsFromFilters = useCallback(() => {
-    const params = {};
-    if (filters.status)          params.status              = filters.status;
-    if (filters.attention)       params.attention           = true;
-    if (filters.pending_draft)   params.pending_draft       = true;
-    if (filters.claim_deadline)  params.claim_deadline_days = 7;
-    if (filters.sla_breached)    params.sla_breached        = true;
-    if (filters.search)          params.search              = filters.search;
-    if (filters.assigned_to)     params.assigned_to         = filters.assigned_to;
-    if (filters.query_type)      params.query_type          = filters.query_type;
-    if (filters.priority)        params.priority            = filters.priority;
-    if (filters.group_name)      params.group_name          = filters.group_name;
-    if (filters.courier)         params.courier             = filters.courier;
-    return params;
-  }, [filters]);
-
-  const loadInbox = useCallback(async () => {
+  const refresh = useCallback(() => {
     setLoading(true);
-    try {
-      const d = await fetchInbox({ ...paramsFromFilters(), limit: PAGE_SIZE, offset: (page - 1) * PAGE_SIZE });
-      setQueries(d.queries || []);
-      setTotal(d.total ?? (d.queries || []).length);
-    } catch (err) { console.error(err); }
-    finally { setLoading(false); }
-  }, [paramsFromFilters, page]);
+    fetchInbox({ ...filters, page, limit: 30 })
+      .then(d => {
+        setQueries(d.queries || []);
+        setTotal(d.total || 0);
+        setStaffList(d.staff || []);
+      })
+      .catch(console.error)
+      .finally(() => setLoading(false));
+  }, [filters, page]);
 
-  // Any filter change resets to the first page.
-  useEffect(() => { setPage(1); }, [filters]);
+  useEffect(() => { refresh(); }, [refresh, refreshKey]);
 
-  useEffect(() => { loadInbox(); }, [loadInbox]);
+  // Pagination math
+  const limit = 30;
+  const totalPages = Math.max(1, Math.ceil(total / limit));
+  const startIdx = total === 0 ? 0 : (page - 1) * limit + 1;
+  const endIdx = Math.min(page * limit, total);
 
-  useEffect(() => {
-    if (refreshKey > 0) loadInbox();
-  }, [refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Pagination maths + a windowed list of page numbers.
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const startIdx   = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
-  const endIdx     = Math.min(page * PAGE_SIZE, total);
-  const pageNumbers = (() => {
-    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1);
-    const out = [1];
-    const lo = Math.max(2, page - 1), hi = Math.min(totalPages - 1, page + 1);
-    if (lo > 2) out.push('…');
-    for (let i = lo; i <= hi; i++) out.push(i);
-    if (hi < totalPages - 1) out.push('…');
-    out.push(totalPages);
-    return out;
-  })();
-
-  const refresh = useCallback(() => setRefreshKey(k => k + 1), []);
+  // Generate page numbers with ellipsis
+  const pageNumbers = [];
+  if (totalPages <= 7) {
+    for (let i = 1; i <= totalPages; i++) pageNumbers.push(i);
+  } else {
+    pageNumbers.push(1);
+    if (page > 3) pageNumbers.push('…');
+    const start = Math.max(2, page - 1);
+    const end = Math.min(totalPages - 1, page + 1);
+    for (let i = start; i <= end; i++) pageNumbers.push(i);
+    if (page < totalPages - 2) pageNumbers.push('…');
+    pageNumbers.push(totalPages);
+  }
 
   // Learning nudges — poll for auto-committed behaviours that match open tickets.
   const [nudge, setNudge] = useState(null);
@@ -2294,7 +2255,7 @@ export default function QueriesPage() {
     try {
       await api.post(`/queries/learning-nudges/${nudge.id}/apply`);
       setNudge(null);
-      refresh();
+      setRefreshKey(k => k + 1);
     } catch { /* ignore */ }
     finally { setNudgeBusy(false); }
   }
@@ -2304,8 +2265,6 @@ export default function QueriesPage() {
     api.post(`/queries/learning-nudges/${id}/dismiss`).catch(() => {});
   }
 
-  const panelFilterCount = [filters.assigned_to, filters.query_type, filters.priority, filters.group_name, filters.courier].filter(Boolean).length;
-
   // When "All Open" (no explicit status filter), always hide resolved tickets.
   const RESOLVED_STATUSES = new Set(['resolved', 'resolved_claim_approved', 'resolved_claim_rejected']);
   const displayQueries = filters.status
@@ -2313,7 +2272,8 @@ export default function QueriesPage() {
     : queries.filter(q => !RESOLVED_STATUSES.has(q.status));
 
   return (
-    <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: C.bg, color: C.text, overflow: 'hidden' }}>
+    <div className="mv-page">
+      <div className="mv-page-inner" style={{ maxWidth: '100%' }}>
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 18px', borderBottom: `0.5px solid ${C.border}`, background: C.surface, flexShrink: 0 }}>
@@ -2602,6 +2562,7 @@ export default function QueriesPage() {
           </button>
         </div>
       )}
+      </div>
     </div>
   );
 }

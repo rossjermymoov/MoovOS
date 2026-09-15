@@ -44,6 +44,7 @@ import notificationsRouter from './routes/notifications.js';
 import taskConfigRouter from './routes/taskConfig.js';
 import { startGmailSync, backfillEmailBodiesOnce, backfillSentRepliesOnce } from './services/gmailSync.js';
 import { runSlaScreamScan } from './services/slaMonitor.js';
+import { runWholeCaseSlaScan, runAutoChaseScan, runSpotCheckSampling } from './services/loopController.js';
 
 dotenv.config();
 
@@ -89,9 +90,11 @@ app.use('/api/v1/onboarding',         onboardingRouter);
 app.use('/api/onboarding-templates',  onboardingTemplatesRouter);
 app.use('/api/integration-software',  integrationSoftwareRouter);
 app.use('/api/teams',                 teamsRouter);
-// Webhook-safe alias — suppliers that block URLs containing "billing"
-// should send to /api/moov-charges/webhook instead
+// Webhook-safe aliases — supports various courier and integrator webhook URLs
 app.use('/api/moov-charges',          billingRouter);
+app.use('/api/billing',               billingRouter);
+app.use('/api/webhook',               billingRouter);
+app.use('/webhook',                   billingRouter);
 app.use('/api/reconciliation',        reconciliationRouter);
 app.use('/api/shipments',             shipmentsRouter);
 app.use('/api/email',                 emailRouter);
@@ -143,6 +146,13 @@ async function start() {
     startGmailSync(3 * 60 * 1000); // poll every 3 minutes
     // SLA scream monitor — escalate breached tickets to Google Chat every 5 min.
     setInterval(() => { runSlaScreamScan().catch(e => console.warn('[SLA] scan error:', e.message)); }, 5 * 60 * 1000);
+    // WISMO Phase 3 (MOS-6) — whole-case SLA clock + spot-check sampling (both
+    // mechanical, no AI) every 5 min; auto-chase every 20 min (less time-sensitive).
+    // Auto-send in any of these is additionally gated by AUTOPILOT_LIVE_SEND_ENABLED
+    // (unset/false by default) — see loopController.js.
+    setInterval(() => { runWholeCaseSlaScan().catch(e => console.warn('[LoopController] whole-case scan error:', e.message)); }, 5 * 60 * 1000);
+    setInterval(() => { runSpotCheckSampling().catch(e => console.warn('[LoopController] spot-check error:', e.message)); }, 5 * 60 * 1000);
+    setInterval(() => { runAutoChaseScan().catch(e => console.warn('[LoopController] chase scan error:', e.message)); }, 20 * 60 * 1000);
     // One-time repair of emails imported before the body-parsing fix.
     // Fire-and-forget so it can never delay or crash startup.
     backfillEmailBodiesOnce().catch(e => console.warn('[Email backfill] skipped:', e.message));

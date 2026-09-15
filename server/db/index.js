@@ -13,7 +13,7 @@ const pool = new Pool({
   // database: process.env.DB_NAME || 'moov_os',
   // user: process.env.DB_USER || 'postgres',
   // password: process.env.DB_PASSWORD,
-  ssl: process.env.NODE_ENV === 'production'
+  ssl: (process.env.NODE_ENV === 'production' || (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('rlwy.net')))
     ? { rejectUnauthorized: false }
     : false,
   max: 20,

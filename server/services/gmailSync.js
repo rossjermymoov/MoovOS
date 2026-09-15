@@ -5,13 +5,13 @@
 
 import { google } from 'googleapis';
 
-// ─── AI triage + summary via Gemini 1.5 Flash (REST — Node-18 safe) ──────────
+// ─── AI triage + summary via Gemini (REST via geminiGenerate — Node-18 safe) ──
 // Returns strict JSON: { ticket_type, summary, courier, tracking_number }.
 // ticket_type ∈ ['query','claim','billing','technical']. Falls back to regex
 // heuristics if the API key is missing or the call fails, so the sync never
-// hard-crashes.
-const GEMINI_GENERATE_URL =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+// hard-crashes. Reuses the shared geminiGenerate()/GEMINI_MODEL from
+// geminiService.js rather than its own REST call, so there's one place to
+// change the model — this file used to duplicate that call entirely.
 
 function triageFallback(subject, body) {
   const text = `${subject || ''} ${body || ''}`.toLowerCase();
@@ -38,8 +38,7 @@ function triageFallback(subject, body) {
 }
 
 export async function triageAndSummarize(subject, body) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return triageFallback(subject, body);
+  if (!process.env.GEMINI_API_KEY) return triageFallback(subject, body);
 
   const trackingExamples = await getAllTrackingExamples();
   const trackingGuide = trackingExamples
@@ -58,24 +57,15 @@ export async function triageAndSummarize(subject, body) {
     `\nSubject: ${subject || '(none)'}\nBody: ${(body || '').slice(0, 2000)}`;
 
   try {
-    const resp = await fetch(`${GEMINI_GENERATE_URL}?key=${encodeURIComponent(apiKey)}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0, responseMimeType: 'application/json' },
-      }),
-    });
-    if (!resp.ok) { console.warn('[Gemini triage] non-OK:', resp.status); return triageFallback(subject, body); }
-    const json = await resp.json();
-    const parsed = JSON.parse(json.candidates?.[0]?.content?.parts?.[0]?.text || '{}');
+    const raw = await geminiGenerate(prompt, { json: true, temperature: 0 });
+    const parsed = JSON.parse(raw || '{}');
     const allowed = ['query', 'claim', 'billing', 'technical'];
     return {
       ticket_type: allowed.includes(parsed.ticket_type) ? parsed.ticket_type : 'query',
       summary: (parsed.summary || subject || 'Customer enquiry').toString().slice(0, 400),
       courier: parsed.courier || null,
       tracking_number: isLikelyTracking(parsed.tracking_number) ? String(parsed.tracking_number).trim() : null,
-      source: 'gemini-2.5-flash',
+      source: GEMINI_MODEL,
     };
   } catch (e) {
     console.warn('[Gemini triage] failed:', e.message);
@@ -104,7 +94,7 @@ import { getAuthedClient, getConfig, updateLastSync } from './gmailService.js';
 import { query } from '../db/index.js';
 import { evaluateAutomationRules } from './automationEngine.js';
 import { triagePriority } from './triageEngine.js';
-import { isLikelyTracking } from './geminiService.js';
+import { isLikelyTracking, geminiGenerate, GEMINI_MODEL } from './geminiService.js';
 import { identifyCourierByTracking, getAllTrackingExamples } from './courierAutomation.js';
 import { interpretCourierReply } from './replyInterpreter.js';
 
@@ -362,12 +352,18 @@ async function upsertTicket(msg, gmail = null) {
       if (id) { courierCode = id.courier_code; courierName = id.courier_name; }
     }
 
+    // Whole-case SLA clock (WISMO Phase 3, MOS-6) — set once here, never reset by
+    // later exchanges. Separate from the existing per-hop courier_sla_expires_at.
+    const settingsRes = await query(`SELECT whole_case_sla_hours FROM automation_settings WHERE id = 1`);
+    const wholeCaseHours = settingsRes.rows[0]?.whole_case_sla_hours || 48;
+
     const ticketRes = await query(`
       INSERT INTO queries
         (customer_id, customer_name, sender_email, sender_matched, subject, description,
          status, query_type, group_name, courier_name, courier_code, consignment_number,
-         trigger, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, 'open', 'other', $7, $8, $9, $10, 'customer_email', $11, $11)
+         trigger, whole_case_sla_deadline, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, 'open', 'other', $7, $8, $9, $10, 'customer_email',
+              $11 + ($12 || ' hours')::INTERVAL, $11, $11)
       RETURNING id
     `, [
       customer?.id || null,
@@ -381,6 +377,7 @@ async function upsertTicket(msg, gmail = null) {
       courierCode,
       tracking,
       receivedAt,
+      wholeCaseHours,
     ]);
     queryId = ticketRes.rows[0].id;
 
@@ -415,6 +412,27 @@ async function upsertTicket(msg, gmail = null) {
     await query(`UPDATE queries SET last_courier_response_at = NOW(), track_b_status = 'Replied', updated_at = NOW() WHERE id = $1`, [queryId]);
   } else if (!isOurs) {
     await query(`UPDATE queries SET last_customer_response_at = NOW(), updated_at = NOW() WHERE id = $1`, [queryId]);
+    // Dissatisfaction check (WISMO Phase 3, MOS-6) — this is a customer follow-up
+    // on an ALREADY-OPEN ticket (brand-new tickets are triaged above, courier
+    // replies are excluded by this branch). Previously nothing automated ran here
+    // at all. Escalates to a human on either of Ross's two confirmed triggers
+    // (explicit complaint language or AI sentiment read); never auto-sends anything.
+    try {
+      const { checkDissatisfaction } = await import('./dissatisfactionEngine.js');
+      const d = await checkDissatisfaction({ subject, body });
+      if (d.dissatisfied) {
+        await query(
+          `UPDATE queries
+              SET requires_attention = true,
+                  attention_reason = $2,
+                  escalation_source = 'dissatisfaction',
+                  internal_automation_state = 'action_required',
+                  updated_at = NOW()
+            WHERE id = $1`,
+          [queryId, `Customer dissatisfaction detected (${d.source}): ${d.reasoning || 'pattern match'}`],
+        );
+      }
+    } catch (e) { console.warn('[Gmail sync] dissatisfaction check failed:', e.message); }
   } else {
     await query(`UPDATE queries SET updated_at = NOW() WHERE id = $1`, [queryId]);
   }

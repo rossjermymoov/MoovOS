@@ -10,10 +10,10 @@ const api = axios.create({ baseURL: '/api' });
 // ─── Xero logo ────────────────────────────────────────────────────────────────
 function XeroLogo({ size = 24 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <rect width="24" height="24" rx="4" fill="#13B5EA"/>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" style={{ borderRadius: 0, flexShrink: 0 }}>
+      <rect width="24" height="24" fill="#13B5EA"/>
       <path d="M7.5 8L12 12.5L16.5 8M7.5 16L12 11.5L16.5 16"
-        stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+        stroke="white" strokeWidth="1.8" strokeLinecap="square" strokeLinejoin="miter"/>
     </svg>
   );
 }

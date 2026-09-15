@@ -195,15 +195,23 @@ export default function OnboardingBoard() {
           </div>
 
           {/* Right: Search Box */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid var(--mv-divider)', paddingBottom: 4, width: 220 }}>
-            <Search size={14} color="var(--mv-ink-45)" />
+          <div className="mv-search" style={{ width: 220, height: 32 }}>
+            <Search size={14} style={{ color: 'var(--mv-ink-45)', flexShrink: 0 }} />
             <input
               type="text"
               placeholder="Search customer…"
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
-              style={{ background: 'transparent', border: 'none', outline: 'none', fontSize: 13, fontFamily: 'inherit', color: 'var(--mv-ink)', width: '100%' }}
             />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="mv-search-clear"
+                title="Clear search"
+              >
+                ✕
+              </button>
+            )}
           </div>
         </div>
 
