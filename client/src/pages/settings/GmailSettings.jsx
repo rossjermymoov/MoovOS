@@ -6,6 +6,18 @@ import { SettingsNav } from './RulesSettings';
 
 const api = axios.create({ baseURL: '/api' });
 
+const S = {
+  card:    { background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline)', borderRadius: 10, padding: '20px 24px', marginBottom: 16 },
+  label:   { fontSize: 11, fontWeight: 600, letterSpacing: '0.07em', textTransform: 'uppercase', color: 'var(--mv-ink-45)', marginBottom: 8 },
+  title:   { fontSize: 16, fontWeight: 600, color: 'var(--mv-ink)', marginBottom: 4 },
+  sub:     { fontSize: 13, color: 'var(--mv-ink-52)', lineHeight: 1.6 },
+  btn:     { display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 18px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 600, fontFamily: "'Inter', sans-serif" },
+  btnGreen:{ background: 'var(--mv-green)', color: 'var(--mv-on-brand)' },
+  btnGray: { background: 'color-mix(in srgb, var(--mv-ink) 6%, transparent)', color: 'var(--mv-ink-78)' },
+  btnRed:  { background: 'var(--mv-magenta-100)', color: 'var(--mv-magenta)', border: '1px solid var(--mv-magenta-200)' },
+  row:     { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--mv-hairline)' },
+};
+
 export default function GmailSettings() {
   const qc = useQueryClient();
   const [syncing, setSyncing] = useState(false);
@@ -52,98 +64,110 @@ export default function GmailSettings() {
   const connected = status?.connected;
 
   return (
-    <div className="mv-page">
-      <div className="mv-page-inner">
-        <SettingsNav />
+    <div style={{ maxWidth: 640, padding: '24px 0' }}>
+      <p style={{ ...S.label }}>Integrations</p>
+      <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--mv-ink)', marginBottom: 6 }}>Gmail inbox</h1>
+      <p style={{ ...S.sub, marginBottom: 24 }}>
+        Connect your service Gmail account to automatically import incoming emails as tickets.
+        Read-only — Moov OS will never send or modify emails.
+      </p>
 
-        <div className="mv-head">
-          <div>
-            <div className="mv-kicker">Settings &amp; Ingest</div>
-            <h1 className="mv-title">Gmail Ingest</h1>
-            <p className="mv-blurb">
-              Connect your customer service inbox to automatically import incoming emails into triage tickets. Read-only scope.
-            </p>
-          </div>
-        </div>
-
-        <div className="mv-rule" style={{ marginBottom: 20 }} />
-
-        {/* Connection status */}
-        <div style={{ background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)', padding: '20px 24px', marginBottom: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-              <div style={{ width: 42, height: 42, background: 'var(--mv-bg)', border: '1px solid var(--mv-hairline-2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Mail size={20} style={{ color: connected ? 'var(--mv-green)' : 'var(--mv-ink-45)' }} />
-              </div>
-              <div>
-                <p style={{ fontSize: 14.5, fontWeight: 800, color: 'var(--mv-ink)', margin: 0 }}>
-                  {isLoading ? 'Checking connection…' : connected ? status.email_address : 'Not connected'}
-                </p>
-                <p style={{ fontSize: 12, color: 'var(--mv-ink-52)', margin: '3px 0 0' }}>
-                  {connected
-                    ? status.last_sync_at
-                      ? 'Last synced ' + new Date(status.last_sync_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
-                      : 'Connected · first sync pending'
-                    : 'Connect to start importing emails as tickets'}
-                </p>
-              </div>
+      {/* Connection status */}
+      <div style={S.card}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <div style={{ width: 40, height: 40, borderRadius: 10, background: connected ? 'var(--mv-purple-100)' : 'color-mix(in srgb, var(--mv-ink) 10%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <Mail size={20} color={connected ? 'var(--mv-green)' : 'var(--mv-ink-45)'} />
             </div>
-            {connected ? (
-              <span className="mv-state mv-state--settled">
-                <span className="mv-mark mv-mark--settled" />
-                <span className="mv-state-label">Connected</span>
-              </span>
-            ) : (
-              <span className="mv-state mv-state--waiting">
-                <span className="mv-mark mv-mark--waiting" />
-                <span className="mv-state-label">Inactive</span>
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div style={{ background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)', padding: '20px 24px', marginBottom: 16 }}>
-          {!connected ? (
             <div>
-              <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--mv-ink)', marginBottom: 4 }}>Connect Google Account</div>
-              <p style={{ fontSize: 13, color: 'var(--mv-ink-52)', marginBottom: 16, lineHeight: 1.5 }}>
-                You will be redirected to Google to authorise read-only access. Moov OS requests
-                the <code style={{ fontSize: 12, background: 'var(--mv-bg)', border: '1px solid var(--mv-hairline-2)', padding: '2px 6px' }}>gmail.readonly</code> scope only.
+              <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--mv-ink)', margin: 0 }}>
+                {isLoading ? 'Checking...' : connected ? status.email_address : 'Not connected'}
               </p>
-              <a href="/api/gmail/auth" className="mv-btn-primary" style={{ textDecoration: 'none', display: 'inline-flex' }}>
-                <Mail size={14} />
-                Authorize with Google
-              </a>
+              <p style={{ fontSize: 12, color: 'var(--mv-ink-45)', margin: '2px 0 0' }}>
+                {connected
+                  ? status.last_sync_at
+                    ? 'Last synced ' + new Date(status.last_sync_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+                    : 'Connected · first sync pending'
+                  : 'Connect to start importing emails as tickets'}
+              </p>
             </div>
-          ) : (
-            <div>
-              <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--mv-ink)', marginBottom: 12 }}>Sync Parameters</div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid var(--mv-hairline-2)', fontSize: 13 }}>
-                <span style={{ color: 'var(--mv-ink-52)' }}>Sync frequency</span>
-                <span style={{ fontWeight: 700, color: 'var(--mv-ink)' }}>Every 3 minutes</span>
+          </div>
+          {connected
+            ? <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <CheckCircle size={16} color="var(--mv-green)" />
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--mv-green-deep)' }}>Connected</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', fontSize: 13 }}>
-                <span style={{ color: 'var(--mv-ink-52)' }}>Access scope</span>
-                <span style={{ fontWeight: 700, color: 'var(--mv-green)' }}>Read-only</span>
-              </div>
-              <div style={{ display: 'flex', gap: 10, marginTop: 16, alignItems: 'center' }}>
-                <button onClick={handleSync} disabled={syncing} className="mv-btn-primary" style={{ fontSize: 12.5 }}>
-                  <RefreshCw size={13} style={{ animation: syncing ? 'spin 1s linear infinite' : 'none' }} />
-                  {syncing ? 'Syncing…' : 'Sync Now'}
-                </button>
-                <button onClick={() => disconnect.mutate()} className="mv-btn-ghost" style={{ fontSize: 12.5, color: 'var(--mv-magenta-deep)' }}>
-                  <LogOut size={13} />
-                  Disconnect
-                </button>
-                {syncMsg && (
-                  <span style={{ fontSize: 12, color: syncMsg.includes('fail') || syncMsg.includes('Error') ? 'var(--mv-magenta)' : 'var(--mv-green)' }}>{syncMsg}</span>
-                )}
-              </div>
-            </div>
-          )}
+            : <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--mv-ink-45)' }} />
+          }
         </div>
       </div>
+
+      {/* Actions */}
+      <div style={S.card}>
+        {!connected ? (
+          <div>
+            <p style={{ ...S.title }}>Connect Gmail account</p>
+            <p style={{ ...S.sub, marginBottom: 16 }}>
+              You'll be redirected to Google to authorise read-only access. Moov OS requests
+              the <code style={{ fontSize: 12, background: 'color-mix(in srgb, var(--mv-ink) 5%, transparent)', padding: '1px 5px', borderRadius: 4 }}>gmail.readonly</code> scope only.
+            </p>
+            <a href="/api/gmail/auth" style={{ ...S.btn, ...S.btnGreen, textDecoration: 'none' }}>
+              <Mail size={14} />
+              Connect Gmail
+            </a>
+          </div>
+        ) : (
+          <div>
+            <p style={{ ...S.title }}>Sync settings</p>
+            <div style={S.row}>
+              <span style={{ fontSize: 13, color: 'var(--mv-ink-78)' }}>Sync frequency</span>
+              <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--mv-ink)' }}>Every 3 minutes</span>
+            </div>
+            <div style={{ ...S.row, borderBottom: 'none' }}>
+              <span style={{ fontSize: 13, color: 'var(--mv-ink-78)' }}>Access level</span>
+              <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--mv-green-deep)' }}>Read-only</span>
+            </div>
+            <div style={{ display: 'flex', gap: 10, marginTop: 16, alignItems: 'center' }}>
+              <button onClick={handleSync} disabled={syncing} style={{ ...S.btn, ...S.btnGray }}>
+                <RefreshCw size={13} style={{ animation: syncing ? 'spin 1s linear infinite' : 'none' }} />
+                {syncing ? 'Syncing...' : 'Sync now'}
+              </button>
+              <button onClick={() => disconnect.mutate()} style={{ ...S.btn, ...S.btnRed }}>
+                <LogOut size={13} />
+                Disconnect
+              </button>
+              {syncMsg && (
+                <span style={{ fontSize: 12, color: syncMsg.includes('fail') ? 'var(--mv-magenta)' : 'var(--mv-green-deep)' }}>{syncMsg}</span>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Setup instructions */}
+      {!connected && (
+        <div style={{ ...S.card, background: 'var(--mv-bg)' }}>
+          <p style={{ ...S.title, fontSize: 14 }}>Before connecting</p>
+          <p style={{ ...S.sub, marginBottom: 12 }}>
+            You need three environment variables set in Railway for the OAuth flow to work:
+          </p>
+          {[
+            { key: 'GMAIL_CLIENT_ID',     desc: 'OAuth 2.0 Client ID from Google Cloud Console' },
+            { key: 'GMAIL_CLIENT_SECRET', desc: 'OAuth 2.0 Client Secret' },
+            { key: 'GMAIL_REDIRECT_URI',  desc: 'Must be set to your app URL + /api/gmail/callback' },
+          ].map(({ key, desc }) => (
+            <div key={key} style={{ marginBottom: 8 }}>
+              <code style={{ fontSize: 12, background: 'color-mix(in srgb, var(--mv-ink) 6%, transparent)', padding: '2px 7px', borderRadius: 4, color: 'var(--mv-ink)' }}>{key}</code>
+              <span style={{ fontSize: 12, color: 'var(--mv-ink-52)', marginLeft: 8 }}>{desc}</span>
+            </div>
+          ))}
+          <p style={{ fontSize: 12, color: 'var(--mv-ink-45)', marginTop: 12 }}>
+            Also add <code style={{ fontSize: 12 }}>https://your-app.railway.app/api/gmail/callback</code> as an authorised redirect URI in Google Cloud Console.
+          </p>
+        </div>
+      )}
+
+      <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
     </div>
   );
 }

@@ -14,20 +14,20 @@ import { Send, User, Truck, Mail, RefreshCw, Inbox, ChevronDown } from 'lucide-r
 // ─── Design tokens ────────────────────────────────────────────────────────────
 
 const C = {
-  bg:        '#F0F4FF',
-  white:     '#FFFFFF',
-  border:    '#DDE3F0',
-  text:      '#1A1D2E',
-  muted:     '#6B7280',
-  blue:      '#2563EB',
-  blueDim:   '#EFF6FF',
-  green:     '#16A34A',
-  greenDim:  '#F0FDF4',
-  red:       '#DC2626',
-  amber:     '#D97706',
-  amberDim:  '#FFFBEB',
-  purple:    '#7C3AED',
-  purpleDim: '#F5F3FF',
+  bg:        'var(--mv-bg)',
+  white:     'var(--mv-surface)',
+  border:    'var(--mv-hairline)',
+  text:      'var(--mv-ink)',
+  muted:     'var(--mv-ink-52)',
+  blue:      'var(--mv-teal)',
+  blueDim:   'var(--mv-teal-100)',
+  green:     'var(--mv-green-deep)',
+  greenDim:  'var(--mv-purple-100)',
+  red:       'var(--mv-magenta)',
+  amber:     'var(--mv-amber)',
+  amberDim:  'var(--mv-amber-100)',
+  purple:    'var(--mv-purple)',
+  purpleDim: 'var(--mv-purple-100)',
 };
 
 // Personas
@@ -53,9 +53,9 @@ const PERSONAS = {
 
 // Direction display
 const DIR = {
-  inbound_customer:  { label: '← Customer',      color: C.blue,   align: 'flex-end',   bubble: C.blue,   bubbleText: '#fff' },
+  inbound_customer:  { label: '← Customer',      color: C.blue,   align: 'flex-end',   bubble: C.blue,   bubbleText: 'var(--mv-on-brand)' },
   outbound_customer: { label: '→ To customer',    color: C.green,  align: 'flex-start', bubble: C.white,  bubbleText: C.text },
-  inbound_courier:   { label: '← DPD Platinum',   color: C.purple, align: 'flex-end',   bubble: C.purple, bubbleText: '#fff' },
+  inbound_courier:   { label: '← DPD Platinum',   color: C.purple, align: 'flex-end',   bubble: C.purple, bubbleText: 'var(--mv-on-brand)' },
   outbound_courier:  { label: '→ To DPD',         color: C.amber,  align: 'flex-start', bubble: C.white,  bubbleText: C.text },
 };
 
@@ -78,7 +78,7 @@ function EmailBubble({ email }) {
       <div style={{ fontSize: 11, color: C.muted, marginBottom: 3, display: 'flex', alignItems: 'center', gap: 6 }}>
         <span style={{ color: d.color, fontWeight: 600 }}>{d.label}</span>
         {isDraft && (
-          <span style={{ fontSize: 10, background: '#FEF3C7', color: C.amber, padding: '1px 6px', borderRadius: 8, fontWeight: 700 }}>AI DRAFT</span>
+          <span style={{ fontSize: 10, background: 'var(--mv-amber-100)', color: C.amber, padding: '1px 6px', borderRadius: 8, fontWeight: 700 }}>AI DRAFT</span>
         )}
         <span>· {fmtDateTime(email.sent_at || email.received_at || email.created_at)}</span>
       </div>
@@ -208,14 +208,14 @@ export default function CustomerSimPage() {
         boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
       }}>
         <div style={{ width: 36, height: 36, borderRadius: 10, background: p.color, display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.2s' }}>
-          <Icon size={18} color="#fff" />
+          <Icon size={18} color="var(--mv-on-brand)" />
         </div>
         <div>
           <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>Query Simulation Sandbox</div>
           <div style={{ fontSize: 12, color: C.muted }}>Simulate the full query lifecycle — customer, Moov, and courier</div>
         </div>
         <div style={{ marginLeft: 'auto' }}>
-          <span style={{ fontSize: 11, background: '#FEF3C7', color: C.amber, padding: '4px 10px', borderRadius: 20, fontWeight: 700 }}>
+          <span style={{ fontSize: 11, background: 'var(--mv-amber-100)', color: C.amber, padding: '4px 10px', borderRadius: 20, fontWeight: 700 }}>
             ⚡ SANDBOX — no real emails sent
           </span>
         </div>
@@ -336,7 +336,7 @@ export default function CustomerSimPage() {
                 ) : (
                   <span key={i} style={{
                     padding: '4px 10px', borderRadius: 8,
-                    background: `${item.color}18`,
+                    background: `color-mix(in srgb, ${item.color} 9%, transparent)`,
                     color: item.color,
                   }}>{item.label}</span>
                 )
@@ -366,7 +366,7 @@ export default function CustomerSimPage() {
               <div style={{
                 padding: '16px 20px',
                 background: p.dim,
-                borderTop: `2px solid ${p.color}22`,
+                borderTop: `2px solid color-mix(in srgb, ${p.color} 13%, transparent)`,
               }}>
                 {/* Who is replying */}
                 <div style={{ fontSize: 11, fontWeight: 700, color: p.color, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -379,7 +379,7 @@ export default function CustomerSimPage() {
 
                 {/* Hint text for courier */}
                 {persona === 'courier' && (
-                  <div style={{ fontSize: 12, color: C.muted, background: C.amberDim, border: `1px solid ${C.amber}33`, borderRadius: 8, padding: '8px 12px', marginBottom: 10 }}>
+                  <div style={{ fontSize: 12, color: C.muted, background: C.amberDim, border: `1px solid color-mix(in srgb, ${C.amber} 20%, transparent)`, borderRadius: 8, padding: '8px 12px', marginBottom: 10 }}>
                     💡 Tip: Write as DPD responding to Moov's investigation request. E.g. GPS data, delivery photo results, or trace updates.
                   </div>
                 )}
@@ -415,8 +415,8 @@ export default function CustomerSimPage() {
                       style={{
                         display: 'inline-flex', alignItems: 'center', gap: 7,
                         padding: '9px 20px', borderRadius: 9,
-                        background: sending || !replyText.trim() ? '#CBD5E1' : p.color,
-                        color: '#0F172A', border: 'none',
+                        background: sending || !replyText.trim() ? 'var(--mv-hairline-2)' : p.color,
+                        color: 'var(--mv-ink)', border: 'none',
                         fontSize: 13, fontWeight: 700,
                         cursor: sending || !replyText.trim() ? 'not-allowed' : 'pointer',
                         transition: 'background 0.15s',
@@ -437,7 +437,7 @@ export default function CustomerSimPage() {
           <div style={{ background: C.white, borderRadius: 14, border: `1px solid ${C.border}`, padding: 48, textAlign: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' }}>
             <Mail size={36} color={C.border} style={{ marginBottom: 14 }} />
             <div style={{ fontSize: 16, fontWeight: 700, color: C.muted, marginBottom: 6 }}>Select a query to get started</div>
-            <div style={{ fontSize: 13, color: '#9CA3AF' }}>Pick a role above, then choose a query to simulate the full email workflow</div>
+            <div style={{ fontSize: 13, color: 'var(--mv-ink-45)' }}>Pick a role above, then choose a query to simulate the full email workflow</div>
           </div>
         )}
       </div>

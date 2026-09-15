@@ -25,24 +25,26 @@ const _BUILD = '2026-05-23-filter-fixes'; // cache bust — fix claim deadline f
 
 const C = {
   bg:       'var(--mv-bg)',
-  surface:  'var(--mv-surface)',
+  surface:  'var(--mv-bg)',
   card:     'var(--mv-surface)',
   hover:    'var(--mv-bg)',
-  selected: 'rgba(123,47,190,0.06)',
-  border:   'var(--mv-hairline-2)',
-  green:    '#00C853',
-  amber:    '#D97706',
-  red:      '#E91E8C',
-  blue:     '#7B2FBE',
+  selected: 'var(--mv-teal-100)',
+  border:   'var(--mv-hairline)',
+  green:    'var(--mv-green-deep)',
+  amber:    'var(--mv-amber-deep)',
+  red:      'var(--mv-magenta-deep)',
+  blue:     'var(--mv-teal-deep)',
   text:     'var(--mv-ink)',
-  sub:      'var(--mv-ink-62)',
+  sub:      'var(--mv-ink-78)',
   muted:    'var(--mv-ink-52)',
-  greenDim: 'rgba(0,200,83,0.1)',
-  amberDim: 'rgba(217,119,6,0.1)',
-  redDim:   'rgba(233,30,140,0.1)',
-  blueDim:  'rgba(123,47,190,0.1)',
+  greenDim: 'var(--mv-purple-100)',
+  amberDim: 'var(--mv-amber-100)',
+  redDim:   'var(--mv-magenta-100)',
+  blueDim:  'var(--mv-teal-100)',
 };
 
+// Shape (kind: 'settled'|'flight'|'attention'|'waiting') feeds the shared
+// mv-state/mv-mark four-mark status language used by StatusBadge below.
 const STATUS_CFG = {
   open:                    { label: 'Open',              kind: 'flight' },
   awaiting_customer_info:  { label: 'Awaiting Customer', kind: 'waiting' },
@@ -82,13 +84,11 @@ function Badge({ label, color, bg, small }) {
       padding: small ? '2px 6px' : '3px 8px',
       borderRadius: 0,
       fontSize: small ? 10 : 11,
-      fontWeight: 700,
-      background: bg || 'var(--mv-bg)',
-      color: color || 'var(--mv-ink)',
+      fontWeight: 600,
+      background: bg || `color-mix(in srgb, ${color} 13%, transparent)`,
+      color,
       whiteSpace: 'nowrap',
-      border: `1px solid ${color ? color + '44' : 'var(--mv-hairline-2)'}`,
-      textTransform: 'uppercase',
-      letterSpacing: '0.04em',
+      border: `1px solid color-mix(in srgb, ${color} 20%, transparent)`,
     }}>{label}</span>
   );
 }
@@ -109,15 +109,15 @@ function TypeBadge({ type, small }) {
 }
 
 const GROUP_BADGE_CFG = {
-  'Claims':    { color: '#E91E8C' },
-  'Billing':   { color: '#00C853' },
-  'Technical': { color: '#7B2FBE' },
-  'Queries':   { color: '#201e1d' },
+  'Claims':    { bg: 'var(--mv-amber-100)', color: 'var(--mv-amber-deep)', border: 'var(--mv-amber-200)' },
+  'Billing':   { bg: 'var(--mv-purple-100)', color: 'var(--mv-green-deep)', border: 'var(--mv-purple-200)' },
+  'Technical': { bg: 'var(--mv-purple-100)', color: 'var(--mv-purple-700)', border: 'var(--mv-purple-200)' },
+  'Queries':   { bg: 'var(--mv-teal-100)', color: 'var(--mv-teal-deep)', border: 'var(--mv-teal-200)' },
 };
 
 function GroupBadge({ group }) {
   if (!group) return null;
-  const cfg = GROUP_BADGE_CFG[group] || { color: 'var(--mv-ink-62)' };
+  const cfg = GROUP_BADGE_CFG[group] || { bg: 'var(--mv-bg)', color: 'var(--mv-ink-62)', border: 'var(--mv-hairline)' };
   return (
     <span style={{
       display: 'inline-block',
@@ -150,22 +150,22 @@ function fmtDate(ts) {
 // ─── Tracking timeline — carbon copy of TrackingPage STATUS + EventTimeline ───
 
 const TRACK_STATUS = {
-  booked:              { label: 'Booked',                       color: '#00BCD4', bg: 'rgba(0,188,212,0.12)',    icon: Package },
-  collected:           { label: 'Collected',                    color: '#2196F3', bg: 'rgba(33,150,243,0.12)',   icon: Package },
-  at_depot:            { label: 'At Hub',                       color: '#5C6BC0', bg: 'rgba(92,107,192,0.12)',   icon: Package },
-  in_transit:          { label: 'In Transit',                   color: '#7B2FBE', bg: 'rgba(123,47,190,0.12)',   icon: Truck },
-  out_for_delivery:    { label: 'Out for Delivery',             color: '#D97706', bg: 'rgba(255,193,7,0.12)',    icon: Truck },
-  failed_delivery:     { label: 'Failed Attempt',               color: '#F44336', bg: 'rgba(244,67,54,0.12)',    icon: AlertTriangle },
-  delivered:           { label: 'Delivered',                    color: '#00C853', bg: 'rgba(0,200,83,0.12)',     icon: PackageCheck },
-  on_hold:             { label: 'On Hold',                      color: '#FF9800', bg: 'rgba(255,152,0,0.12)',    icon: Clock },
-  exception:           { label: 'Address Issue',                color: '#F44336', bg: 'rgba(244,67,54,0.12)',    icon: AlertTriangle },
-  returned:            { label: 'Return to Sender',             color: '#607D8B', bg: 'rgba(96,125,139,0.12)',   icon: RotateCcw },
-  tracking_expired:    { label: 'Tracking Expired',             color: '#757575', bg: 'rgba(117,117,117,0.12)',  icon: Clock },
-  cancelled:           { label: 'Cancelled',                    color: '#757575', bg: 'rgba(117,117,117,0.12)',  icon: AlertTriangle },
-  awaiting_collection: { label: 'Awaiting Customer Collection', color: '#FF6F00', bg: 'rgba(255,111,0,0.12)',    icon: Store },
-  damaged:             { label: 'Damaged',                      color: '#E91E8C', bg: 'rgba(233,30,140,0.12)',   icon: PackageX },
-  customs_hold:        { label: 'Customs Hold',                 color: '#9C27B0', bg: 'rgba(156,39,176,0.12)',   icon: ShieldAlert },
-  unknown:             { label: 'Unknown',                      color: '#64748B', bg: 'rgba(0,0,0,0.05)',       icon: Package },
+  booked:              { label: 'Booked',                       color: 'var(--mv-teal)', bg: 'color-mix(in srgb, var(--mv-teal) 12%, transparent)',    icon: Package },
+  collected:           { label: 'Collected',                    color: 'var(--mv-teal)', bg: 'color-mix(in srgb, var(--mv-teal) 12%, transparent)',   icon: Package },
+  at_depot:            { label: 'At Hub',                       color: 'var(--mv-purple)', bg: 'color-mix(in srgb, var(--mv-purple) 12%, transparent)',   icon: Package },
+  in_transit:          { label: 'In Transit',                   color: 'var(--mv-purple)', bg: 'color-mix(in srgb, var(--mv-purple) 12%, transparent)',   icon: Truck },
+  out_for_delivery:    { label: 'Out for Delivery',             color: 'var(--mv-amber)', bg: 'color-mix(in srgb, var(--mv-amber) 12%, transparent)',    icon: Truck },
+  failed_delivery:     { label: 'Failed Attempt',               color: 'var(--mv-magenta)', bg: 'color-mix(in srgb, var(--mv-magenta) 12%, transparent)', icon: AlertTriangle },
+  delivered:           { label: 'Delivered',                    color: 'var(--mv-green)', bg: 'color-mix(in srgb, var(--mv-green) 12%, transparent)',     icon: PackageCheck },
+  on_hold:             { label: 'On Hold',                      color: 'var(--mv-amber)', bg: 'color-mix(in srgb, var(--mv-amber) 12%, transparent)',    icon: Clock },
+  exception:           { label: 'Address Issue',                color: 'var(--mv-magenta)', bg: 'color-mix(in srgb, var(--mv-magenta) 12%, transparent)', icon: AlertTriangle },
+  returned:            { label: 'Return to Sender',             color: 'var(--mv-ink-52)', bg: 'color-mix(in srgb, var(--mv-ink-52) 12%, transparent)',   icon: RotateCcw },
+  tracking_expired:    { label: 'Tracking Expired',             color: 'var(--mv-ink-52)', bg: 'color-mix(in srgb, var(--mv-ink-52) 12%, transparent)',  icon: Clock },
+  cancelled:           { label: 'Cancelled',                    color: 'var(--mv-ink-52)', bg: 'color-mix(in srgb, var(--mv-ink-52) 12%, transparent)',  icon: AlertTriangle },
+  awaiting_collection: { label: 'Awaiting Customer Collection', color: 'var(--mv-amber)', bg: 'color-mix(in srgb, var(--mv-amber) 12%, transparent)',    icon: Store },
+  damaged:             { label: 'Damaged',                      color: 'var(--mv-magenta)', bg: 'color-mix(in srgb, var(--mv-magenta) 12%, transparent)',   icon: PackageX },
+  customs_hold:        { label: 'Customs Hold',                 color: 'var(--mv-purple)', bg: 'color-mix(in srgb, var(--mv-purple) 12%, transparent)',   icon: ShieldAlert },
+  unknown:             { label: 'Unknown',                      color: 'var(--mv-ink-52)', bg: 'color-mix(in srgb, var(--mv-ink) 5%, transparent)',       icon: Package },
 };
 
 function TrackingStatusBadge({ status }) {
@@ -177,7 +177,7 @@ function TrackingStatusBadge({ status }) {
       padding: '3px 9px',
       borderRadius: 9999,
       background: cfg.bg,
-      border: `1px solid ${cfg.color}44`,
+      border: `1px solid color-mix(in srgb, ${cfg.color} 27%, transparent)`,
       color: cfg.color,
       fontSize: 11,
       fontWeight: 700,
@@ -210,7 +210,7 @@ function TrackingTimeline({ events }) {
               </div>
               {!isLast && (
                 <div style={{ width: 2, flex: 1, minHeight: 16,
-                  background: 'linear-gradient(to bottom, rgba(0,0,0,0.12), rgba(0,0,0,0.03))' }} />
+                  background: 'linear-gradient(to bottom, color-mix(in srgb, var(--mv-ink) 12%, transparent), color-mix(in srgb, var(--mv-ink) 3%, transparent))' }} />
               )}
             </div>
             <div style={{ flex: 1, paddingTop: 2, paddingBottom: isLast ? 0 : 4 }}>
@@ -226,7 +226,7 @@ function TrackingTimeline({ events }) {
                   <MapPin size={11} /> {ev.location}
                 </span>
               )}
-              <div style={{ fontSize: 11, color: '#64748B', marginTop: 3 }}>
+              <div style={{ fontSize: 11, color: 'var(--mv-ink-52)', marginTop: 3 }}>
                 {new Date(ev.event_at).toLocaleString('en-GB')}
               </div>
             </div>
@@ -244,8 +244,8 @@ function KpiCard({ label, value, color, sub, onClick, active, icon: Icon, warn }
   return (
     <button onClick={onClick} style={{
       flex: '1 1 110px', minWidth: 90,
-      background: active ? `${color}14` : C.card,
-      border: `1px solid ${active ? color : value > 0 && warn ? `${color}40` : C.border}`,
+      background: active ? `color-mix(in srgb, ${color} 8%, transparent)` : C.card,
+      border: `1px solid ${active ? color : value > 0 && warn ? `color-mix(in srgb, ${color} 25%, transparent)` : C.border}`,
       borderRadius: 8, padding: '12px 14px',
       cursor: onClick ? 'pointer' : 'default',
       textAlign: 'left', transition: 'all 0.15s', outline: 'none',
@@ -284,14 +284,14 @@ function SlaChip({ mins, policyName }) {
 
   // Colour bands: green > 25% time unused, amber < 25% or < 4h, red breached
   const color = info.breached ? C.red : mins < 240 ? C.amber : C.green;
-  const bg    = info.breached ? C.redDim : mins < 240 ? C.amberDim : 'rgba(0,200,83,0.1)';
+  const bg    = info.breached ? C.redDim : mins < 240 ? C.amberDim : 'color-mix(in srgb, var(--mv-green) 10%, transparent)';
 
   return (
     <span title={policyName || 'SLA'} style={{
       display: 'inline-flex', alignItems: 'center', gap: 3,
       fontSize: 9, fontWeight: 700, color,
       background: bg, padding: '1px 6px',
-      borderRadius: 3, border: `1px solid ${color}33`,
+      borderRadius: 3, border: `1px solid color-mix(in srgb, ${color} 20%, transparent)`,
       whiteSpace: 'nowrap',
     }}>
       ⏱ {info.breached ? '−' : ''}{info.label}
@@ -307,7 +307,7 @@ const PRIORITY_BAR = {
   urgent: C.red,
   high:   C.amber,
   medium: C.blue,
-  low:    'rgba(125,133,144,0.4)',
+  low:    'var(--mv-ink-45)',
 };
 
 const PRIORITY_LABEL = { urgent: 'Urgent', high: 'High', medium: 'Medium', low: 'Low' };
@@ -327,8 +327,8 @@ function TicketPopup({ q, pos, logoUrl, assigneeName }) {
     <div style={{
       position: 'fixed', left, top,
       width: 355,
-      background: '#FFFFFF',
-      border: '1px solid rgba(0,0,0,0.12)',
+      background: 'var(--mv-surface)',
+      border: '1px solid var(--mv-hairline-2)',
       borderRadius: 10,
       boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.06)',
       padding: '14px 16px',
@@ -346,8 +346,8 @@ function TicketPopup({ q, pos, logoUrl, assigneeName }) {
         {q.query_type && <TypeBadge type={q.query_type} />}
         <StatusBadge status={q.status} />
         {q.priority && q.priority !== 'medium' && (
-          <span style={{ fontSize: 10, fontWeight: 700, color: priColor, background: `${priColor}18`,
-            padding: '2px 8px', borderRadius: 4, border: `1px solid ${priColor}33`, textTransform: 'capitalize' }}>
+          <span style={{ fontSize: 10, fontWeight: 700, color: priColor, background: `color-mix(in srgb, ${priColor} 9%, transparent)`,
+            padding: '2px 8px', borderRadius: 4, border: `1px solid color-mix(in srgb, ${priColor} 20%, transparent)`, textTransform: 'capitalize' }}>
             {PRIORITY_LABEL[q.priority]}
           </span>
         )}
@@ -356,11 +356,11 @@ function TicketPopup({ q, pos, logoUrl, assigneeName }) {
       {/* Consignment strip */}
       {q.consignment_number && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10,
-          padding: '7px 10px', background: '#F1F5F9',
+          padding: '7px 10px', background: 'var(--mv-bg)',
           borderRadius: 6, border: `1px solid ${C.border}` }}>
           {logoUrl && (
             <div style={{ width: 22, height: 16, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: '#fff', borderRadius: 3, flexShrink: 0, padding: 2 }}>
+              background: 'var(--mv-surface)', borderRadius: 3, flexShrink: 0, padding: 2 }}>
               <img src={logoUrl} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
             </div>
           )}
@@ -380,7 +380,7 @@ function TicketPopup({ q, pos, logoUrl, assigneeName }) {
 
       {/* Preview — up to 4 lines */}
       {q.latest_email_preview && (
-        <div style={{ fontSize: 12, color: '#64748B', lineHeight: 1.6, marginBottom: 10,
+        <div style={{ fontSize: 12, color: 'var(--mv-ink-52)', lineHeight: 1.6, marginBottom: 10,
           display: '-webkit-box', WebkitLineClamp: 4, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
           {q.latest_email_preview}
         </div>
@@ -388,7 +388,7 @@ function TicketPopup({ q, pos, logoUrl, assigneeName }) {
 
       {/* Footer */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 10,
-        borderTop: '1px solid rgba(0,0,0,0.08)' }}>
+        borderTop: '1px solid var(--mv-hairline)' }}>
         <User size={11} color={C.muted} />
         <span style={{ fontSize: 11, color: C.muted, flex: 1 }}>{assigneeName || 'Unassigned'}</span>
         <Clock size={10} color={C.muted} />
@@ -422,15 +422,15 @@ function getAiSummary(q) {
 
 // ─── Type icon well ───────────────────────────────────────────────────────────
 const TYPE_ICON_CFG = {
-  whereabouts:    { Icon: Package,       bg: '#EFF6FF', color: '#2563EB' },
-  not_delivered:  { Icon: PackageX,      bg: '#FEF2F2', color: '#DC2626' },
-  wrong_address:  { Icon: MapPin,        bg: '#FFFBEB', color: '#D97706' },
-  damaged:        { Icon: AlertTriangle, bg: '#FEF2F2', color: '#DC2626' },
-  missing_items:  { Icon: PackageCheck,  bg: '#FFFBEB', color: '#D97706' },
-  failed_delivery:{ Icon: Truck,         bg: '#FEF2F2', color: '#DC2626' },
-  returned:       { Icon: RotateCcw,     bg: '#FFFBEB', color: '#D97706' },
-  delay:          { Icon: Clock,         bg: '#EFF6FF', color: '#2563EB' },
-  other:          { Icon: MessageSquare, bg: '#F8FAFC', color: '#94A3B8' },
+  whereabouts:    { Icon: Package,       bg: 'var(--mv-teal-100)', color: 'var(--mv-teal)' },
+  not_delivered:  { Icon: PackageX,      bg: 'var(--mv-magenta-100)', color: 'var(--mv-magenta)' },
+  wrong_address:  { Icon: MapPin,        bg: 'var(--mv-amber-100)', color: 'var(--mv-amber)' },
+  damaged:        { Icon: AlertTriangle, bg: 'var(--mv-magenta-100)', color: 'var(--mv-magenta)' },
+  missing_items:  { Icon: PackageCheck,  bg: 'var(--mv-amber-100)', color: 'var(--mv-amber)' },
+  failed_delivery:{ Icon: Truck,         bg: 'var(--mv-magenta-100)', color: 'var(--mv-magenta)' },
+  returned:       { Icon: RotateCcw,     bg: 'var(--mv-amber-100)', color: 'var(--mv-amber)' },
+  delay:          { Icon: Clock,         bg: 'var(--mv-teal-100)', color: 'var(--mv-teal)' },
+  other:          { Icon: MessageSquare, bg: 'var(--mv-bg)', color: 'var(--mv-ink-52)' },
 };
 
 function TypeIconWell({ type }) {
@@ -444,15 +444,15 @@ function TypeIconWell({ type }) {
 }
 
 function rowAccentColor(q) {
-  if (q.requires_attention) return '#EF4444';
-  if (['claim_raised','awaiting_claim_docs','escalated','resolved_claim_rejected'].includes(q.status)) return '#EF4444';
-  if (['awaiting_courier','courier_investigating','claim_submitted'].includes(q.status)) return '#F59E0B';
-  if (['resolved','resolved_claim_approved'].includes(q.status)) return '#00C853';
+  if (q.requires_attention) return 'var(--mv-magenta)';
+  if (['claim_raised','awaiting_claim_docs','escalated','resolved_claim_rejected'].includes(q.status)) return 'var(--mv-magenta)';
+  if (['awaiting_courier','courier_investigating','claim_submitted'].includes(q.status)) return 'var(--mv-amber)';
+  if (['resolved','resolved_claim_approved'].includes(q.status)) return 'var(--mv-green)';
   const d = (q.description || '').toLowerCase();
-  if (/very angry|furious|outrageous|unacceptable/.test(d)) return '#EF4444';
-  if (/frustrated|angry/.test(d)) return '#F59E0B';
-  if (q.has_new_reply) return '#3B82F6';
-  return 'rgba(0,0,0,0.10)';
+  if (/very angry|furious|outrageous|unacceptable/.test(d)) return 'var(--mv-magenta)';
+  if (/frustrated|angry/.test(d)) return 'var(--mv-amber)';
+  if (q.has_new_reply) return 'var(--mv-teal)';
+  return 'var(--mv-hairline-2)';
 }
 
 // Render light markdown (**bold**) as clean JSX — strips the raw asterisks and
@@ -464,7 +464,7 @@ function mdLite(text) {
     .filter(Boolean)
     .map((part, i) =>
       /^\*\*[^*]+\*\*$/.test(part)
-        ? <strong key={i} className="font-semibold text-slate-900">{part.slice(2, -2)}</strong>
+        ? <strong key={i} className="font-semibold" style={{ color: 'var(--mv-ink)' }}>{part.slice(2, -2)}</strong>
         : <span key={i}>{part.replace(/\*\*/g, '')}</span>
     );
 }
@@ -492,40 +492,42 @@ function cleanIncoming(raw) {
 // left-hand indicator strip), with completed tickets overriding to green.
 // Nothing tied to group_name / assigned_to / operational state.
 //   Closed/Resolved → green · Urgent → red · High → amber · Medium → yellow · Low → blue
+// Colour styles (token-driven) keyed by status/priority — used as inline `style`
+// alongside the static structural Tailwind classes at each call site.
 function rowBadgeClasses(q) {
   const s = (q.status || '').toLowerCase();
   const p = (q.priority || '').toLowerCase();
 
   if (['resolved', 'resolved_claim_approved', 'resolved_claim_rejected', 'closed'].includes(s))
-    return 'bg-emerald-50 text-emerald-700 border-emerald-200';
-  if (p === 'urgent') return 'bg-red-50 text-red-700 border-red-200 font-bold';
-  if (p === 'high')   return 'bg-amber-50 text-amber-700 border-amber-200 font-bold';
-  if (p === 'medium') return 'bg-yellow-50 text-yellow-700 border-yellow-200 font-bold';
-  if (p === 'low')    return 'bg-blue-50 text-blue-700 border-blue-200';
-  return 'bg-blue-50 text-blue-700 border-blue-200';
+    return { background: 'var(--mv-purple-100)', color: 'var(--mv-green-deep)', borderColor: 'var(--mv-purple-200)' };
+  if (p === 'urgent') return { background: 'var(--mv-magenta-100)', color: 'var(--mv-magenta-deep)', borderColor: 'var(--mv-magenta-200)' };
+  if (p === 'high')   return { background: 'var(--mv-amber-100)', color: 'var(--mv-amber-deep)', borderColor: 'var(--mv-amber-200)' };
+  if (p === 'medium') return { background: 'var(--mv-amber-100)', color: 'var(--mv-amber-deep)', borderColor: 'var(--mv-amber-200)' };
+  if (p === 'low')    return { background: 'var(--mv-teal-100)', color: 'var(--mv-teal)', borderColor: 'var(--mv-teal-200)' };
+  return { background: 'var(--mv-teal-100)', color: 'var(--mv-teal)', borderColor: 'var(--mv-teal-200)' };
 }
 
-// Compact priority chip (label + tailwind classes), same spectrum as the badge.
+// Compact priority chip (label + colour style), same spectrum as the badge.
 function priorityChip(q) {
   const p = (q.priority || '').toLowerCase();
   const map = {
-    urgent: ['Urgent', 'bg-red-50 text-red-700 border-red-200'],
-    high:   ['High',   'bg-amber-50 text-amber-700 border-amber-200'],
-    medium: ['Medium', 'bg-yellow-50 text-yellow-700 border-yellow-200'],
-    low:    ['Low',    'bg-blue-50 text-blue-700 border-blue-200'],
+    urgent: ['Urgent', { background: 'var(--mv-magenta-100)', color: 'var(--mv-magenta-deep)', borderColor: 'var(--mv-magenta-200)' }],
+    high:   ['High',   { background: 'var(--mv-amber-100)', color: 'var(--mv-amber-deep)', borderColor: 'var(--mv-amber-200)' }],
+    medium: ['Medium', { background: 'var(--mv-amber-100)', color: 'var(--mv-amber-deep)', borderColor: 'var(--mv-amber-200)' }],
+    low:    ['Low',    { background: 'var(--mv-teal-100)', color: 'var(--mv-teal)', borderColor: 'var(--mv-teal-200)' }],
   };
   return map[p] || null;
 }
 
-// Left-edge indicator strip — same spectrum, returned as a hex colour.
+// Left-edge indicator strip — same spectrum, returned as a token colour.
 function priorityStripColor(q) {
   const s = (q.status || '').toLowerCase();
   const p = (q.priority || '').toLowerCase();
-  if (['resolved', 'resolved_claim_approved', 'resolved_claim_rejected', 'closed'].includes(s)) return '#10B981';
-  if (p === 'urgent') return '#EF4444';
-  if (p === 'high')   return '#F59E0B';
-  if (p === 'medium') return '#EAB308';
-  return '#3B82F6'; // low / default
+  if (['resolved', 'resolved_claim_approved', 'resolved_claim_rejected', 'closed'].includes(s)) return 'var(--mv-green)';
+  if (p === 'urgent') return 'var(--mv-magenta)';
+  if (p === 'high')   return 'var(--mv-amber)';
+  if (p === 'medium') return 'var(--mv-amber)';
+  return 'var(--mv-teal)'; // low / default
 }
 
 function InboxRow({ q, onClick, staffList = [], onUpdate }) {
@@ -548,7 +550,6 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
   }
 
   const logoUrl      = q.courier_code ? getCourierLogo(q.courier_code) : null;
-  const statusCfg    = STATUS_CFG[q.status] || { label: q.status, color: C.muted, bg: 'rgba(148,163,184,0.1)' };
   const humanName    = staffList.find(s => s.id === q.assigned_to)?.full_name;
   // No human owner + a staged AI draft → owned by the AI agent "Katana" (never "Unassigned").
   const isKatana     = !humanName && (parseInt(q.pending_drafts) || 0) > 0;
@@ -571,10 +572,10 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
   // Dynamic colour scheme for the hover card — red urgent / amber medium / blue standard.
   const cardUrgent   = isScreamer || q.sla_breached;
   const cardTone     = cardUrgent
-    ? { header: 'text-red-600',   topBorder: 'border-t-4 border-t-red-500',   footer: '🚨 URGENT: Action Required.',                 footerCls: 'font-semibold text-red-600' }
+    ? { header: { color: 'var(--mv-magenta)' },   topBorder: { borderTop: '4px solid var(--mv-magenta)' },   footer: '🚨 URGENT: Action Required.',                 footerCls: { fontWeight: 600, color: 'var(--mv-magenta)' } }
     : priority === 'medium'
-      ? { header: 'text-amber-600', topBorder: 'border-t-4 border-t-amber-500', footer: '⚠️ Medium priority, monitor closely.',         footerCls: 'text-amber-600' }
-      : { header: 'text-blue-600',  topBorder: 'border-t-4 border-t-blue-400',  footer: '✓ Standard priority, no escalation flagged.', footerCls: 'text-slate-500' };
+      ? { header: { color: 'var(--mv-amber-deep)' }, topBorder: { borderTop: '4px solid var(--mv-amber)' }, footer: '⚠️ Medium priority, monitor closely.',         footerCls: { color: 'var(--mv-amber-deep)' } }
+      : { header: { color: 'var(--mv-teal)' },  topBorder: { borderTop: '4px solid var(--mv-teal)' },  footer: '✓ Standard priority, no escalation flagged.', footerCls: { color: 'var(--mv-ink-52)' } };
 
   // SLA label
   let slaLabel = null, slaColor = C.muted, slaType = '';
@@ -604,38 +605,27 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
     <div
       onClick={onClick}
       onMouseLeave={() => { setHoverPos(null); setAssignOpen(false); }}
-      style={{
-        position: 'relative', display: 'flex', flexDirection: 'column', gap: 12,
-        background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)',
-        borderLeft: `4px solid ${priorityBar || 'var(--mv-hairline-2)'}`,
-        padding: '16px 20px', cursor: 'pointer', marginBottom: 10,
-        transition: 'border-color 0.15s, box-shadow 0.15s',
-      }}
+      className="relative flex cursor-pointer flex-col gap-4 overflow-visible rounded-xl border p-5 shadow-sm transition-all hover:shadow-md"
+      style={{ borderLeft: `4px solid ${priorityBar || 'var(--mv-hairline-2)'}`, borderTop: '1px solid var(--mv-hairline-2)', borderRight: '1px solid var(--mv-hairline-2)', borderBottom: '1px solid var(--mv-hairline-2)', background: 'var(--mv-surface)' }}
     >
       {/* ── Line 1: metadata shelf ────────────────────────────────────────── */}
-      <div style={{ display: 'flex', width: '100%', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--mv-hairline-2)', paddingBottom: 10 }}>
+      <div className="flex w-full items-center justify-between pb-3" style={{ borderBottom: '1px solid var(--mv-hairline)' }}>
         {/* Left: priority badge (#M-ID + Urgent) · customer identity */}
         <div style={{ display: 'flex', minWidth: 0, alignItems: 'center', gap: 8 }}>
           {(hasNewReply || unread > 0) && (
-            <span style={{ width: 8, height: 8, flexShrink: 0, background: 'var(--mv-purple)' }} />
+            <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: 'var(--mv-teal)' }} />
           )}
           {q.ticket_number != null && (
-            <span className="mv-num" style={{
-              fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em',
-              background: 'var(--mv-bg)', border: '1px solid var(--mv-hairline-2)', padding: '2px 7px', color: 'var(--mv-ink)'
-            }}>
+            <span className="inline-flex shrink-0 items-center justify-center rounded-md border px-2.5 py-1 text-xs font-bold uppercase tracking-wide shadow-sm" style={rowBadgeClasses(q)}>
               #M-{q.ticket_number}
             </span>
           )}
           {pchip && (
-            <span style={{
-              fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em',
-              padding: '2px 6px', border: '1px solid var(--mv-hairline-2)', background: 'var(--mv-bg)', color: 'var(--mv-ink)'
-            }}>
+            <span className="shrink-0 rounded-md border px-2 py-1 text-xs font-bold" style={pchip[1]}>
               {pchip[0]}
             </span>
           )}
-          <span style={{ marginLeft: 6, fontWeight: 800, fontSize: 14, color: 'var(--mv-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <span className="ml-2 truncate text-base font-bold tracking-tight" style={{ color: 'var(--mv-ink)' }}>
             {q.customer_name || q.sender_email || '(unknown sender)'}
           </span>
         </div>
@@ -649,7 +639,7 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
             </span>
           )}
           <StatusBadge status={q.status} />
-          <span className="mv-num" style={{ whiteSpace: 'nowrap', fontSize: 12, color: 'var(--mv-ink-52)' }}>{timeAgo(actTime)}</span>
+          <span className="whitespace-nowrap text-sm" style={{ color: 'var(--mv-ink-45)' }}>{timeAgo(actTime)}</span>
 
           {/* Assign avatar */}
           <div style={{ position: 'relative', flexShrink: 0 }}>
@@ -657,11 +647,8 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
               <div
                 onClick={e => { e.stopPropagation(); setAssignOpen(v => !v); }}
                 title="Owned by Katana (AI) — draft awaiting review"
-                style={{
-                  display: 'inline-flex', cursor: 'pointer', alignItems: 'center', gap: 4,
-                  border: '1px solid var(--mv-purple)', background: 'rgba(123,47,190,0.1)',
-                  padding: '2px 8px', fontSize: 11, fontWeight: 800, color: 'var(--mv-purple)'
-                }}>
+                className="inline-flex cursor-pointer items-center gap-1 rounded-full border px-2 py-1 text-[11px] font-bold"
+                style={{ borderColor: 'var(--mv-purple-200)', background: 'var(--mv-purple-100)', color: 'var(--mv-purple-700)', outline: assignOpen ? '2px solid var(--mv-purple)' : 'none' }}>
                 🤖 Katana
               </div>
             ) : (
@@ -669,12 +656,11 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
                 onClick={e => { e.stopPropagation(); setAssignOpen(v => !v); }}
                 title={assigneeName ? `Assigned to ${assigneeName}` : 'Assign ticket'}
                 style={{
-                  width: 26, height: 26,
-                  background: initials ? 'rgba(123,47,190,0.12)' : 'var(--mv-bg)',
-                  border: '1px solid var(--mv-hairline-2)',
+                  width: 28, height: 28, borderRadius: '50%',
+                  background: initials ? 'var(--mv-purple-100)' : 'var(--mv-hairline)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 10.5, fontWeight: 800, color: initials ? 'var(--mv-purple)' : 'var(--mv-ink-52)',
-                  cursor: 'pointer',
+                  fontSize: 11, fontWeight: 600, color: initials ? 'var(--mv-purple-700)' : C.muted,
+                  cursor: 'pointer', outline: assignOpen ? '2px solid var(--mv-purple)' : 'none',
                 }}>
                 {assigning ? '…' : (initials || <User size={12} color="var(--mv-ink-52)" />)}
               </div>
@@ -682,13 +668,10 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
             {assignOpen && (
               <div
                 onClick={e => e.stopPropagation()}
-                style={{
-                  position: 'absolute', right: 0, zIndex: 100, marginTop: 4, width: 190,
-                  border: '1px solid var(--mv-hairline-2)', background: 'var(--mv-surface)',
-                  padding: '4px 0', boxShadow: '0 4px 16px rgba(0,0,0,0.12)', top: '100%'
-                }}
+                className="absolute right-0 z-[100] mt-2 w-48 rounded-md border py-1 shadow-lg"
+                style={{ top: '100%', borderColor: 'var(--mv-hairline)', background: 'var(--mv-surface)' }}
               >
-                <div style={{ padding: '6px 12px 4px', fontSize: 10, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--mv-ink-52)' }}>
+                <div style={{ padding: '6px 12px 4px', fontSize: 10, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--mv-ink-45)' }}>
                   Assign to
                 </div>
                 {staffList.map(s => (
@@ -696,24 +679,24 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
                     key={s.id}
                     onClick={() => handleAssign(s.id)}
                     style={{
-                      padding: '7px 12px', fontSize: 12.5, color: s.id === q.assigned_to ? 'var(--mv-purple)' : 'var(--mv-ink)',
-                      background: s.id === q.assigned_to ? 'rgba(123,47,190,0.08)' : 'transparent',
+                      padding: '7px 12px', fontSize: 13, color: s.id === q.assigned_to ? 'var(--mv-purple-700)' : 'var(--mv-ink)',
+                      background: s.id === q.assigned_to ? 'var(--mv-purple-100)' : 'transparent',
                       cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
                     }}
                     onMouseOver={e => { if (s.id !== q.assigned_to) e.currentTarget.style.background = 'var(--mv-bg)'; }}
                     onMouseOut={e => { if (s.id !== q.assigned_to) e.currentTarget.style.background = 'transparent'; }}
                   >
-                    <div style={{ width: 20, height: 20, background: 'var(--mv-bg)', border: '1px solid var(--mv-hairline-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: 'var(--mv-purple)', flexShrink: 0 }}>
+                    <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--mv-purple-100)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 600, color: 'var(--mv-purple-700)', flexShrink: 0 }}>
                       {s.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                     </div>
                     <span>{s.full_name}</span>
-                    {s.id === q.assigned_to && <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--mv-purple)' }}>✓</span>}
+                    {s.id === q.assigned_to && <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--mv-purple-700)' }}>✓</span>}
                   </div>
                 ))}
                 {q.assigned_to && (
                   <div
                     onClick={() => handleAssign(null)}
-                    style={{ padding: '7px 12px', fontSize: 11.5, color: 'var(--mv-ink-52)', cursor: 'pointer', borderTop: '1px solid var(--mv-hairline-2)', marginTop: 2 }}
+                    style={{ padding: '7px 12px', fontSize: 12, color: 'var(--mv-ink-45)', cursor: 'pointer', borderTop: '1px solid var(--mv-hairline)', marginTop: 2 }}
                     onMouseOver={e => e.currentTarget.style.background = 'var(--mv-bg)'}
                     onMouseOut={e => e.currentTarget.style.background = 'transparent'}
                   >
@@ -727,22 +710,18 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
       </div>
 
       {/* ── Line 2: subject ───────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: 'var(--mv-ink-62)' }}>
-        <span className={['resolved','resolved_claim_approved','resolved_claim_rejected'].includes(q.status) ? 'line-through' : ''}>
-          ✉️ <strong style={{ color: 'var(--mv-ink)' }}>Subject:</strong> {q.subject || preview || '(no subject)'}
+      <div className="flex items-start gap-2 text-sm font-medium" style={{ color: 'var(--mv-ink-78)' }}>
+        <span className={['resolved','resolved_claim_approved','resolved_claim_rejected'].includes(q.status) ? 'line-through' : ''} style={['resolved','resolved_claim_approved','resolved_claim_rejected'].includes(q.status) ? { color: 'var(--mv-ink-45)' } : undefined}>
+          ✉️ <strong className="font-semibold" style={{ color: 'var(--mv-ink)' }}>Subject:</strong> {q.subject || preview || '(no subject)'}
         </span>
       </div>
 
       {/* ── Line 3: always-visible Gemini summary box ─────────────────────── */}
-      <div style={{
-        position: 'relative', display: 'flex', flexDirection: 'column', gap: 4,
-        border: '1px solid var(--mv-hairline-2)', background: 'var(--mv-bg)',
-        padding: '12px 14px', fontSize: 12, lineHeight: 1.5, color: 'var(--mv-ink-62)'
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 800, fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--mv-purple)' }}>
+      <div className="relative mt-1 flex flex-col gap-1 rounded-lg border p-3.5 text-xs font-medium leading-relaxed" style={{ borderColor: 'var(--mv-hairline)', background: 'var(--mv-bg)', color: 'var(--mv-ink-62)' }}>
+        <div className="mb-1 flex items-center gap-1 font-bold" style={{ color: 'var(--mv-ink)' }}>
           <span>✨ Gemini Automation Analysis</span>
         </div>
-        <p style={{ margin: 0, fontSize: 12.5, color: 'var(--mv-ink)' }}>
+        <p className="text-sm" style={{ color: 'var(--mv-ink-62)' }}>
           {fullSummary ? mdLite(fullSummary) : 'Analyzing ticket context…'}
         </p>
       </div>
@@ -764,8 +743,8 @@ function MessageBubble({ email, onApprove, onEdit, approving, courierName, couri
 
   let bubbleBg, bubbleBorderStyle, accentColor, bubbleRadius;
   if (isNote) {
-    bubbleBg = 'rgba(210,153,34,0.08)';
-    bubbleBorderStyle = `1px dashed ${C.amber}44`;
+    bubbleBg = 'color-mix(in srgb, var(--mv-amber) 8%, transparent)';
+    bubbleBorderStyle = `1px dashed color-mix(in srgb, ${C.amber} 27%, transparent)`;
     accentColor = C.amber;
     bubbleRadius = 8;
   } else if (dir === 'inbound_customer') {
@@ -774,18 +753,18 @@ function MessageBubble({ email, onApprove, onEdit, approving, courierName, couri
     accentColor = C.blue;
     bubbleRadius = '2px 10px 10px 10px';
   } else if (dir === 'outbound_customer') {
-    bubbleBg = isDraft ? '#F0FDF4' : '#EFF6FF';
-    bubbleBorderStyle = isDraft ? `1px solid ${C.green}33` : `1px solid ${C.blue}33`;
+    bubbleBg = isDraft ? 'var(--mv-purple-100)' : 'var(--mv-teal-100)';
+    bubbleBorderStyle = isDraft ? `1px solid color-mix(in srgb, ${C.green} 20%, transparent)` : `1px solid color-mix(in srgb, ${C.blue} 20%, transparent)`;
     accentColor = isDraft ? C.green : C.blue;
     bubbleRadius = '10px 2px 10px 10px';
   } else if (dir === 'inbound_courier') {
     bubbleBg = C.card;
-    bubbleBorderStyle = `1px solid ${C.amber}33`;
+    bubbleBorderStyle = `1px solid color-mix(in srgb, ${C.amber} 20%, transparent)`;
     accentColor = C.amber;
     bubbleRadius = '2px 10px 10px 10px';
   } else {
-    bubbleBg = 'rgba(210,153,34,0.08)';
-    bubbleBorderStyle = `1px solid ${C.amber}33`;
+    bubbleBg = 'color-mix(in srgb, var(--mv-amber) 8%, transparent)';
+    bubbleBorderStyle = `1px solid color-mix(in srgb, ${C.amber} 20%, transparent)`;
     accentColor = C.amber;
     bubbleRadius = '10px 2px 10px 10px';
   }
@@ -810,7 +789,7 @@ function MessageBubble({ email, onApprove, onEdit, approving, courierName, couri
           <span style={{ fontSize: 10, fontWeight: 700, color: accentColor }}>{senderLabel}</span>
           {isDraft && (
             <span style={{ fontSize: 10, fontWeight: 700, color: C.green, background: C.greenDim,
-              padding: '1px 6px', borderRadius: 3, border: `1px solid ${C.green}33` }}>
+              padding: '1px 6px', borderRadius: 3, border: `1px solid color-mix(in srgb, ${C.green} 20%, transparent)` }}>
               AI Draft
             </span>
           )}
@@ -822,7 +801,7 @@ function MessageBubble({ email, onApprove, onEdit, approving, courierName, couri
         {/* Bubble */}
         <div style={{
           background: bubbleBg,
-          border: isNote ? `1px dashed ${C.amber}44` : bubbleBorderStyle,
+          border: isNote ? `1px dashed color-mix(in srgb, ${C.amber} 27%, transparent)` : bubbleBorderStyle,
           borderLeft: isNote ? `3px solid ${C.amber}` : bubbleBorderStyle,
           borderRadius: bubbleRadius,
           overflow: 'hidden',
@@ -837,7 +816,7 @@ function MessageBubble({ email, onApprove, onEdit, approving, courierName, couri
             {editMode ? (
               <textarea value={editBody} onChange={e => setEditBody(e.target.value)} style={{
                 width: '100%', minHeight: 120, background: C.surface,
-                border: `1px solid ${C.green}44`, borderRadius: 5,
+                border: `1px solid color-mix(in srgb, ${C.green} 27%, transparent)`, borderRadius: 5,
                 color: C.text, fontSize: 12, padding: 9, resize: 'vertical',
                 fontFamily: 'inherit', boxSizing: 'border-box', outline: 'none',
               }} />
@@ -858,7 +837,7 @@ function MessageBubble({ email, onApprove, onEdit, approving, courierName, couri
                 <>
                   <button onClick={() => { onEdit(email.id, editBody); setEditMode(false); }}
                     style={{ padding: '5px 12px', borderRadius: 5, border: 'none', background: C.green,
-                      color: '#000', fontSize: 11, fontWeight: 700, cursor: 'pointer',
+                      color: 'var(--mv-on-brand)', fontSize: 11, fontWeight: 700, cursor: 'pointer',
                       display: 'flex', alignItems: 'center', gap: 5 }}>
                     <Send size={11} /> Save & Approve
                   </button>
@@ -872,7 +851,7 @@ function MessageBubble({ email, onApprove, onEdit, approving, courierName, couri
                 <>
                   <button onClick={() => onApprove(email.id, email.body_text)} disabled={approving}
                     style={{ padding: '5px 14px', borderRadius: 5, border: 'none', background: C.green,
-                      color: '#000', fontSize: 11, fontWeight: 700, cursor: approving ? 'default' : 'pointer',
+                      color: 'var(--mv-on-brand)', fontSize: 11, fontWeight: 700, cursor: approving ? 'default' : 'pointer',
                       opacity: approving ? 0.6 : 1, display: 'flex', alignItems: 'center', gap: 5 }}>
                     <Send size={11} />{approving ? 'Sending…' : 'Approve & Send'}
                   </button>
@@ -935,7 +914,7 @@ function ThreadView({ emails, onApprove, onEdit, approving, courierName, courier
             <span style={{
               fontSize: 10, fontWeight: 700, minWidth: 16, textAlign: 'center',
               padding: '0 5px', borderRadius: 8,
-              background: activeThread === t.key ? `${t.color}22` : C.card,
+              background: activeThread === t.key ? `color-mix(in srgb, ${t.color} 13%, transparent)` : C.card,
               color: activeThread === t.key ? t.color : C.muted,
             }}>{t.count}</span>
           </button>
@@ -995,7 +974,7 @@ function ComposeBar({ q, draft, setDraft, generateDraft }) {
               flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
               padding: '9px 8px', border: 'none',
               borderTop: `2px solid ${active === t.key ? t.color : 'transparent'}`,
-              background: active === t.key ? `${t.color}10` : 'transparent',
+              background: active === t.key ? `color-mix(in srgb, ${t.color} 6%, transparent)` : 'transparent',
               color: active === t.key ? t.color : C.muted,
               fontSize: 11, fontWeight: active === t.key ? 700 : 500,
               cursor: 'pointer', transition: 'all 0.1s',
@@ -1013,7 +992,7 @@ function ComposeBar({ q, draft, setDraft, generateDraft }) {
         <div style={{ padding: '10px 14px' }}>
           {active !== 'note' && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8,
-              padding: '4px 9px', borderRadius: 5, background: C.amberDim, border: `1px solid ${C.amber}33` }}>
+              padding: '4px 9px', borderRadius: 5, background: C.amberDim, border: `1px solid color-mix(in srgb, ${C.amber} 20%, transparent)` }}>
               <AlertTriangle size={11} color={C.amber} />
               <span style={{ fontSize: 10, fontWeight: 700, color: C.amber, textTransform: 'uppercase', letterSpacing: '0.4px' }}>
                 Simulation — no emails will be sent
@@ -1026,13 +1005,13 @@ function ComposeBar({ q, draft, setDraft, generateDraft }) {
               <textarea value={noteText} onChange={e => setNoteText(e.target.value)}
                 placeholder="Add an internal note visible only to your team…"
                 style={{ width: '100%', boxSizing: 'border-box', background: C.card,
-                  border: `1px solid ${C.amber}33`, borderRadius: 6, color: C.text,
+                  border: `1px solid color-mix(in srgb, ${C.amber} 20%, transparent)`, borderRadius: 6, color: C.text,
                   fontSize: 12, padding: 10, resize: 'none', height: 90,
                   fontFamily: 'inherit', lineHeight: 1.55, outline: 'none', display: 'block' }}
               />
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
                 <button onClick={() => alert('SIMULATION MODE\n\nNotes will be saved in a future build.')}
-                  style={{ padding: '5px 14px', borderRadius: 5, border: `1px solid ${C.muted}44`,
+                  style={{ padding: '5px 14px', borderRadius: 5, border: `1px solid color-mix(in srgb, ${C.muted} 27%, transparent)`,
                     background: C.card, color: C.muted, fontSize: 12, fontWeight: 700, cursor: 'not-allowed',
                     display: 'flex', alignItems: 'center', gap: 5 }}>
                   <Send size={11} /> Save Note (sim)
@@ -1055,18 +1034,18 @@ function ComposeBar({ q, draft, setDraft, generateDraft }) {
                 value={current.text}
                 onChange={e => setDraft(d => ({ ...d, [active]: { ...d[active], text: e.target.value } }))}
                 style={{ width: '100%', boxSizing: 'border-box', background: C.card,
-                  border: `1px solid ${accent}33`, borderRadius: 6, color: C.text,
+                  border: `1px solid color-mix(in srgb, ${accent} 20%, transparent)`, borderRadius: 6, color: C.text,
                   fontSize: 12, padding: 10, resize: 'none', height: 140,
                   fontFamily: 'inherit', lineHeight: 1.55, outline: 'none', display: 'block' }}
               />
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
                 <button onClick={() => generateDraft(active)} disabled={loading}
-                  style={{ padding: '5px 10px', borderRadius: 5, border: `1px solid ${accent}44`,
+                  style={{ padding: '5px 10px', borderRadius: 5, border: `1px solid color-mix(in srgb, ${accent} 27%, transparent)`,
                     background: 'transparent', color: accent, fontSize: 11, cursor: 'pointer' }}>
                   Regenerate
                 </button>
                 <button onClick={() => alert('SIMULATION MODE\n\nThis email has not been sent.')}
-                  style={{ padding: '5px 14px', borderRadius: 5, border: `1px solid ${C.muted}44`,
+                  style={{ padding: '5px 14px', borderRadius: 5, border: `1px solid color-mix(in srgb, ${C.muted} 27%, transparent)`,
                     background: C.card, color: C.muted, fontSize: 12, fontWeight: 700, cursor: 'not-allowed',
                     display: 'flex', alignItems: 'center', gap: 5 }}>
                   <Send size={11} /> Send (sim only)
@@ -1077,7 +1056,7 @@ function ComposeBar({ q, draft, setDraft, generateDraft }) {
             <div style={{ padding: '12px 0', textAlign: 'center' }}>
               <button onClick={() => generateDraft(active)}
                 style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 16px',
-                  borderRadius: 6, border: `1px solid ${accent}55`, background: `${accent}14`,
+                  borderRadius: 6, border: `1px solid color-mix(in srgb, ${accent} 33%, transparent)`, background: `color-mix(in srgb, ${accent} 8%, transparent)`,
                   color: accent, fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                 <Sparkles size={13} /> Generate AI Draft
               </button>
@@ -1242,7 +1221,7 @@ function QueryDetail({ queryId, onUpdated }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {logoUrl && (
               <div style={{ width: 26, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                background: '#fff', borderRadius: 3, padding: 2, flexShrink: 0 }}>
+                background: 'var(--mv-surface)', borderRadius: 3, padding: 2, flexShrink: 0 }}>
                 <img src={logoUrl} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
               </div>
             )}
@@ -1263,7 +1242,7 @@ function QueryDetail({ queryId, onUpdated }) {
             {showPhoneCall && (
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700,
                 color: C.red, background: C.redDim, padding: '2px 8px', borderRadius: 4,
-                border: `1px solid ${C.red}33`, flexShrink: 0 }}>
+                border: `1px solid color-mix(in srgb, ${C.red} 20%, transparent)`, flexShrink: 0 }}>
                 <Phone size={10} /> Call needed
               </span>
             )}
@@ -1302,7 +1281,7 @@ function QueryDetail({ queryId, onUpdated }) {
         <div style={{ flex: 1, overflowY: 'auto', padding: 14 }}>
 
           {/* ── Ticket ── */}
-          <div style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase',
+          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--mv-ink-52)', textTransform: 'uppercase',
             letterSpacing: '0.1em', marginBottom: 12, paddingTop: 4 }}>Ticket</div>
 
           {/* Status */}
@@ -1310,11 +1289,11 @@ function QueryDetail({ queryId, onUpdated }) {
             <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>Status</div>
             <select value={q.status} onChange={handleStatusChange} disabled={statusUpdating}
               style={{ width: '100%', background: STATUS_CFG[q.status]?.bg || C.card,
-                border: `1px solid ${(STATUS_CFG[q.status]?.color || C.muted) + '44'}`,
+                border: `1px solid color-mix(in srgb, ${STATUS_CFG[q.status]?.color || C.muted} 27%, transparent)`,
                 borderRadius: 6, color: STATUS_CFG[q.status]?.color || C.text,
                 fontSize: 11, padding: '5px 8px', cursor: 'pointer', fontWeight: 700, outline: 'none' }}>
               {Object.entries(STATUS_CFG).map(([k, v]) => (
-                <option key={k} value={k} style={{ background: '#FFFFFF', color: '#0F172A', fontWeight: 400 }}>{v.label}</option>
+                <option key={k} value={k} style={{ background: 'var(--mv-surface)', color: 'var(--mv-ink)', fontWeight: 400 }}>{v.label}</option>
               ))}
             </select>
           </div>
@@ -1323,7 +1302,7 @@ function QueryDetail({ queryId, onUpdated }) {
           <div style={{ marginBottom: 10 }}>
             <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>Assignee</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-              <div style={{ width: 22, height: 22, borderRadius: '50%', background: `${C.blue}33`,
+              <div style={{ width: 22, height: 22, borderRadius: '50%', background: `color-mix(in srgb, ${C.blue} 20%, transparent)`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: 10, fontWeight: 700, color: C.blue, flexShrink: 0 }}>
                 {(q.assignee_name || 'U').charAt(0).toUpperCase()}
@@ -1351,7 +1330,7 @@ function QueryDetail({ queryId, onUpdated }) {
           {/* Attention banner */}
           {showAttention && (
             <div style={{ marginBottom: 10, padding: '8px 10px', borderRadius: 6, background: C.amberDim,
-              border: `1px solid ${C.amber}33`, fontSize: 11, color: C.amber, lineHeight: 1.4 }}>
+              border: `1px solid color-mix(in srgb, ${C.amber} 20%, transparent)`, fontSize: 11, color: C.amber, lineHeight: 1.4 }}>
               ⚠ {q.attention_reason}
             </div>
           )}
@@ -1361,13 +1340,13 @@ function QueryDetail({ queryId, onUpdated }) {
           {/* ── Parcel ── */}
           {(q.consignment_number || parcel) && (
             <div>
-              <div style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase',
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--mv-ink-45)', textTransform: 'uppercase',
                 letterSpacing: '0.1em', marginBottom: 12 }}>Parcel</div>
 
               {logoUrl && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                   <div style={{ width: 32, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    background: '#fff', borderRadius: 4, padding: 3, flexShrink: 0 }}>
+                    background: 'var(--mv-surface)', borderRadius: 4, padding: 3, flexShrink: 0 }}>
                     <img src={logoUrl} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
                   </div>
                   <span style={{ fontSize: 12, color: C.sub }}>{q.courier_name}</span>
@@ -1402,7 +1381,7 @@ function QueryDetail({ queryId, onUpdated }) {
           {trackingEvents.length > 0 && (
             <div style={{ marginBottom: 4 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                <div style={{ fontSize: 10, fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--mv-ink-52)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
                   Tracking
                 </div>
                 {q.consignment_number && (
@@ -1421,15 +1400,15 @@ function QueryDetail({ queryId, onUpdated }) {
                   return (
                     <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 10, alignItems: 'flex-start' }}>
                       <div style={{ width: 10, height: 10, borderRadius: '50%', flexShrink: 0, marginTop: 2,
-                        background: i === 0 ? cfg.color : '#E2E8F0',
-                        border: `2px solid ${i === 0 ? cfg.color + '44' : '#F1F5F9'}`,
-                        boxShadow: i === 0 ? `0 0 0 3px ${cfg.color}22` : 'none' }} />
+                        background: i === 0 ? cfg.color : 'var(--mv-hairline-2)',
+                        border: `2px solid ${i === 0 ? `color-mix(in srgb, ${cfg.color} 27%, transparent)` : 'var(--mv-bg)'}`,
+                        boxShadow: i === 0 ? `0 0 0 3px color-mix(in srgb, ${cfg.color} 13%, transparent)` : 'none' }} />
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 11.5, fontWeight: i === 0 ? 600 : 400,
-                          color: i === 0 ? '#0F172A' : '#64748B', lineHeight: 1.3, marginBottom: 2 }}>
+                          color: i === 0 ? 'var(--mv-ink)' : 'var(--mv-ink-52)', lineHeight: 1.3, marginBottom: 2 }}>
                           {ev.description || cfg.label}
                         </div>
-                        <div style={{ fontSize: 10, color: '#94A3B8' }}>
+                        <div style={{ fontSize: 10, color: 'var(--mv-ink-52)' }}>
                           {timeAgo(ev.event_at || ev.event_datetime || ev.created_at)}
                           {ev.location && ` · ${ev.location}`}
                         </div>
@@ -1474,7 +1453,7 @@ function QueryDetail({ queryId, onUpdated }) {
               </div>
               {notifications.filter(n => !n.read_at).slice(0, 3).map(n => (
                 <div key={n.id} style={{ marginBottom: 7, padding: '6px 8px', background: C.amberDim,
-                  border: `1px solid ${C.amber}33`, borderRadius: 6 }}>
+                  border: `1px solid color-mix(in srgb, ${C.amber} 20%, transparent)`, borderRadius: 6 }}>
                   <div style={{ fontSize: 10, fontWeight: 700, color: C.amber, marginBottom: 2, textTransform: 'capitalize' }}>
                     {n.notification_type.replace(/_/g, ' ')}
                   </div>
@@ -1493,13 +1472,13 @@ function QueryDetail({ queryId, onUpdated }) {
               <textarea placeholder="Why does this need attention?" value={attentionNote}
                 onChange={e => setAttentionNote(e.target.value)}
                 style={{ width: '100%', boxSizing: 'border-box', background: C.card,
-                  border: `1px solid ${C.red}44`, borderRadius: 6, color: C.text,
+                  border: `1px solid color-mix(in srgb, ${C.red} 27%, transparent)`, borderRadius: 6, color: C.text,
                   fontSize: 11, padding: 9, resize: 'vertical', minHeight: 56,
                   fontFamily: 'inherit', outline: 'none' }} />
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={handleFlagAttention}
                   style={{ flex: 1, padding: '5px 0', borderRadius: 5, border: 'none',
-                    background: C.red, color: '#0F172A', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+                    background: C.red, color: 'var(--mv-on-brand)', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
                   Flag
                 </button>
                 <button onClick={() => setShowFlag(false)}
@@ -1640,7 +1619,7 @@ function SeedButton({ onDone }) {
   return (
     <button onClick={run} disabled={state === 'loading'} title="Wipe and re-seed practice tickets"
       style={{ padding: '5px 11px', borderRadius: 7, border: `1px solid ${C.border}`,
-        background: bg, color: state === 'idle' ? C.muted : '#fff', fontSize: 11,
+        background: bg, color: state === 'idle' ? C.muted : 'var(--mv-on-brand)', fontSize: 11,
         cursor: state === 'loading' ? 'default' : 'pointer', maxWidth: state === 'error' ? 280 : 'auto',
         overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
       {label}
@@ -1667,12 +1646,12 @@ const STATUS_FILTERS = [
 const userDefinedGroups = ['Claims', 'Queries', 'Billing', 'Technical'];
 
 const GROUP_COLORS = {
-  Claims:    '#D97706',
-  Queries:   '#2563EB',
-  Billing:   '#059669',
-  Technical: '#7C3AED',
+  Claims:    'var(--mv-amber)',
+  Queries:   'var(--mv-teal)',
+  Billing:   'var(--mv-green)',
+  Technical: 'var(--mv-purple)',
 };
-const DEFAULT_GROUP_COLOR = '#0F172A';
+const DEFAULT_GROUP_COLOR = 'var(--mv-ink)';
 const groupColor = (group) => GROUP_COLORS[group] || DEFAULT_GROUP_COLOR;
 
 const GROUP_TABS = [
@@ -1685,7 +1664,7 @@ function FilterPill({ active, color, onClick, children }) {
     <button onClick={onClick} style={{
       padding: '4px 11px', borderRadius: 20,
       border: `1px solid ${active ? color : C.border}`,
-      background: active ? `${color}18` : 'transparent',
+      background: active ? `color-mix(in srgb, ${color} 9%, transparent)` : 'transparent',
       color: active ? color : C.muted,
       fontSize: 11, fontWeight: 600, cursor: 'pointer', transition: 'all 0.12s',
       whiteSpace: 'nowrap',
@@ -1721,9 +1700,9 @@ const GROUPS_OPTS = [
 ];
 
 const filterSelectStyle = {
-  width: '100%', background: '#FFFFFF',
-  border: `1px solid rgba(0,0,0,0.12)`,
-  borderRadius: 6, color: '#0F172A', fontSize: 12,
+  width: '100%', background: 'var(--mv-surface)',
+  border: `1px solid var(--mv-hairline-2)`,
+  borderRadius: 6, color: 'var(--mv-ink)', fontSize: 12,
   padding: '6px 10px', outline: 'none', cursor: 'pointer',
 };
 
@@ -1812,7 +1791,7 @@ function FilterPanel({ filters, setFilters, staffList, onClose }) {
 
         {/* Active filter summary */}
         {hasActive && (
-          <div style={{ marginTop: 8, padding: '8px 10px', background: `${C.blue}10`, border: `1px solid ${C.blue}30`, borderRadius: 6 }}>
+          <div style={{ marginTop: 8, padding: '8px 10px', background: `color-mix(in srgb, ${C.blue} 6%, transparent)`, border: `1px solid color-mix(in srgb, ${C.blue} 19%, transparent)`, borderRadius: 6 }}>
             <div style={{ fontSize: 10, color: C.blue, fontWeight: 700, marginBottom: 4 }}>ACTIVE FILTERS</div>
             {filters.assigned_to && staffList.find(s => s.id === filters.assigned_to) && (
               <div style={{ fontSize: 11, color: C.sub }}>
@@ -1888,34 +1867,39 @@ function QuickViewModal({ card, onClose, onDispatched }) {
     } finally { setSending(false); }
   }
 
-  const panel = 'flex min-h-0 flex-col border border-[var(--mv-hairline-2)] bg-[var(--mv-surface)] overflow-hidden';
-  const head  = 'border-b border-[var(--mv-hairline-2)] px-4 py-2.5 text-xs font-extrabold uppercase tracking-wide';
+  const panel = 'flex min-h-0 flex-col rounded-xl overflow-hidden';
+  const panelStyle = { border: '1px solid var(--mv-hairline)', background: 'var(--mv-surface)' };
+  const head  = 'px-4 py-2.5 text-xs font-extrabold uppercase tracking-wide';
+  const headStyle = { borderBottom: '1px solid var(--mv-hairline)' };
 
   return (
-    <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/60 p-6 backdrop-blur-sm" onClick={onClose}>
-      <div className="flex max-h-[88vh] w-full max-w-7xl flex-col bg-[var(--mv-surface)] border border-[var(--mv-hairline-2)] shadow-2xl" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-[999] flex items-center justify-center p-6 backdrop-blur-sm"
+      style={{ background: 'color-mix(in srgb, var(--mv-ink) 60%, transparent)' }} onClick={onClose}>
+      <div className="flex max-h-[88vh] w-full max-w-7xl flex-col rounded-xl shadow-2xl" style={{ background: 'var(--mv-surface)' }} onClick={e => e.stopPropagation()}>
         {/* Header */}
-        <div className="flex items-center justify-between gap-3 border-b border-[var(--mv-hairline-2)] px-6 py-4">
+        <div className="flex items-center justify-between gap-3 border-b px-6 py-4" style={{ borderColor: 'var(--mv-hairline)' }}>
           <div className="flex min-w-0 items-center gap-3">
-            <span className="inline-flex shrink-0 items-center justify-center border border-[var(--mv-hairline-2)] bg-[var(--mv-bg)] px-2.5 py-1 text-xs font-extrabold uppercase tracking-wide text-[var(--mv-ink)]">
+            <span className="inline-flex shrink-0 items-center justify-center rounded-md border px-2.5 py-1 text-xs font-bold uppercase tracking-wide" style={rowBadgeClasses(card)}>
               #M-{card.ticket_number}
             </span>
-            <span className="truncate text-base font-extrabold tracking-tight text-[var(--mv-ink)]">
+            <span className="truncate text-base font-bold tracking-tight" style={{ color: 'var(--mv-ink)' }}>
               {card.customer_name || card.subject || 'Ticket'}
             </span>
-            {pchip && <span className="shrink-0 border border-[var(--mv-hairline-2)] bg-[var(--mv-bg)] px-2 py-0.5 text-xs font-bold">{pchip[0]}</span>}
+            {pchip && <span className="shrink-0 rounded-md border px-2 py-0.5 text-xs font-bold" style={pchip[1]}>{pchip[0]}</span>}
           </div>
-          <button onClick={onClose} className="p-1.5 text-[var(--mv-ink-52)] hover:text-[var(--mv-ink)] font-bold">✕</button>
+          <button onClick={onClose} className="rounded-lg p-1.5" style={{ color: 'var(--mv-ink-45)' }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'var(--mv-bg)'; e.currentTarget.style.color = 'var(--mv-ink-78)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--mv-ink-45)'; }}>✕</button>
         </div>
 
         {/* Closure → AI suggestion intercept (no draft, no email) */}
         {isClosure ? (
           <div className="flex min-h-0 flex-1 items-center justify-center overflow-y-auto p-8">
-            <div className="w-full max-w-lg border border-[var(--mv-green)] bg-[var(--mv-surface)] p-8 text-center">
-              <div className="text-lg font-extrabold text-[var(--mv-ink)]">🤖 We believe this ticket should be resolved.</div>
-              <div className="mt-4 border border-[var(--mv-hairline-2)] bg-[var(--mv-bg)] p-4 text-left">
-                <div className="mb-1 text-[10px] font-extrabold uppercase tracking-wide text-[var(--mv-ink-52)]">Customer message snippet</div>
-                <p className="line-clamp-6 whitespace-pre-wrap text-sm leading-relaxed text-[var(--mv-ink-62)]">
+            <div className="w-full max-w-lg rounded-2xl border p-8 text-center" style={{ borderColor: 'var(--mv-purple-200)', background: 'var(--mv-purple-100)' }}>
+              <div className="text-lg font-black" style={{ color: 'var(--mv-ink)' }}>🤖 We believe this ticket should be resolved.</div>
+              <div className="mt-4 rounded-xl border p-4 text-left" style={{ borderColor: 'var(--mv-hairline)', background: 'var(--mv-surface)' }}>
+                <div className="mb-1 text-[10px] font-bold uppercase tracking-wide" style={{ color: 'var(--mv-ink-45)' }}>Customer message snippet</div>
+                <p className="line-clamp-6 whitespace-pre-wrap text-sm leading-relaxed" style={{ color: 'var(--mv-ink-62)' }}>
                   {cleanIncoming(card.incoming_text)?.slice(0, 400) || card.subject || '—'}
                 </p>
               </div>
@@ -1925,70 +1909,70 @@ function QuickViewModal({ card, onClose, onDispatched }) {
         /* Three-panel cockpit */
         <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-hidden p-4 lg:grid-cols-3">
           {/* Panel 1 — inbound trigger */}
-          <div className={panel}>
-            <div className={`${head} text-[var(--mv-magenta-deep)] bg-[var(--mv-bg)]`}>📥 Inbound Trigger</div>
-            <div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap p-4 text-sm leading-relaxed text-[var(--mv-ink-62)] bg-[var(--mv-surface)]">
+          <div className={panel} style={panelStyle}>
+            <div className={head} style={{ ...headStyle, color: 'var(--mv-magenta)' }}>📥 Inbound Trigger</div>
+            <div className="min-h-0 flex-1 overflow-y-auto whitespace-pre-wrap p-4 text-sm leading-relaxed" style={{ color: 'var(--mv-ink-78)' }}>
               {cleanIncoming(card.incoming_text) || card.subject || 'No incoming message text on file.'}
             </div>
           </div>
 
           {/* Panel 2 — customer response draft */}
-          <div className={panel}>
-            <div className={`${head} text-[var(--mv-purple)] bg-[var(--mv-bg)]`}>👤 Customer Response Draft</div>
+          <div className={panel} style={panelStyle}>
+            <div className={head} style={{ ...headStyle, color: 'var(--mv-teal)' }}>👤 Customer Response Draft</div>
             {card.customer_email_id ? (
               <>
                 <textarea value={custBody} onChange={e => setCustBody(e.target.value)}
-                  className="min-h-0 flex-1 resize-none p-4 text-sm leading-relaxed text-[var(--mv-ink)] bg-[var(--mv-surface)] outline-none" />
-                <div className="border-t border-[var(--mv-hairline-2)] p-3 bg-[var(--mv-bg)]">
+                  className="min-h-0 flex-1 resize-none p-4 text-sm leading-relaxed outline-none" style={{ color: 'var(--mv-ink)' }} />
+                <div className="border-t p-3" style={{ borderColor: 'var(--mv-hairline)' }}>
                   <div className="flex gap-2">
                     <input value={custFb} onChange={e => setCustFb(e.target.value)}
                       placeholder="🛠️ Refine the customer voice…"
-                      className="min-w-0 flex-1 border border-[var(--mv-hairline-2)] bg-[var(--mv-surface)] px-3 py-2 text-xs outline-none text-[var(--mv-ink)]" />
+                      className="min-w-0 flex-1 rounded-lg border px-3 py-2 text-xs outline-none" style={{ borderColor: 'var(--mv-hairline)' }} />
                     <button onClick={() => refine('customer')} disabled={!custFb.trim() || refining === 'customer'}
-                      className="mv-btn-primary text-xs" style={{ padding: '6px 12px' }}>
+                      className="rounded-lg px-3 py-2 text-xs font-bold disabled:opacity-40" style={{ background: 'var(--mv-ink)', color: 'var(--mv-bg)' }}>
                       {refining === 'customer' ? '…' : 'Refine'}
                     </button>
                   </div>
                 </div>
               </>
             ) : (
-              <div className="flex flex-1 items-center justify-center p-6 text-center text-sm text-[var(--mv-ink-52)]">No customer draft on this ticket.</div>
+              <div className="flex flex-1 items-center justify-center p-6 text-center text-sm" style={{ color: 'var(--mv-ink-45)' }}>No customer draft on this ticket.</div>
             )}
           </div>
 
           {/* Panel 3 — courier inquiry draft (conditional) */}
-          <div className={panel}>
-            <div className={`${head} text-[#D97706] bg-[var(--mv-bg)]`}>🚚 Courier Inquiry Draft</div>
+          <div className={panel} style={panelStyle}>
+            <div className={head} style={{ ...headStyle, color: 'var(--mv-amber)' }}>🚚 Courier Inquiry Draft</div>
             {hasCourier ? (
               <>
                 <textarea value={courBody} onChange={e => setCourBody(e.target.value)}
-                  className="min-h-0 flex-1 resize-none p-4 text-sm leading-relaxed text-[var(--mv-ink)] bg-[var(--mv-surface)] outline-none" />
-                <div className="border-t border-[var(--mv-hairline-2)] p-3 bg-[var(--mv-bg)]">
+                  className="min-h-0 flex-1 resize-none p-4 text-sm leading-relaxed outline-none" style={{ color: 'var(--mv-ink)' }} />
+                <div className="border-t p-3" style={{ borderColor: 'var(--mv-hairline)' }}>
                   <div className="flex gap-2">
                     <input value={courFb} onChange={e => setCourFb(e.target.value)}
                       placeholder="🛠️ Refine the courier urgency…"
-                      className="min-w-0 flex-1 border border-[var(--mv-hairline-2)] bg-[var(--mv-surface)] px-3 py-2 text-xs outline-none text-[var(--mv-ink)]" />
+                      className="min-w-0 flex-1 rounded-lg border px-3 py-2 text-xs outline-none" style={{ borderColor: 'var(--mv-hairline)' }} />
                     <button onClick={() => refine('courier')} disabled={!courFb.trim() || refining === 'courier'}
-                      className="mv-btn-primary text-xs" style={{ padding: '6px 12px' }}>
+                      className="rounded-lg px-3 py-2 text-xs font-bold disabled:opacity-40" style={{ background: 'var(--mv-ink)', color: 'var(--mv-bg)' }}>
                       {refining === 'courier' ? '…' : 'Refine'}
                     </button>
                   </div>
                 </div>
               </>
             ) : card.missing_variables ? (
-              <div className="flex flex-1 flex-col items-center justify-center gap-2 bg-[var(--mv-bg)] p-6 text-center">
-                <div className="text-sm font-bold text-[#D97706]">⚠️ Carrier escalation on standby</div>
-                <div className="text-xs font-medium text-[var(--mv-ink-62)]">
+              <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center" style={{ background: 'var(--mv-amber-100)' }}>
+                <div className="text-sm font-bold" style={{ color: 'var(--mv-amber-deep)' }}>⚠️ Carrier escalation on standby</div>
+                <div className="text-xs font-medium" style={{ color: 'var(--mv-amber-deep)' }}>
                   Awaiting customer clarification for: {card.missing_variables.split(/[,;]+/).map(v => v.trim().replace(/_/g, ' ')).filter(Boolean).join(', ')}.
                 </div>
               </div>
             ) : card.triage_intent === 'ticket_closure' ? (
-              <div className="flex flex-1 flex-col items-center justify-center gap-2 bg-[var(--mv-bg)] p-6 text-center">
-                <div className="text-sm font-bold text-[var(--mv-green)]">✅ Issue Resolved / Suspended</div>
-                <div className="text-xs font-medium text-[var(--mv-ink-62)]">No carrier intervention required for this query state.</div>
+              <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center" style={{ background: 'var(--mv-purple-100)' }}>
+                <div className="text-sm font-bold" style={{ color: 'var(--mv-green-deep)' }}>✅ Issue Resolved / Suspended</div>
+                <div className="text-xs font-medium" style={{ color: 'var(--mv-green-deep)' }}>No carrier intervention required for this query state.</div>
               </div>
             ) : (
-              <div className="flex flex-1 items-center justify-center bg-[var(--mv-bg)] p-6 text-center text-sm font-medium text-[var(--mv-ink-52)]">
+              <div className="flex flex-1 items-center justify-center p-6 text-center text-sm font-medium" style={{ background: 'var(--mv-bg)', color: 'var(--mv-ink-45)' }}>
                 No carrier outreach required for this query type.
               </div>
             )}
@@ -1997,16 +1981,28 @@ function QuickViewModal({ card, onClose, onDispatched }) {
         )}
 
         {/* Footer — closure confirm, or dual-dispatch */}
-        <div className="flex items-center justify-end gap-3 border-t border-[var(--mv-hairline-2)] px-6 py-4">
-          <button onClick={onClose} className="mv-btn-ghost">
+        <div className="flex items-center justify-end gap-3 border-t px-6 py-4" style={{ borderColor: 'var(--mv-hairline)' }}>
+          <button onClick={onClose}
+            className="rounded-lg border px-5 py-2.5 text-sm font-semibold"
+            style={{ borderColor: 'var(--mv-hairline)', color: 'var(--mv-ink-62)' }}
+            onMouseEnter={e => { e.currentTarget.style.background = 'var(--mv-bg)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}>
             Cancel / Close
           </button>
           {isClosure ? (
-            <button onClick={confirmClose} disabled={sending} className="mv-btn-primary">
+            <button onClick={confirmClose} disabled={sending}
+              className="rounded-lg px-5 py-2.5 text-sm font-bold shadow-sm transition disabled:opacity-50"
+              style={{ background: 'var(--mv-green)', color: 'var(--mv-on-brand)', boxShadow: '0 1px 2px var(--mv-purple-100)' }}
+              onMouseEnter={e => { if (!sending) e.currentTarget.style.background = 'var(--mv-green-deep)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'var(--mv-green)'; }}>
               {sending ? 'Closing…' : '✓ Confirmed - Close Ticket'}
             </button>
           ) : (
-            <button onClick={dispatch} disabled={sending} className="mv-btn-primary">
+            <button onClick={dispatch} disabled={sending}
+              className="rounded-lg px-5 py-2.5 text-sm font-bold shadow-sm transition disabled:opacity-50"
+              style={{ background: 'var(--mv-green)', color: 'var(--mv-on-brand)', boxShadow: '0 1px 2px var(--mv-purple-100)' }}
+              onMouseEnter={e => { if (!sending) e.currentTarget.style.background = 'var(--mv-green-deep)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'var(--mv-green)'; }}>
               {sending ? 'Dispatching…' : '✓ Approve & Send Balanced Strategy'}
             </button>
           )}
@@ -2061,88 +2057,101 @@ function AutopilotQABay({ refreshKey, onChanged }) {
   }
 
   return (
-    <div className="flex h-full flex-col border border-[var(--mv-hairline-2)] bg-[var(--mv-surface)]">
-      <div className="flex items-center justify-between border-b border-[var(--mv-hairline-2)] px-4 py-3 bg-[var(--mv-bg)]">
+    <div className="flex h-full flex-col rounded-2xl shadow-sm" style={{ border: '1px solid var(--mv-hairline)', background: 'var(--mv-surface)' }}>
+      <div className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: 'var(--mv-hairline)' }}>
         <div className="flex items-center gap-2">
           <span className="text-base">🤖</span>
-          <span className="text-xs font-extrabold uppercase tracking-wide text-[var(--mv-ink)]">Autopilot QA Guardrails</span>
+          <span className="text-sm font-bold" style={{ color: 'var(--mv-ink)' }}>Autopilot QA Guardrails</span>
         </div>
-        <span className="border border-[var(--mv-green)] bg-[rgba(0,200,83,0.1)] px-2 py-0.5 text-xs font-bold text-[var(--mv-green-deep)]">
+        <span className="rounded-full px-2 py-0.5 text-xs font-bold" style={{ background: 'var(--mv-purple-100)', color: 'var(--mv-green-deep)' }}>
           {cards.length} ticket{cards.length === 1 ? '' : 's'}
         </span>
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
-        {loading && <div className="p-6 text-center text-xs text-[var(--mv-ink-52)]">Loading drafts…</div>}
+        {loading && <div className="p-6 text-center text-xs" style={{ color: 'var(--mv-ink-45)' }}>Loading drafts…</div>}
         {!loading && cards.length === 0 && (
           <div className="p-8 text-center">
-            <div className="mb-2 text-2xl">✓</div>
-            <div className="text-sm font-extrabold text-[var(--mv-ink)]">Queue Clear</div>
-            <div className="text-xs text-[var(--mv-ink-52)] mt-1">No tickets waiting for QA.</div>
+            <div className="mb-2 text-3xl">✓</div>
+            <div className="text-sm font-semibold" style={{ color: 'var(--mv-ink-62)' }}>Queue clear</div>
+            <div className="text-xs" style={{ color: 'var(--mv-ink-45)' }}>No tickets waiting for QA.</div>
           </div>
         )}
         {cards.map(c => (
           c.kind === 'paused' ? (
-            <div key={`p-${c.query_id}`} className="mb-3 border border-[#D97706] bg-[var(--mv-surface)] p-3 last:mb-0">
+            <div key={`p-${c.query_id}`} className="mb-3 rounded-xl p-3 last:mb-0" style={{ border: '1px solid var(--mv-amber-200)', background: 'var(--mv-amber-100)' }}>
               <div className="mb-2 flex items-center gap-2">
                 <button onClick={() => navigate(`/queries/${c.query_id}`)}
-                  className="inline-flex items-center justify-center border border-[var(--mv-hairline-2)] bg-[var(--mv-bg)] px-2 py-0.5 text-xs font-extrabold uppercase text-[var(--mv-ink)]">
+                  className="inline-flex items-center justify-center rounded border px-2 py-0.5 text-xs font-bold uppercase" style={rowBadgeClasses(c)}>
                   M-{c.ticket_number}
                 </button>
-                <span className="truncate text-xs font-medium text-[#D97706]">{c.customer_name || c.subject}</span>
+                <span className="truncate text-xs font-medium" style={{ color: 'var(--mv-amber-deep)' }}>{c.customer_name || c.subject}</span>
               </div>
-              <p className="mb-3 text-xs font-semibold leading-snug text-[var(--mv-ink)]">
+              <p className="mb-3 text-sm font-semibold leading-snug" style={{ color: 'var(--mv-amber-deep)' }}>
                 🤖 Autopilot Paused: Manual review required for this complex query.
               </p>
               <button onClick={() => navigate(`/queries/${c.query_id}`)}
-                className="mv-btn-ghost w-full text-xs">
-                Open &amp; Review →
+                className="w-full rounded-lg px-3 py-2 text-xs font-bold transition"
+                style={{ border: '1px solid var(--mv-amber-200)', background: 'var(--mv-surface)', color: 'var(--mv-amber-deep)' }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'var(--mv-amber-100)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'var(--mv-surface)'; }}>
+                Open &amp; review →
               </button>
             </div>
           ) : c.kind === 'closure' ? (
-            <div key={`c-${c.query_id}`} className="mb-3 border border-[var(--mv-green)] bg-[var(--mv-surface)] p-3 last:mb-0">
+            <div key={`c-${c.query_id}`} className="mb-3 rounded-xl p-3 last:mb-0" style={{ border: '1px solid var(--mv-purple-200)', background: 'var(--mv-purple-100)' }}>
               <div className="mb-2 flex items-center gap-2">
                 <button onClick={() => navigate(`/queries/${c.query_id}`)}
-                  className="inline-flex items-center justify-center border border-[var(--mv-hairline-2)] bg-[var(--mv-bg)] px-2 py-0.5 text-xs font-extrabold uppercase text-[var(--mv-ink)]">
+                  className="inline-flex items-center justify-center rounded border px-2 py-0.5 text-xs font-bold uppercase" style={rowBadgeClasses(c)}>
                   M-{c.ticket_number}
                 </button>
-                <span className="truncate text-xs font-medium text-[var(--mv-green-deep)]">{c.customer_name || c.subject}</span>
+                <span className="truncate text-xs font-medium" style={{ color: 'var(--mv-green-deep)' }}>{c.customer_name || c.subject}</span>
               </div>
-              <p className="mb-3 text-xs font-semibold leading-snug text-[var(--mv-ink)]">
+              <p className="mb-3 text-sm font-semibold leading-snug" style={{ color: 'var(--mv-green-deep)' }}>
                 🤖 AI suggests this ticket can be resolved.
               </p>
               <button onClick={() => setViewing(c)}
-                className="mv-btn-primary w-full text-xs">
-                👁️ Review &amp; Close →
+                className="w-full rounded-lg px-3 py-2 text-xs font-bold transition"
+                style={{ border: '1px solid var(--mv-purple-200)', background: 'var(--mv-surface)', color: 'var(--mv-green-deep)' }}
+                onMouseEnter={e => { e.currentTarget.style.background = 'var(--mv-purple-100)'; }}
+                onMouseLeave={e => { e.currentTarget.style.background = 'var(--mv-surface)'; }}>
+                👁️ Review &amp; close →
               </button>
             </div>
           ) : (
-            <div key={c.query_id} className="mb-3 border border-[var(--mv-hairline-2)] bg-[var(--mv-surface)] p-3 last:mb-0">
+            <div key={c.query_id} className="mb-3 rounded-xl p-3 last:mb-0" style={{ border: '1px solid var(--mv-hairline)' }}>
               <div className="mb-2 flex items-center gap-2">
                 <button onClick={() => navigate(`/queries/${c.query_id}`)}
-                  className="inline-flex items-center justify-center border border-[var(--mv-hairline-2)] bg-[var(--mv-bg)] px-2 py-0.5 text-xs font-extrabold uppercase text-[var(--mv-ink)]">
+                  className="inline-flex items-center justify-center rounded border px-2 py-0.5 text-xs font-bold uppercase" style={rowBadgeClasses(c)}>
                   M-{c.ticket_number}
                 </button>
-                <span className="truncate text-xs font-medium text-[var(--mv-ink-52)]">{c.customer_name || c.subject}</span>
-                {c.customer_email_id && <span className="shrink-0 border border-[var(--mv-purple)] bg-[rgba(123,47,190,0.1)] px-1.5 py-0.5 text-[10px] font-bold text-[var(--mv-purple)]">👤 Cust</span>}
-                {c.courier_email_id  && <span className="shrink-0 border border-[#D97706] bg-[rgba(217,119,6,0.1)] px-1.5 py-0.5 text-[10px] font-bold text-[#D97706]">🚚 Courier</span>}
+                <span className="truncate text-xs font-medium" style={{ color: 'var(--mv-ink-52)' }}>{c.customer_name || c.subject}</span>
+                {/* Draft channel chips */}
+                {c.customer_email_id && <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ background: 'var(--mv-teal-100)', color: 'var(--mv-teal)' }}>👤 Cust</span>}
+                {c.courier_email_id  && <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ background: 'var(--mv-amber-100)', color: 'var(--mv-amber-deep)' }}>🚚 Courier</span>}
               </div>
 
               {(c.consecutive_approvals ?? 0) >= AUTOPILOT_THRESHOLD && (
-                <div className="mb-2 inline-flex items-center gap-1 border border-[var(--mv-green)] bg-[rgba(0,200,83,0.1)] px-2 py-0.5 text-[11px] font-bold text-[var(--mv-green-deep)]">
+                <div className="mb-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold" style={{ background: 'var(--mv-purple-100)', color: 'var(--mv-green-deep)' }}>
                   🎯 Automation Stable — Autopilot Ready
                 </div>
               )}
 
-              <p className="mb-3 line-clamp-3 text-xs leading-snug text-[var(--mv-ink-62)]">{intentLine(c)}</p>
+              <p className="mb-3 line-clamp-3 text-sm leading-snug" style={{ color: 'var(--mv-ink-78)' }}>{intentLine(c)}</p>
 
               <div className="flex flex-wrap gap-2">
                 <button onClick={() => quickApprove(c)} disabled={busyId === c.query_id}
-                  className="mv-btn-primary flex-1 text-xs" style={{ padding: '6px 10px' }}>
+                  className="flex-1 rounded-lg px-3 py-2 text-xs font-bold transition disabled:opacity-50"
+                  style={{ background: 'var(--mv-green)', color: 'var(--mv-on-brand)' }}
+                  onMouseEnter={e => { if (busyId !== c.query_id) e.currentTarget.style.background = 'var(--mv-green-deep)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'var(--mv-green)'; }}>
                   {busyId === c.query_id ? 'Sending…' : '✓ Quick Approve'}
                 </button>
                 <button onClick={() => setViewing(c)}
-                  className="mv-btn-ghost text-xs" style={{ padding: '6px 10px' }}>
+                  className="flex items-center gap-1 rounded-md px-3 py-2 text-xs font-semibold"
+                  style={{ background: 'var(--mv-bg)', color: 'var(--mv-ink-78)' }}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'var(--mv-hairline-2)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'var(--mv-bg)'; }}>
                   👁️ Quick View
                 </button>
               </div>
@@ -2266,30 +2275,12 @@ export default function QueriesPage() {
     <div className="mv-page">
       <div className="mv-page-inner" style={{ maxWidth: '100%' }}>
 
-        {/* ── Header ─────────────────────────────────────────────────────────── */}
-        <div className="mv-head">
-          <div>
-            <div className="mv-kicker">Support &amp; Customer Triage</div>
-            <h1 className="mv-title">Queries</h1>
-            <p className="mv-blurb">
-              Centralized customer communications, courier investigations, AI response drafting, and automated SLA clocks.
-            </p>
-          </div>
-          <div className="mv-actions">
-            <button onClick={refresh} className="mv-icon-btn" title="Refresh">
-              <RefreshCw size={14} />
-            </button>
-            <button
-              onClick={() => navigate('/queries/simulator')}
-              className="mv-btn-ghost"
-            >
-              🧪 Simulator
-            </button>
-          </div>
-        </div>
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 18px', borderBottom: `0.5px solid ${C.border}`, background: C.surface, flexShrink: 0 }}>
+        <span style={{ fontSize: 22, fontWeight: 800, color: 'var(--mv-ink)', letterSpacing: '-0.03em' }}>Queries</span>
 
-        {/* ── Workspace Switcher Tabs ────────────────────────────────────────── */}
-        <div className="mv-tabs" style={{ marginTop: 14, marginBottom: 20 }}>
+        {/* Workspace switcher — Unassigned / Assigned to me / All open */}
+        <div className="ml-2 inline-flex items-center gap-1 rounded-xl p-1" style={{ background: 'var(--mv-bg)' }}>
           {[
             { key: 'unassigned', label: 'Unassigned',      count: stats?.unassigned },
             { key: 'mine',       label: 'Assigned to me',  count: stats?.assigned_to_me },
@@ -2300,226 +2291,277 @@ export default function QueriesPage() {
               <button
                 key={w.key}
                 onClick={() => setWorkspace(w.key)}
-                className={`mv-tab ${active ? 'is-active' : ''}`}
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition"
+                style={{
+                  background: active ? 'var(--mv-surface)' : 'transparent',
+                  color: active ? 'var(--mv-ink)' : 'var(--mv-ink-52)',
+                  boxShadow: active ? '0 1px 2px color-mix(in srgb, var(--mv-ink) 10%, transparent)' : 'none',
+                }}
+                onMouseEnter={e => { if (!active) e.currentTarget.style.color = 'var(--mv-ink-78)'; }}
+                onMouseLeave={e => { if (!active) e.currentTarget.style.color = 'var(--mv-ink-52)'; }}
               >
                 {w.label}
                 {w.count != null && (
-                  <span className="mv-tab-count">
-                    ({w.count})
+                  <span
+                    className="rounded-full px-1.5 text-xs font-semibold"
+                    style={{
+                      background: active ? 'var(--mv-ink)' : 'var(--mv-hairline-2)',
+                      color: active ? 'var(--mv-bg)' : 'var(--mv-ink-62)',
+                    }}
+                  >
+                    {w.count}
                   </span>
                 )}
               </button>
             );
           })}
         </div>
-
-        {/* ── Threat Matrix — high-impact operational counters ───────────────── */}
-        <div className="mv-kpis" style={{ gridTemplateColumns: 'repeat(4, 1fr)', marginBottom: 20 }}>
-          {[
-            { key: 'urgent', label: 'Critical Threats',     value: stats?.urgent_open,
-              onClick: () => setFilters(f => ({ ...f, priority: f.priority === 'urgent' ? '' : 'urgent', sla_breached: false, status: '', attention: false })), active: filters.priority === 'urgent' },
-            { key: 'high',   label: 'High Priority',         value: stats?.high_open,
-              onClick: () => setFilters(f => ({ ...f, priority: f.priority === 'high' ? '' : 'high', sla_breached: false, status: '', attention: false })), active: filters.priority === 'high' },
-            { key: 'sla',    label: 'Courier SLA Breaches',  value: stats?.courier_sla_breached,
-              onClick: () => setFilters(f => ({ ...f, sla_breached: !f.sla_breached, priority: '', status: '', attention: false })), active: filters.sla_breached },
-            { key: 'auto',   label: 'Autopilot Runs',        value: stats?.autopilot_runs,
-              onClick: null, active: false },
-          ].map(k => (
-            <div
-              key={k.key}
-              onClick={k.onClick || undefined}
-              className={`mv-kpi ${k.active ? 'is-clickable is-active' : (k.onClick ? 'is-clickable' : '')}`}
-              style={{ cursor: k.onClick ? 'pointer' : 'default' }}
-            >
-              <div className="mv-kpi-label">{k.label}</div>
-              <div className="mv-kpi-value mv-num">
-                {k.value ?? '—'}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* ── Group & Status Filter Toolbar with Search ──────────────────────── */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
-          <div className="mv-chips">
-            <span className="mv-filter-label">Group:</span>
-            {GROUP_TABS.map(t => {
-              const isActive = t.group === '' ? !filters.group_name : filters.group_name === t.group;
-              return (
-                <button
-                  key={t.key}
-                  onClick={() => setFilters(f => ({ ...f, group_name: t.group, attention: false, status: '' }))}
-                  className={`mv-chip ${isActive ? 'is-on' : ''}`}
-                >
-                  {t.label}
-                </button>
-              );
-            })}
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            {/* Search query box */}
-            <div className="mv-search" style={{ width: 250, height: 32, padding: '4px 10px' }}>
-              <Search size={13} style={{ color: 'var(--mv-ink-45)', flexShrink: 0 }} />
-              <input
-                placeholder="Search query, customer…"
-                value={filters.search}
-                onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
-              />
-              {filters.search && (
-                <button
-                  onClick={() => setFilters(f => ({ ...f, search: '' }))}
-                  style={{ background: 'none', border: 'none', color: 'var(--mv-ink-45)', cursor: 'pointer', fontSize: 11, padding: 0 }}
-                  title="Clear search"
-                >
-                  ✕
-                </button>
-              )}
-            </div>
-
-            {/* Status chips */}
-            <div className="mv-chips">
-              <button
-                onClick={() => setFilters(p => ({ ...p, attention: !p.attention, pending_draft: false }))}
-                className={`mv-chip ${filters.attention ? 'is-on' : ''}`}
-              >
-                ⚠ Attention
-              </button>
-              <button
-                onClick={() => setFilters(p => ({ ...p, pending_draft: !p.pending_draft, attention: false }))}
-                className={`mv-chip ${filters.pending_draft ? 'is-on' : ''}`}
-              >
-                ✦ To verify
-              </button>
-              <button
-                onClick={() => setFilters(p => ({ ...p, status: p.status === 'resolved' ? '' : 'resolved', attention: false }))}
-                className={`mv-chip ${filters.status === 'resolved' ? 'is-on' : ''}`}
-              >
-                Resolved
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* ── Command Center: live queue (2 cols) + Autopilot QA Bay (1 col) ── */}
-        <div className="grid min-h-0 flex-1 grid-cols-1 items-stretch gap-6 overflow-hidden xl:grid-cols-3">
-
-          {/* Columns 1 & 2 — Live Traffic Queue */}
-          <div className="flex min-h-0 flex-col xl:col-span-2">
-            <div className="min-h-0 flex-1">
-              {loading && <div style={{ padding: 40, textAlign: 'center', color: 'var(--mv-ink-52)', fontSize: 13 }}>Loading…</div>}
-              {!loading && displayQueries.length === 0 && (
-                <div style={{ background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)', padding: 60, textAlign: 'center' }}>
-                  <div style={{ fontSize: 32, marginBottom: 12 }}>📭</div>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--mv-ink)', marginBottom: 6 }}>No queries match</div>
-                  <div style={{ fontSize: 12, color: 'var(--mv-ink-52)' }}>Try a different filter or check back later</div>
-                </div>
-              )}
-              {!loading && displayQueries.length > 0 && (
-                <div>
-                  {[...displayQueries]
-                    .sort((a, b) =>
-                      priRank(a) - priRank(b) ||
-                      new Date(b.latest_email_at || b.created_at) - new Date(a.latest_email_at || a.created_at)
-                    )
-                    .map(q => (
-                      <InboxRow key={q.id} q={q} onClick={() => navigate(`/queries/${q.id}`)} staffList={staffList} onUpdate={refresh} />
-                    ))
-                  }
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Column 3 — Autopilot QA Bay */}
-          <div className="min-h-0 xl:col-span-1">
-            <AutopilotQABay refreshKey={refreshKey} onChanged={refresh} />
-          </div>
-        </div>
-
-        {/* Right filter panel (overlay) */}
-        {showFilters && (
-          <FilterPanel
-            filters={filters}
-            setFilters={setFilters}
-            staffList={staffList}
-            onClose={() => setShowFilters(false)}
+        <div style={{ flex: 1 }} />
+        {/* Search */}
+        <div style={{ position: 'relative' }}>
+          <Search size={12} style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', color: C.muted, pointerEvents: 'none' }} />
+          <input
+            placeholder="Search consignment, customer…"
+            value={filters.search}
+            onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
+            style={{ background: C.card, border: `0.5px solid ${C.border}`, borderRadius: 8, color: C.text,
+              fontSize: 12, padding: '7px 10px 7px 28px', width: 220, outline: 'none' }}
           />
-        )}
+        </div>
+        {/* Sort indicator */}
+        <span style={{ fontSize: 12, color: C.muted, display: 'flex', alignItems: 'center', gap: 4 }}>
+          <RefreshCw size={11} style={{ cursor: 'pointer' }} onClick={refresh} />
+          Last activity
+        </span>
+        {/* Automation simulator */}
+        <button
+          onClick={() => navigate('/queries/simulator')}
+          title="Open the automation simulator"
+          className="rounded-lg px-3 py-1.5 text-xs font-medium"
+          style={{ border: '1px solid var(--mv-hairline-2)', color: 'var(--mv-ink-62)', background: 'transparent' }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'var(--mv-bg)'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+        >
+          🧪 Simulator
+        </button>
 
-        {/* ── Pagination footer ──────────────────────────────────────────────── */}
-        {total > 0 && (
-          <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            borderTop: '1px solid var(--mv-hairline-2)', background: 'var(--mv-surface)',
-            padding: '12px 18px', marginTop: 24
-          }}>
-            <span style={{ fontSize: 12.5, color: 'var(--mv-ink-52)' }}>
-              Showing <strong className="mv-num">{startIdx}</strong>–<strong className="mv-num">{endIdx}</strong> of <strong className="mv-num">{total}</strong> entries
+        {/* New query */}
+        <button style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: '7px 16px', borderRadius: 8, cursor: 'pointer',
+          border: 'none', background: 'var(--mv-ink)',
+          color: 'var(--mv-bg)', fontSize: 12, fontWeight: 700,
+          letterSpacing: '0.01em',
+          transition: 'background 0.12s, box-shadow 0.12s',
+        }}
+          onMouseEnter={e => { e.currentTarget.style.background = 'color-mix(in srgb, var(--mv-ink) 85%, transparent)'; e.currentTarget.style.boxShadow = '0 4px 12px color-mix(in srgb, var(--mv-ink) 22%, transparent)'; }}
+          onMouseLeave={e => { e.currentTarget.style.background = 'var(--mv-ink)'; e.currentTarget.style.boxShadow = 'none'; }}
+        >
+          <span style={{ fontSize: 15, lineHeight: 1, fontWeight: 400 }}>+</span> New query
+        </button>
+      </div>
+
+      {/* ── Threat Matrix — high-impact operational counters ───────────────── */}
+      <div className="grid shrink-0 grid-cols-2 gap-3 px-[18px] pb-3 pt-3.5 lg:grid-cols-4" style={{ background: 'var(--mv-bg)' }}>
+        {[
+          { key: 'urgent', label: '🚨 Critical Threats',     value: stats?.urgent_open,          accent: 'var(--mv-magenta)', tint: 'var(--mv-magenta-100)', text: 'var(--mv-magenta-deep)',
+            onClick: () => setFilters(f => ({ ...f, priority: f.priority === 'urgent' ? '' : 'urgent', sla_breached: false, status: '', attention: false })), active: filters.priority === 'urgent' },
+          { key: 'high',   label: '⚠️ High Priority',         value: stats?.high_open,            accent: 'var(--mv-amber)', tint: 'var(--mv-amber-100)', text: 'var(--mv-amber-deep)',
+            onClick: () => setFilters(f => ({ ...f, priority: f.priority === 'high' ? '' : 'high', sla_breached: false, status: '', attention: false })), active: filters.priority === 'high' },
+          { key: 'sla',    label: '⏳ Courier SLA Breaches',  value: stats?.courier_sla_breached, accent: 'var(--mv-purple)', tint: 'var(--mv-purple-100)', text: 'var(--mv-purple-700)',
+            onClick: () => setFilters(f => ({ ...f, sla_breached: !f.sla_breached, priority: '', status: '', attention: false })), active: filters.sla_breached },
+          { key: 'auto',   label: '🤖 Autopilot Runs',        value: stats?.autopilot_runs,       accent: 'var(--mv-green-deep)', tint: 'var(--mv-purple-100)', text: 'var(--mv-green-deep)',
+            onClick: null, active: false },
+        ].map(k => (
+          <button
+            key={k.key}
+            onClick={k.onClick || undefined}
+            className={`flex flex-col items-start rounded-2xl border p-4 text-left transition ${k.onClick ? 'cursor-pointer' : 'cursor-default'}`}
+            style={{
+              background: k.tint,
+              borderColor: k.active ? k.accent : 'transparent',
+              boxShadow: k.active ? `0 0 0 2px color-mix(in srgb, ${k.accent} 35%, transparent)` : 'none',
+            }}
+            onMouseEnter={e => { if (!k.active) e.currentTarget.style.boxShadow = '0 1px 3px color-mix(in srgb, var(--mv-ink) 10%, transparent)'; }}
+            onMouseLeave={e => { if (!k.active) e.currentTarget.style.boxShadow = 'none'; }}
+          >
+            <span className="text-4xl font-extrabold leading-none" style={{ color: k.accent }}>
+              {k.value ?? '—'}
             </span>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <button
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-                disabled={page <= 1}
-                className="mv-btn-ghost"
-                style={{ fontSize: 12, padding: '4px 10px' }}
-              >
-                Previous
-              </button>
-              {pageNumbers.map((n, i) =>
-                n === '…' ? (
-                  <span key={`e${i}`} style={{ padding: '0 4px', color: 'var(--mv-ink-52)' }}>…</span>
-                ) : (
-                  <button
-                    key={n}
-                    onClick={() => setPage(n)}
-                    className={n === page ? 'mv-btn-primary' : 'mv-btn-ghost'}
-                    style={{ fontSize: 12, padding: '4px 10px', minWidth: 32 }}
-                  >
-                    {n}
-                  </button>
-                )
-              )}
-              <button
-                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                disabled={page >= totalPages}
-                className="mv-btn-ghost"
-                style={{ fontSize: 12, padding: '4px 10px' }}
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        )}
+            <span className="mt-2 text-xs font-bold uppercase tracking-wide" style={{ color: k.text }}>{k.label}</span>
+          </button>
+        ))}
+      </div>
 
-        {showUnmatched && <UnmatchedPanel onClose={() => setShowUnmatched(false)} />}
-
-        {/* 🎓 Smart-nudge toast */}
-        {nudge && (
-          <div style={{
-            position: 'fixed', bottom: 24, right: 24, zIndex: 1000, width: 380,
-            background: 'var(--mv-surface)', border: '1px solid var(--mv-purple)', padding: 18,
-            boxShadow: '0 8px 32px rgba(0,0,0,0.18)'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--mv-ink)' }}>🎓 System Learned New Behavior</div>
-              <button onClick={dismissNudge} style={{ background: 'none', border: 'none', color: 'var(--mv-ink-52)', cursor: 'pointer' }}>✕</button>
-            </div>
-            <p style={{ margin: '8px 0 12px', fontSize: 12, lineHeight: 1.5, color: 'var(--mv-ink-62)' }}>
-              We've recorded your phrasing preference for this scenario
-              {nudge.scenario_trigger ? <> (<span style={{ fontWeight: 700, color: 'var(--mv-ink)' }}>{nudge.scenario_trigger.replace(/_/g, ' ')}</span>)</> : null}.
-              We found <strong className="mv-num">{nudge.match_count}</strong> other pending ticket{nudge.match_count === 1 ? '' : 's'} matching this profile.
-            </p>
-            <button
-              onClick={applyNudge}
-              disabled={nudgeBusy}
-              className="mv-btn-primary"
-              style={{ width: '100%', fontSize: 12 }}
+      {/* ── Group tabs ──────────────────────────────────────────────────────── */}
+      <div style={{ display: 'flex', alignItems: 'center', borderBottom: `0.5px solid ${C.border}`, background: C.bg, flexShrink: 0, padding: '0 18px', gap: 2 }}>
+        {GROUP_TABS.map(t => {
+          const isActive = t.group === '' ? !filters.group_name : filters.group_name === t.group;
+          const color = groupColor(t.group);
+          return (
+            <button key={t.key} onClick={() => setFilters(f => ({ ...f, group_name: t.group, attention: false, status: '' }))}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '9px 14px', border: 'none', background: 'none',
+                borderBottom: `2px solid ${isActive ? color : 'transparent'}`,
+                color: isActive ? color : C.muted,
+                fontSize: 13, fontWeight: isActive ? 600 : 400,
+                cursor: 'pointer', marginBottom: -0.5, whiteSpace: 'nowrap',
+                transition: 'color 0.1s',
+              }}
+              onMouseOver={e => { if (!isActive) e.currentTarget.style.color = C.sub; }}
+              onMouseOut={e => { if (!isActive) e.currentTarget.style.color = C.muted; }}
             >
-              {nudgeBusy ? 'Updating…' : `🔄 Update Remaining Drafts (${nudge.match_count})`}
+              {t.group !== '' && (
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: color, flexShrink: 0,
+                  opacity: isActive ? 1 : 0.5 }} />
+              )}
+              {t.label}
+            </button>
+          );
+        })}
+        <div style={{ flex: 1 }} />
+        {/* Status sub-filters as smaller pills */}
+        <div style={{ display: 'flex', gap: 4, alignItems: 'center', padding: '6px 0' }}>
+          <FilterPill color={C.red} active={filters.attention}
+            onClick={() => setFilters(p => ({ ...p, attention: !p.attention, pending_draft: false }))}>
+            ⚠ Attention
+          </FilterPill>
+          <FilterPill color={C.green} active={filters.pending_draft}
+            onClick={() => setFilters(p => ({ ...p, pending_draft: !p.pending_draft, attention: false }))}>
+            ✦ To verify
+          </FilterPill>
+          <FilterPill color={C.blue} active={filters.status === 'resolved'}
+            onClick={() => setFilters(p => ({ ...p, status: p.status === 'resolved' ? '' : 'resolved', attention: false }))}>
+            Resolved
+          </FilterPill>
+        </div>
+      </div>
+
+      {/* ── Command Center: live queue (2 cols) + Autopilot QA Bay (1 col) ── */}
+      <div className="grid min-h-0 flex-1 grid-cols-1 items-stretch gap-6 overflow-hidden px-[18px] py-3 xl:grid-cols-3">
+
+        {/* Columns 1 & 2 — Live Traffic Queue */}
+        <div className="flex min-h-0 flex-col xl:col-span-2">
+          <div className="min-h-0 flex-1 overflow-auto rounded-2xl" style={{ border: '1px solid var(--mv-hairline)', background: 'var(--mv-surface)' }}>
+            {loading && <div style={{ padding: 40, textAlign: 'center', color: C.muted, fontSize: 12 }}>Loading…</div>}
+            {!loading && displayQueries.length === 0 && (
+              <div style={{ padding: 60, textAlign: 'center' }}>
+                <div style={{ fontSize: 36, marginBottom: 12 }}>📭</div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: C.sub, marginBottom: 6 }}>No queries match</div>
+                <div style={{ fontSize: 12, color: C.muted }}>Try a different filter or check back later</div>
+              </div>
+            )}
+            {!loading && displayQueries.length > 0 && (
+              <>
+                {/* Rows: Red (Urgent) & Amber (High) pinned to the top, then by activity */}
+                {[...displayQueries]
+                  .sort((a, b) =>
+                    priRank(a) - priRank(b) ||
+                    new Date(b.latest_email_at || b.created_at) - new Date(a.latest_email_at || a.created_at)
+                  )
+                  .map(q => (
+                    <InboxRow key={q.id} q={q} onClick={() => navigate(`/queries/${q.id}`)} staffList={staffList} onUpdate={refresh} />
+                  ))
+                }
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Column 3 — Autopilot QA Bay */}
+        <div className="min-h-0 xl:col-span-1">
+          <AutopilotQABay refreshKey={refreshKey} onChanged={refresh} />
+        </div>
+      </div>
+
+      {/* Right filter panel (overlay) */}
+      {showFilters && (
+        <FilterPanel
+          filters={filters}
+          setFilters={setFilters}
+          staffList={staffList}
+          onClose={() => setShowFilters(false)}
+        />
+      )}
+
+      {/* ── Pagination footer ──────────────────────────────────────────────── */}
+      {total > 0 && (
+        <div className="flex shrink-0 items-center justify-between border-t px-5 py-3" style={{ borderColor: 'var(--mv-hairline)', background: 'var(--mv-surface)' }}>
+          <span className="text-sm" style={{ color: 'var(--mv-ink-52)' }}>
+            Showing {startIdx}-{endIdx} of {total} entries
+          </span>
+          <div className="inline-flex items-center gap-1">
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-40"
+              style={{ border: '1px solid var(--mv-hairline)', color: 'var(--mv-ink-62)' }}
+              onMouseEnter={e => { if (page > 1) e.currentTarget.style.background = 'var(--mv-bg)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+            >
+              Previous
+            </button>
+            {pageNumbers.map((n, i) =>
+              n === '…' ? (
+                <span key={`e${i}`} className="px-2 text-sm" style={{ color: 'var(--mv-ink-45)' }}>…</span>
+              ) : (
+                <button
+                  key={n}
+                  onClick={() => setPage(n)}
+                  className="min-w-[36px] rounded-lg px-3 py-1.5 text-sm font-medium transition"
+                  style={n === page
+                    ? { border: '1px solid var(--mv-ink)', background: 'var(--mv-ink)', color: 'var(--mv-bg)' }
+                    : { border: '1px solid var(--mv-hairline)', color: 'var(--mv-ink-62)' }}
+                  onMouseEnter={e => { if (n !== page) e.currentTarget.style.background = 'var(--mv-bg)'; }}
+                  onMouseLeave={e => { if (n !== page) e.currentTarget.style.background = 'transparent'; }}
+                >
+                  {n}
+                </button>
+              )
+            )}
+            <button
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              className="rounded-lg px-3 py-1.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-40"
+              style={{ border: '1px solid var(--mv-hairline)', color: 'var(--mv-ink-62)' }}
+              onMouseEnter={e => { if (page < totalPages) e.currentTarget.style.background = 'var(--mv-bg)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; }}
+            >
+              Next
             </button>
           </div>
-        )}
+        </div>
+      )}
+
+      {showUnmatched && <UnmatchedPanel onClose={() => setShowUnmatched(false)} />}
+
+      {/* 🎓 Smart-nudge toast — surfaced when the system auto-learns a behaviour */}
+      {nudge && (
+        <div className="fixed bottom-6 right-6 z-[1000] w-96 rounded-2xl p-4 shadow-2xl" style={{ border: '1px solid var(--mv-hairline)', background: 'var(--mv-surface)' }}>
+          <div className="flex items-start justify-between gap-2">
+            <div className="text-sm font-bold" style={{ color: 'var(--mv-ink)' }}>🎓 System Learned New Behavior</div>
+            <button onClick={dismissNudge} className="rounded p-1" style={{ color: 'var(--mv-ink-45)' }}
+              onMouseEnter={e => { e.currentTarget.style.background = 'var(--mv-bg)'; e.currentTarget.style.color = 'var(--mv-ink-78)'; }}
+              onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--mv-ink-45)'; }}>✕</button>
+          </div>
+          <p className="mt-1 text-xs leading-relaxed" style={{ color: 'var(--mv-ink-62)' }}>
+            We've recorded your phrasing preference for this scenario
+            {nudge.scenario_trigger ? <> (<span className="font-semibold" style={{ color: 'var(--mv-ink-78)' }}>{nudge.scenario_trigger.replace(/_/g, ' ')}</span>)</> : null}.
+            We found <strong>{nudge.match_count}</strong> other pending ticket{nudge.match_count === 1 ? '' : 's'} matching this profile.
+          </p>
+          <button
+            onClick={applyNudge}
+            disabled={nudgeBusy}
+            className="mt-3 w-full rounded-lg px-3 py-2 text-xs font-bold transition disabled:opacity-50"
+            style={{ background: 'var(--mv-ink)', color: 'var(--mv-bg)' }}
+            onMouseEnter={e => { if (!nudgeBusy) e.currentTarget.style.background = 'color-mix(in srgb, var(--mv-ink) 85%, transparent)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background = 'var(--mv-ink)'; }}
+          >
+            {nudgeBusy ? 'Updating…' : `🔄 Update Remaining Drafts (${nudge.match_count})`}
+          </button>
+        </div>
+      )}
       </div>
     </div>
   );

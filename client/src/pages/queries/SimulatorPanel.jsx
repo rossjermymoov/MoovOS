@@ -59,70 +59,62 @@ export default function SimulatorPanel() {
   };
 
   return (
-    <div className="mv-page">
-      <div className="mv-page-inner" style={{ maxWidth: 720 }}>
-        <div className="mv-head">
-          <div>
-            <div className="mv-kicker">Developer Testing</div>
-            <h1 className="mv-title">Automation Simulator</h1>
-            <p className="mv-blurb">Run the courier loop against a ticket without dispatching real emails.</p>
-          </div>
-        </div>
+    <div className="mx-auto max-w-xl rounded-2xl border p-5" style={{ borderColor: 'var(--mv-hairline)', background: 'var(--mv-surface)' }}>
+      <h2 className="mb-1 text-base font-semibold" style={{ color: 'var(--mv-ink)' }}>Automation Simulator</h2>
+      <p className="mb-4 text-sm" style={{ color: 'var(--mv-ink-52)' }}>Run the courier loop against a ticket — no real email is sent.</p>
 
-        <div className="mv-rule" />
-
-        <div style={{ background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)', padding: 24 }}>
-          {/* Quick-fill presets */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 18 }}>
-            {PRESETS.map(p => (
-              <button key={p.label} onClick={() => applyPreset(p)} className="mv-btn-ghost" style={{ fontSize: 12 }}>
-                {p.label}
-              </button>
-            ))}
-          </div>
-
-          <label style={{ fontSize: 10, fontWeight: 800, color: 'var(--mv-ink-52)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6, display: 'block' }}>Ticket number or id</label>
-          <input value={ticket} onChange={e => setTicket(e.target.value)} placeholder="e.g. 236"
-            style={{ width: '100%', boxSizing: 'border-box', background: 'var(--mv-bg)', border: '1px solid var(--mv-hairline-2)', borderRadius: 0, padding: '8px 12px', fontSize: 13, color: 'var(--mv-ink)', marginBottom: 14 }} />
-
-          <label style={{ fontSize: 10, fontWeight: 800, color: 'var(--mv-ink-52)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6, display: 'block' }}>Simulated sender</label>
-          <div style={{ display: 'inline-flex', background: 'var(--mv-bg)', border: '1px solid var(--mv-hairline-2)', padding: 2, marginBottom: 14 }}>
-            {['customer', 'courier'].map(r => (
-              <button key={r} onClick={() => setRole(r)}
-                style={{
-                  padding: '6px 14px', fontSize: 12, fontWeight: 700, textTransform: 'capitalize', cursor: 'pointer', border: 'none',
-                  background: role === r ? 'var(--mv-purple)' : 'transparent',
-                  color: role === r ? '#fff' : 'var(--mv-ink-52)',
-                }}>
-                {r}
-              </button>
-            ))}
-          </div>
-
-          <label style={{ fontSize: 10, fontWeight: 800, color: 'var(--mv-ink-52)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6, display: 'block' }}>Sender handle (optional)</label>
-          <input value={sender} onChange={e => setSender(e.target.value)} placeholder="investigations@dpd.co.uk"
-            style={{ width: '100%', boxSizing: 'border-box', background: 'var(--mv-bg)', border: '1px solid var(--mv-hairline-2)', borderRadius: 0, padding: '8px 12px', fontSize: 13, color: 'var(--mv-ink)', marginBottom: 14 }} />
-
-          <label style={{ fontSize: 10, fontWeight: 800, color: 'var(--mv-ink-52)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6, display: 'block' }}>Subject</label>
-          <input value={subject} onChange={e => setSubject(e.target.value)}
-            style={{ width: '100%', boxSizing: 'border-box', background: 'var(--mv-bg)', border: '1px solid var(--mv-hairline-2)', borderRadius: 0, padding: '8px 12px', fontSize: 13, color: 'var(--mv-ink)', marginBottom: 14 }} />
-
-          <label style={{ fontSize: 10, fontWeight: 800, color: 'var(--mv-ink-52)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6, display: 'block' }}>Body</label>
-          <textarea value={body} onChange={e => setBody(e.target.value)} rows={6}
-            style={{ width: '100%', boxSizing: 'border-box', background: 'var(--mv-bg)', border: '1px solid var(--mv-hairline-2)', borderRadius: 0, padding: '8px 12px', fontSize: 13, color: 'var(--mv-ink)', marginBottom: 18 }} />
-
-          <button onClick={run} disabled={running} className="mv-btn-primary">
-            {running ? 'Running…' : 'Submit Simulation'}
+      {/* Quick-fill presets */}
+      <div className="mb-4 flex flex-wrap gap-2">
+        {PRESETS.map(p => (
+          <button key={p.label} onClick={() => applyPreset(p)}
+            className="rounded-lg border px-3 py-1.5 text-xs font-semibold transition"
+            style={{ borderColor: 'var(--mv-purple-200)', background: 'var(--mv-purple-100)', color: 'var(--mv-purple)' }}
+            onMouseEnter={e => e.currentTarget.style.background = 'var(--mv-purple-200)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'var(--mv-purple-100)'}>
+            {p.label}
           </button>
-
-          {error && <p style={{ marginTop: 14, background: 'rgba(233,30,140,0.08)', border: '1px solid var(--mv-magenta)', padding: '8px 12px', fontSize: 12.5, color: 'var(--mv-magenta-deep)' }}>{error}</p>}
-          {result && (
-            <pre style={{ marginTop: 16, maxHeight: 300, overflow: 'auto', whiteSpace: 'pre-wrap', background: 'var(--mv-bg)', border: '1px solid var(--mv-hairline-2)', padding: 12, fontSize: 12, color: 'var(--mv-ink)' }}>
-              {JSON.stringify(result, null, 2)}
-            </pre>
-          )}
-        </div>
+        ))}
       </div>
+
+      <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--mv-ink-52)' }}>Ticket number or id</label>
+      <input value={ticket} onChange={e => setTicket(e.target.value)} placeholder="e.g. 236"
+        className="mb-3 w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: 'var(--mv-hairline)' }} />
+
+      <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--mv-ink-52)' }}>Simulated sender</label>
+      <div className="mb-3 inline-flex rounded-lg p-1" style={{ background: 'var(--mv-bg)' }}>
+        {['customer', 'courier'].map(r => (
+          <button key={r} onClick={() => setRole(r)}
+            className={`rounded-md px-3 py-1 text-sm font-medium capitalize ${role === r ? 'shadow-sm' : ''}`}
+            style={{ background: role === r ? 'var(--mv-surface)' : 'transparent', color: role === r ? 'var(--mv-ink)' : 'var(--mv-ink-52)' }}>
+            {r}
+          </button>
+        ))}
+      </div>
+
+      <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--mv-ink-52)' }}>Sender handle (optional)</label>
+      <input value={sender} onChange={e => setSender(e.target.value)} placeholder="investigations@dpd.co.uk"
+        className="mb-3 w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: 'var(--mv-hairline)' }} />
+
+      <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--mv-ink-52)' }}>Subject</label>
+      <input value={subject} onChange={e => setSubject(e.target.value)}
+        className="mb-3 w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: 'var(--mv-hairline)' }} />
+
+      <label className="mb-1 block text-xs font-medium" style={{ color: 'var(--mv-ink-52)' }}>Body</label>
+      <textarea value={body} onChange={e => setBody(e.target.value)} rows={6}
+        className="mb-4 w-full rounded-lg border px-3 py-2 text-sm" style={{ borderColor: 'var(--mv-hairline)' }} />
+
+      <button onClick={run} disabled={running}
+        className="rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
+        style={{ background: 'var(--mv-purple)', color: 'var(--mv-on-brand)' }}>
+        {running ? 'Running…' : 'Submit Simulation'}
+      </button>
+
+      {error && <p className="mt-3 rounded-lg px-3 py-2 text-sm" style={{ background: 'var(--mv-magenta-100)', color: 'var(--mv-magenta-deep)' }}>{error}</p>}
+      {result && (
+        <pre className="mt-4 max-h-72 overflow-auto whitespace-pre-wrap rounded-lg p-3 text-xs" style={{ background: 'var(--mv-bg)', color: 'var(--mv-ink-78)' }}>
+          {JSON.stringify(result, null, 2)}
+        </pre>
+      )}
     </div>
   );
 }

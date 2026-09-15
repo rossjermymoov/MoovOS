@@ -31,7 +31,7 @@ export default function CountryPickerModal({ zone, onClose, onRefresh }) {
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(15,23,42,0.6)',
+        background: 'color-mix(in srgb, var(--mv-ink) 60%, transparent)',
         backdropFilter: 'blur(4px)',
         zIndex: 2000,
         display: 'flex',
@@ -43,13 +43,13 @@ export default function CountryPickerModal({ zone, onClose, onRefresh }) {
     >
       <div
         style={{
-          background: '#FFFFFF',
+          background: 'var(--mv-surface)',
           width: '100%',
           maxWidth: 620,
           maxHeight: '85vh',
           display: 'flex',
           flexDirection: 'column',
-          border: '2px solid #0F172A',
+          border: '2px solid var(--mv-ink)',
           boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
         }}
         onClick={(e) => e.stopPropagation()}
@@ -58,23 +58,23 @@ export default function CountryPickerModal({ zone, onClose, onRefresh }) {
         <div
           style={{
             padding: '16px 20px',
-            borderBottom: '2px solid #0F172A',
+            borderBottom: '2px solid var(--mv-ink)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            background: '#F8FAFC',
+            background: 'var(--mv-bg)',
           }}
         >
           <div>
-            <div className="mv-kicker" style={{ color: '#7B2FBE' }}>ZONE DESTINATIONS</div>
-            <h3 style={{ margin: '2px 0 0', fontSize: 16, fontWeight: 700, color: '#0F172A' }}>
-              Assign Countries — <span style={{ color: '#7B2FBE' }}>{zone.name}</span>
+            <div className="mv-kicker" style={{ color: 'var(--mv-purple)' }}>ZONE DESTINATIONS</div>
+            <h3 style={{ margin: '2px 0 0', fontSize: 16, fontWeight: 700, color: 'var(--mv-ink)' }}>
+              Assign Countries — <span style={{ color: 'var(--mv-purple)' }}>{zone.name}</span>
             </h3>
           </div>
           <button
             onClick={onClose}
             className="mv-btn mv-btn-secondary"
-            style={{ padding: '4px 8px', minHeight: 'auto', border: '1px solid #0F172A' }}
+            style={{ padding: '4px 8px', minHeight: 'auto', border: '1px solid var(--mv-ink)' }}
             aria-label="Close"
           >
             <X size={16} />
@@ -89,7 +89,7 @@ export default function CountryPickerModal({ zone, onClose, onRefresh }) {
                 style={{
                   fontSize: 11,
                   fontWeight: 700,
-                  color: '#64748B',
+                  color: 'var(--mv-ink-52)',
                   letterSpacing: '0.08em',
                   textTransform: 'uppercase',
                   marginBottom: 8,
@@ -107,16 +107,16 @@ export default function CountryPickerModal({ zone, onClose, onRefresh }) {
                         display: 'inline-flex',
                         alignItems: 'center',
                         gap: 6,
-                        background: '#F1F5F9',
-                        border: '1px solid #CBD5E1',
+                        background: 'var(--mv-bg)',
+                        border: '1px solid var(--mv-hairline-2)',
                         padding: '3px 8px',
                         fontSize: 12,
                         fontWeight: 600,
-                        color: '#0F172A',
+                        color: 'var(--mv-ink)',
                       }}
                     >
                       <span>{c.name}</span>
-                      <span className="mv-num" style={{ color: '#00C853', fontWeight: 700 }}>
+                      <span className="mv-num" style={{ color: 'var(--mv-green)', fontWeight: 700 }}>
                         {c.iso}
                       </span>
                       <button
@@ -125,7 +125,7 @@ export default function CountryPickerModal({ zone, onClose, onRefresh }) {
                         style={{
                           background: 'none',
                           border: 'none',
-                          color: '#E91E8C',
+                          color: 'var(--mv-magenta)',
                           cursor: 'pointer',
                           padding: 0,
                           display: 'flex',
@@ -148,7 +148,7 @@ export default function CountryPickerModal({ zone, onClose, onRefresh }) {
               style={{
                 fontSize: 11,
                 fontWeight: 700,
-                color: '#64748B',
+                color: 'var(--mv-ink-52)',
                 letterSpacing: '0.08em',
                 textTransform: 'uppercase',
                 marginBottom: 6,
@@ -156,8 +156,17 @@ export default function CountryPickerModal({ zone, onClose, onRefresh }) {
             >
               Add Countries
             </div>
-            <div className="mv-search" style={{ width: '100%', height: 36 }}>
-              <Search size={14} style={{ color: 'var(--mv-ink-45)', flexShrink: 0 }} />
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                border: '1px solid var(--mv-ink)',
+                background: 'var(--mv-surface)',
+                padding: '0 10px',
+                height: 36,
+              }}
+            >
+              <Search size={15} color="var(--mv-ink-52)" style={{ marginRight: 8 }} />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -177,7 +186,7 @@ export default function CountryPickerModal({ zone, onClose, onRefresh }) {
           </div>
 
           {/* Search results table */}
-          <div style={{ border: '1px solid #E2E8F0', maxHeight: 260, overflowY: 'auto' }}>
+          <div style={{ border: '1px solid var(--mv-hairline)', maxHeight: 260, overflowY: 'auto' }}>
             <table className="mv-table" style={{ margin: 0, borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
@@ -191,7 +200,7 @@ export default function CountryPickerModal({ zone, onClose, onRefresh }) {
                   <tr key={c.iso}>
                     <td style={{ padding: '7px 12px', fontWeight: 600 }}>{c.name}</td>
                     <td style={{ padding: '7px 12px' }}>
-                      <span className="mv-num" style={{ fontWeight: 700, color: '#7B2FBE' }}>
+                      <span className="mv-num" style={{ fontWeight: 700, color: 'var(--mv-purple)' }}>
                         {c.iso}
                       </span>
                     </td>
@@ -213,7 +222,7 @@ export default function CountryPickerModal({ zone, onClose, onRefresh }) {
                 ))}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={3} style={{ padding: 24, textAlign: 'center', color: '#64748B' }}>
+                    <td colSpan={3} style={{ padding: 24, textAlign: 'center', color: 'var(--mv-ink-52)' }}>
                       No countries match "{search}"
                     </td>
                   </tr>
@@ -227,10 +236,10 @@ export default function CountryPickerModal({ zone, onClose, onRefresh }) {
         <div
           style={{
             padding: '12px 20px',
-            borderTop: '1px solid #E2E8F0',
+            borderTop: '1px solid var(--mv-hairline)',
             display: 'flex',
             justifyContent: 'flex-end',
-            background: '#F8FAFC',
+            background: 'var(--mv-bg)',
           }}
         >
           <button onClick={onClose} className="mv-btn mv-btn-secondary" style={{ padding: '6px 18px', fontSize: 13 }}>

@@ -292,7 +292,7 @@ function RulesPanel({ surcharge, courierId }) {
       </div>
 
       {rules.length === 0 && !addingRule && (
-        <div style={{ fontSize: 12, color: 'var(--mv-magenta-deep)', background: 'rgba(233,30,140,.06)', border: '1px solid rgba(233,30,140,.2)', padding: '8px 12px', marginBottom: 8 }}>
+        <div style={{ fontSize: 12, color: 'var(--mv-magenta-deep)', background: 'rgba(205,29,105,.06)', border: '1px solid rgba(205,29,105,.2)', padding: '8px 12px', marginBottom: 8 }}>
           <AlertTriangle size={12} style={{ marginRight: 6, verticalAlign: 'middle' }} />
           {surcharge.applies_when === 'always' ? 'No rules — surcharge will never auto-fire. Add at least one rule.' : 'No rules — surcharge will match any shipment during reconciliation.'}
         </div>

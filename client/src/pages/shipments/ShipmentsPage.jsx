@@ -255,7 +255,7 @@ export default function ShipmentsPage() {
               Shipments & Ingested Parcels
             </h1>
           </div>
-          <div style={{ fontSize: 13, color: 'var(--mv-ink-60)', marginTop: 4 }}>
+          <div style={{ fontSize: 13, color: 'var(--mv-ink-62)', marginTop: 4 }}>
             Live stream of parcel webhooks, tracking barcodes, DC service codes, and linked billing charges.
           </div>
         </div>
@@ -326,7 +326,7 @@ export default function ShipmentsPage() {
         {/* Tile 2: Awaiting Reconciliation */}
         <div className="mv-kpi">
           <div className="mv-kpi-label">Awaiting Reconciliation</div>
-          <div className="mv-kpi-value mv-num" style={{ color: awaitingCount > 0 ? 'var(--mv-orange, #d97706)' : undefined }}>
+          <div className="mv-kpi-value mv-num" style={{ color: awaitingCount > 0 ? 'var(--mv-amber-deep)' : undefined }}>
             {awaitingCount.toLocaleString('en-GB')}
           </div>
           <div className="mv-kpi-sub">Booked & verified by tracking</div>
@@ -344,7 +344,7 @@ export default function ShipmentsPage() {
         {/* Tile 4: Total Gross Margin */}
         <div className="mv-kpi">
           <div className="mv-kpi-label">Total Gross Margin</div>
-          <div className="mv-kpi-value mv-num" style={{ color: totalMargin >= 0 ? 'var(--mv-green-deep, #059669)' : 'var(--mv-magenta-deep, #dc2626)' }}>
+          <div className="mv-kpi-value mv-num" style={{ color: totalMargin >= 0 ? 'var(--mv-green-deep)' : 'var(--mv-magenta-deep)' }}>
             £{totalMargin.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
           <div className="mv-kpi-sub">Sell revenue minus buy cost</div>
@@ -353,7 +353,7 @@ export default function ShipmentsPage() {
         {/* Tile 5: Gross Margin Percentage */}
         <div className="mv-kpi">
           <div className="mv-kpi-label">Gross Margin %</div>
-          <div className="mv-kpi-value mv-num" style={{ color: marginPct >= 0 ? 'var(--mv-green-deep, #059669)' : 'var(--mv-magenta-deep, #dc2626)' }}>
+          <div className="mv-kpi-value mv-num" style={{ color: marginPct >= 0 ? 'var(--mv-green-deep)' : 'var(--mv-magenta-deep)' }}>
             {marginPct}%
           </div>
           <div className="mv-kpi-sub">Blended profit margin</div>
@@ -364,8 +364,8 @@ export default function ShipmentsPage() {
 
       {/* ── Filter Bar ──────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16 }}>
-        <div className="mv-search" style={{ flex: 1, maxWidth: 360, height: 36 }}>
-          <Search size={14} style={{ color: 'var(--mv-ink-45)', flexShrink: 0 }} />
+        <div style={{ position: 'relative', flex: 1, maxWidth: 360 }}>
+          <Search size={14} style={{ position: 'absolute', left: 12, top: 10, color: 'var(--mv-ink-45)' }} />
           <input
             type="text"
             placeholder="Search tracking, reference, customer, service…"
@@ -436,13 +436,13 @@ export default function ShipmentsPage() {
         <tbody>
           {loading ? (
             <tr>
-              <td colSpan={13} style={{ textAlign: 'center', padding: '36px 0', color: 'var(--mv-ink-50)' }}>
+              <td colSpan={13} style={{ textAlign: 'center', padding: '36px 0', color: 'var(--mv-ink-52)' }}>
                 Loading shipments...
               </td>
             </tr>
           ) : shipments.length === 0 ? (
             <tr>
-              <td colSpan={13} style={{ textAlign: 'center', padding: '48px 0', color: 'var(--mv-ink-50)' }}>
+              <td colSpan={13} style={{ textAlign: 'center', padding: '48px 0', color: 'var(--mv-ink-52)' }}>
                 <Package size={24} style={{ display: 'block', margin: '0 auto 8px', opacity: 0.4 }} />
                 <div style={{ fontWeight: 600, color: 'var(--mv-ink)', marginBottom: 4 }}>No shipments displayed currently</div>
                 <div style={{ fontSize: 12, color: 'var(--mv-ink-50)', marginBottom: 14 }}>
@@ -488,7 +488,7 @@ export default function ShipmentsPage() {
                   </td>
                   <td className="mv-num" style={{ fontSize: 12.5, whiteSpace: 'nowrap' }}>
                     {new Date(s.created_at).toLocaleDateString('en-GB')}
-                    <div style={{ fontSize: 11, color: 'var(--mv-ink-50)' }}>
+                    <div style={{ fontSize: 11, color: 'var(--mv-ink-52)' }}>
                       {new Date(s.created_at).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
                     </div>
                   </td>
@@ -504,7 +504,7 @@ export default function ShipmentsPage() {
                   </td>
                   <td>
                     <div style={{ fontWeight: 600 }}>{s.customer_display_name || s.customer_name || 'Unmapped Customer'}</div>
-                    <div style={{ fontSize: 11, color: 'var(--mv-ink-50)' }}>
+                    <div style={{ fontSize: 11, color: 'var(--mv-ink-52)' }}>
                       Acct: {s.customer_account || '—'}
                     </div>
                   </td>
@@ -515,7 +515,7 @@ export default function ShipmentsPage() {
                     <div style={{ fontWeight: 700, fontSize: 12.5 }}>
                       {s.dc_service_id || '—'}
                     </div>
-                    <div style={{ fontSize: 11, color: 'var(--mv-ink-50)' }}>
+                    <div style={{ fontSize: 11, color: 'var(--mv-ink-52)' }}>
                       {s.service_name || '—'}
                     </div>
                   </td>
@@ -526,14 +526,14 @@ export default function ShipmentsPage() {
                     <div style={{ fontSize: 12.5, fontWeight: 500 }}>
                       {s.ship_to_postcode || '—'} ({s.ship_to_country_iso || 'GB'})
                     </div>
-                    <div style={{ fontSize: 11, color: 'var(--mv-ink-50)', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div style={{ fontSize: 11, color: 'var(--mv-ink-52)', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {s.ship_to_name || '—'}
                     </div>
                   </td>
                   <td style={{ fontSize: 12 }} className="mv-num">
                     {s.reference || '—'}
                     {s.reference_2 && (
-                      <div style={{ fontSize: 10.5, color: 'var(--mv-ink-50)' }}>
+                      <div style={{ fontSize: 10.5, color: 'var(--mv-ink-52)' }}>
                         Ref2: {s.reference_2}
                       </div>
                     )}
@@ -548,7 +548,7 @@ export default function ShipmentsPage() {
                           </div>
                         )}
                       </div>
-                    ) : <span style={{ color: 'var(--mv-ink-40)' }}>—</span>}
+                    ) : <span style={{ color: 'var(--mv-ink-45)' }}>—</span>}
                   </td>
                   <td className="tar mv-num" style={{ fontWeight: 700 }}>
                     {sellVal != null ? (
@@ -566,7 +566,7 @@ export default function ShipmentsPage() {
                         )}
                       </div>
                     ) : (
-                      <span className="mv-chip" style={{ color: '#b91c1c', background: '#fef2f2', border: '1px solid #fecaca', fontSize: 11 }}>
+                      <span className="mv-chip" style={{ color: 'var(--mv-magenta-deep)', background: 'var(--mv-magenta-100)', border: '1px solid var(--mv-magenta-200)', fontSize: 11 }}>
                         Unpriced
                       </span>
                     )}
@@ -585,7 +585,7 @@ export default function ShipmentsPage() {
                     <button
                       onClick={() => handleDeleteShipment(s.id)}
                       className="mv-btn-ghost"
-                      style={{ padding: '4px 6px', color: 'var(--mv-ink-40)' }}
+                      style={{ padding: '4px 6px', color: 'var(--mv-ink-45)' }}
                       title="Delete"
                     >
                       <Trash2 size={13} />
@@ -649,302 +649,273 @@ export default function ShipmentsPage() {
          </div>
        </div>
 
-       {/* ── Inject Sample Modal ─────────────────────────────────────────── */}
-       {showInjectModal && (
-         <div style={{
-           position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
-           display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
-         }}>
-           <div style={{
-             background: '#fff', width: 560, border: '2px solid var(--mv-divider)',
-             padding: 24, boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
-           }}>
-             <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 8px 0' }}>
-               Inject DPD Invoice Test Shipments
-             </h2>
-             <p style={{ fontSize: 13, color: 'var(--mv-ink-60)', margin: '0 0 16px 0', lineHeight: 1.5 }}>
-               This tool creates sample parcel shipments matching the DPD invoice lines and assigns them to a chosen customer.
-             </p>
+      {/* ── Inject Sample Modal ─────────────────────────────────────────── */}
+      {showInjectModal && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
+        }}>
+          <div style={{
+            background: '#fff', width: 560, border: '2px solid var(--mv-divider)',
+            padding: 24, boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
+          }}>
+            <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 8px 0' }}>
+              Inject DPD Invoice Test Shipments
+            </h2>
+            <p style={{ fontSize: 13, color: 'var(--mv-ink-62)', margin: '0 0 16px 0', lineHeight: 1.5 }}>
+              This tool creates sample parcel shipments matching the DPD invoice lines and assigns them to a chosen customer.
+            </p>
 
-             <div style={{ marginBottom: 20 }}>
-               <label style={{ display: 'block', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', marginBottom: 6 }}>
-                 Select Customer Account
-               </label>
-               <select
-                 value={selectedCustomerId}
-                 onChange={e => setSelectedCustomerId(e.target.value)}
-                 className="mv-input"
-                 style={{ width: '100%', height: 38, fontSize: 13 }}
-               >
-                 <option value="">-- Pick Customer --</option>
-                 {customers.map(c => (
-                   <option key={c.id} value={c.id}>
-                     {c.company_name || c.trading_name || c.business_name || c.name} ({c.account_number || 'No Account #'})
-                   </option>
-                 ))}
-               </select>
-             </div>
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 700, textTransform: 'uppercase', marginBottom: 6 }}>
+                Select Customer Account
+              </label>
+              <select
+                value={selectedCustomerId}
+                onChange={e => setSelectedCustomerId(e.target.value)}
+                className="mv-input"
+                style={{ width: '100%', height: 38, fontSize: 13 }}
+              >
+                <option value="">-- Pick Customer --</option>
+                {customers.map(c => (
+                  <option key={c.id} value={c.id}>
+                    {c.company_name || c.trading_name || c.business_name || c.name} ({c.account_number || 'No Account #'})
+                  </option>
+                ))}
+              </select>
+            </div>
 
-             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-               <button
-                 onClick={() => setShowInjectModal(false)}
-                 className="mv-btn-ghost"
-                 disabled={injecting}
-               >
-                 Cancel
-               </button>
-               <button
-                 onClick={handleInjectSample}
-                 className="mv-btn"
-                 disabled={injecting || !selectedCustomerId}
-               >
-                 {injecting ? 'Injecting...' : 'Inject Sample Shipments'}
-               </button>
-             </div>
-           </div>
-         </div>
-       )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button
+                onClick={() => setShowInjectModal(false)}
+                className="mv-btn-ghost"
+                disabled={injecting}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleInjectSample}
+                className="mv-btn"
+                disabled={injecting || !selectedCustomerId}
+              >
+                {injecting ? 'Injecting...' : 'Inject Sample Shipments'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
-       {/* ── Multi-Tab Payload & Pricing Audit Modal ────────────────────── */}
-       {selectedShipment && (
-         <div style={{
-           position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
-           display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
-         }}>
-           <div style={{
-             background: '#fff', width: 780, maxHeight: '88vh', border: '2px solid var(--mv-divider)',
-             display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
-           }}>
-             {/* Modal Header */}
-             <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--mv-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-               <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                 <CourierLogo courier={selectedShipment.courier} size={22} />
-                 <div>
-                   <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>
-                     Shipment {selectedShipment.tracking_codes?.[0] || selectedShipment.reference || selectedShipment.id}
-                   </h3>
-                   <div style={{ fontSize: 12, color: 'var(--mv-ink-60)', marginTop: 2 }}>
-                     Service Code: <strong>{selectedShipment.dc_service_id || 'DPD-12'}</strong> | Customer: <strong>{selectedShipment.customer_display_name || selectedShipment.customer_name || 'Cranswick'}</strong>
-                   </div>
-                 </div>
-               </div>
-               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                 <button
-                   onClick={() => handleRepriceSingle(selectedShipment.id)}
-                   disabled={repricingSingle}
-                   className="mv-btn"
-                   style={{ padding: '6px 12px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}
-                 >
-                   <Calculator size={13} /> {repricingSingle ? 'Calculating...' : 'Re-calculate Pricing'}
-                 </button>
-                 <button onClick={() => setSelectedShipment(null)} className="mv-btn-ghost" style={{ padding: '6px 10px' }}>
-                   ✕
-                 </button>
-               </div>
-             </div>
+      {/* ── Multi-Tab Payload & Pricing Audit Modal ────────────────────── */}
+      {selectedShipment && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
+        }}>
+          <div style={{
+            background: '#fff', width: 780, maxHeight: '88vh', border: '2px solid var(--mv-divider)',
+            display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
+          }}>
+            {/* Modal Header */}
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--mv-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <CourierLogo courier={selectedShipment.courier} size={22} />
+                <div>
+                  <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0 }}>
+                    Shipment {selectedShipment.tracking_codes?.[0] || selectedShipment.reference || selectedShipment.id}
+                  </h3>
+                  <div style={{ fontSize: 12, color: 'var(--mv-ink-62)', marginTop: 2 }}>
+                    Service Code: <strong>{selectedShipment.dc_service_id || 'DPD-12'}</strong> | Customer: <strong>{selectedShipment.customer_display_name || selectedShipment.customer_name || 'Cranswick'}</strong>
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button
+                  onClick={() => handleRepriceSingle(selectedShipment.id)}
+                  disabled={repricingSingle}
+                  className="mv-btn"
+                  style={{ padding: '6px 12px', fontSize: 12, display: 'flex', alignItems: 'center', gap: 5 }}
+                >
+                  <Calculator size={13} /> {repricingSingle ? 'Calculating...' : 'Re-calculate Pricing'}
+                </button>
+                <button onClick={() => setSelectedShipment(null)} className="mv-btn-ghost" style={{ padding: '6px 10px' }}>
+                  ✕
+                </button>
+              </div>
+            </div>
 
-             {/* Modal Tabs */}
-             <div style={{ display: 'flex', borderBottom: '1px solid var(--mv-border)', background: 'var(--mv-surface)' }}>
-               <button
-                 onClick={() => setActiveModalTab('pricing')}
-                 style={{
-                   padding: '10px 18px', fontSize: 13, fontWeight: 600, border: 'none', background: 'none', cursor: 'pointer',
-                   borderBottom: activeModalTab === 'pricing' ? '2px solid var(--mv-ink)' : '2px solid transparent',
-                   color: activeModalTab === 'pricing' ? 'var(--mv-ink)' : 'var(--mv-ink-60)'
-                 }}
-               >
-                 Pricing & Margin Audit
-               </button>
-               <button
-                 onClick={() => setActiveModalTab('response')}
-                 style={{
-                   padding: '10px 18px', fontSize: 13, fontWeight: 600, border: 'none', background: 'none', cursor: 'pointer',
-                   borderBottom: activeModalTab === 'response' ? '2px solid var(--mv-ink)' : '2px solid transparent',
-                   color: activeModalTab === 'response' ? 'var(--mv-ink)' : 'var(--mv-ink-60)'
-                 }}
-               >
-                 Carrier Response JSON
-               </button>
-               <button
-                 onClick={() => setActiveModalTab('raw')}
-                 style={{
-                   padding: '10px 18px', fontSize: 13, fontWeight: 600, border: 'none', background: 'none', cursor: 'pointer',
-                   borderBottom: activeModalTab === 'raw' ? '2px solid var(--mv-ink)' : '2px solid transparent',
-                   color: activeModalTab === 'raw' ? 'var(--mv-ink)' : 'var(--mv-ink-60)'
-                 }}
-               >
-                 Raw Webhook Payload
-               </button>
-             </div>
+            {/* Modal Tabs */}
+            <div style={{ display: 'flex', borderBottom: '1px solid var(--mv-border)', background: 'var(--mv-surface)' }}>
+              <button
+                onClick={() => setActiveModalTab('pricing')}
+                style={{
+                  padding: '10px 18px', fontSize: 13, fontWeight: 600, border: 'none', background: 'none', cursor: 'pointer',
+                  borderBottom: activeModalTab === 'pricing' ? '2px solid var(--mv-ink)' : '2px solid transparent',
+                  color: activeModalTab === 'pricing' ? 'var(--mv-ink)' : 'var(--mv-ink-62)'
+                }}
+              >
+                Pricing & Margin Audit
+              </button>
+              <button
+                onClick={() => setActiveModalTab('response')}
+                style={{
+                  padding: '10px 18px', fontSize: 13, fontWeight: 600, border: 'none', background: 'none', cursor: 'pointer',
+                  borderBottom: activeModalTab === 'response' ? '2px solid var(--mv-ink)' : '2px solid transparent',
+                  color: activeModalTab === 'response' ? 'var(--mv-ink)' : 'var(--mv-ink-62)'
+                }}
+              >
+                Carrier Response JSON
+              </button>
+              <button
+                onClick={() => setActiveModalTab('raw')}
+                style={{
+                  padding: '10px 18px', fontSize: 13, fontWeight: 600, border: 'none', background: 'none', cursor: 'pointer',
+                  borderBottom: activeModalTab === 'raw' ? '2px solid var(--mv-ink)' : '2px solid transparent',
+                  color: activeModalTab === 'raw' ? 'var(--mv-ink)' : 'var(--mv-ink-62)'
+                }}
+              >
+                Raw Webhook Payload
+              </button>
+            </div>
 
-             {/* Modal Content */}
-             <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
-               {activeModalTab === 'pricing' && (
-                 <div>
-                   {(() => {
-                     const allSell = (selectedShipment.charges || []).reduce((sum, c) => sum + (Number(c.price) || 0), 0);
-                     const allCost = (selectedShipment.charges || []).reduce((sum, c) => sum + (Number(c.cost_price) || 0), 0);
-                     const allMargin = allSell - allCost;
-                     const allMarginPct = allSell > 0 ? ((allMargin / allSell) * 100).toFixed(1) : null;
+            {/* Modal Content */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
+              {activeModalTab === 'pricing' && (
+                <div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
+                    <div className="mv-card" style={{ padding: 14, background: 'var(--mv-surface)' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--mv-ink-62)', textTransform: 'uppercase' }}>Customer Sell Price</div>
+                      <div style={{ fontSize: 22, fontWeight: 800, marginTop: 4 }} className="mv-num">
+                        {selectedShipment.charges?.[0]?.price != null ? `£${Number(selectedShipment.charges[0].price).toFixed(2)}` : '£0.00'}
+                      </div>
+                      <div style={{ fontSize: 11.5, color: 'var(--mv-ink-52)', marginTop: 2 }}>
+                        Billed to {selectedShipment.customer_display_name || selectedShipment.customer_name || 'Customer'}
+                      </div>
+                    </div>
 
-                     return (
-                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12, marginBottom: 20 }}>
-                         <div className="mv-card" style={{ padding: 14, background: 'var(--mv-surface)' }}>
-                           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--mv-ink-60)', textTransform: 'uppercase' }}>Total Customer Sell Price</div>
-                           <div style={{ fontSize: 22, fontWeight: 800, marginTop: 4 }} className="mv-num">
-                             £{allSell.toFixed(2)}
-                           </div>
-                           <div style={{ fontSize: 11.5, color: 'var(--mv-ink-50)', marginTop: 2 }}>
-                             Billed to {selectedShipment.customer_display_name || selectedShipment.customer_name || 'Customer'}
-                           </div>
-                         </div>
+                    <div className="mv-card" style={{ padding: 14, background: 'var(--mv-surface)' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--mv-ink-62)', textTransform: 'uppercase' }}>Carrier Buy Cost</div>
+                      <div style={{ fontSize: 22, fontWeight: 800, marginTop: 4 }} className="mv-num">
+                        {selectedShipment.charges?.[0]?.cost_price != null ? `£${Number(selectedShipment.charges[0].cost_price).toFixed(2)}` : '£0.00'}
+                      </div>
+                      <div style={{ fontSize: 11.5, color: 'var(--mv-ink-52)', marginTop: 2 }}>
+                        Payable to {selectedShipment.courier || 'DPD'}
+                      </div>
+                    </div>
 
-                         <div className="mv-card" style={{ padding: 14, background: 'var(--mv-surface)' }}>
-                           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--mv-ink-60)', textTransform: 'uppercase' }}>Total Carrier Buy Cost</div>
-                           <div style={{ fontSize: 22, fontWeight: 800, marginTop: 4 }} className="mv-num">
-                             £{allCost.toFixed(2)}
-                           </div>
-                           <div style={{ fontSize: 11.5, color: 'var(--mv-ink-50)', marginTop: 2 }}>
-                             Payable to {selectedShipment.courier || 'DPD'}
-                           </div>
-                         </div>
+                    <div className="mv-card" style={{ padding: 14, background: 'var(--mv-surface)' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--mv-ink-62)', textTransform: 'uppercase' }}>Profit Margin</div>
+                      {(() => {
+                        const sVal = selectedShipment.charges?.[0]?.price != null ? Number(selectedShipment.charges[0].price) : null;
+                        const cVal = selectedShipment.charges?.[0]?.cost_price != null ? Number(selectedShipment.charges[0].cost_price) : null;
+                        const mVal = (sVal != null && cVal != null) ? (sVal - cVal) : null;
+                        const pct = (sVal && mVal != null) ? ((mVal / sVal) * 100).toFixed(1) : null;
+                        return (
+                          <>
+                            <div style={{ fontSize: 22, fontWeight: 800, marginTop: 4, color: mVal >= 0 ? 'var(--mv-green)' : 'var(--mv-red)' }} className="mv-num">
+                              {mVal != null ? `${mVal >= 0 ? '+' : ''}£${mVal.toFixed(2)}` : '—'}
+                            </div>
+                            <div style={{ fontSize: 11.5, color: 'var(--mv-ink-52)', marginTop: 2 }}>
+                              {pct != null ? `${pct}% margin` : 'Awaiting rate calculation'}
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </div>
 
-                         <div className="mv-card" style={{ padding: 14, background: 'var(--mv-surface)' }}>
-                           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--mv-ink-60)', textTransform: 'uppercase' }}>Total Profit Margin</div>
-                           <div style={{ fontSize: 22, fontWeight: 800, marginTop: 4, color: allMargin >= 0 ? 'var(--mv-green)' : 'var(--mv-red)' }} className="mv-num">
-                             {allMargin >= 0 ? '+' : ''}£{allMargin.toFixed(2)}
-                           </div>
-                           <div style={{ fontSize: 11.5, color: 'var(--mv-ink-50)', marginTop: 2 }}>
-                             {allMarginPct != null ? `${allMarginPct}% gross margin` : 'Awaiting rate calculation'}
-                           </div>
-                         </div>
-                       </div>
-                     );
-                   })()}
+                  {/* Audit Details */}
+                  <h4 style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', marginBottom: 10 }}>
+                    Matching & Resolution Audit
+                  </h4>
+                  <table className="mv-table" style={{ fontSize: 12.5, marginBottom: 20 }}>
+                    <tbody>
+                      <tr>
+                        <td style={{ width: 160, fontWeight: 600, color: 'var(--mv-ink-62)' }}>Matched Service Code</td>
+                        <td><code>{selectedShipment.dc_service_id || 'DPD-12'}</code> ({selectedShipment.service_name || 'DPD Domestic Parcel Next Day'})</td>
+                      </tr>
+                      <tr>
+                        <td style={{ fontWeight: 600, color: 'var(--mv-ink-62)' }}>Weight & Parcels</td>
+                        <td>{selectedShipment.total_weight_kg || 1} kg ({selectedShipment.parcel_count || 1} parcel)</td>
+                      </tr>
+                      <tr>
+                        <td style={{ fontWeight: 600, color: 'var(--mv-ink-62)' }}>Destination Postcode</td>
+                        <td>{selectedShipment.ship_to_postcode || '—'} ({selectedShipment.ship_to_country_iso || 'GB'})</td>
+                      </tr>
+                      <tr>
+                        <td style={{ fontWeight: 600, color: 'var(--mv-ink-62)' }}>Matched Customer ID</td>
+                        <td><code>{selectedShipment.customer_id || 'Not linked'}</code></td>
+                      </tr>
+                    </tbody>
+                  </table>
 
-                   {/* Audit Details */}
-                   <h4 style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', marginBottom: 10 }}>
-                     Matching & Resolution Audit
-                   </h4>
-                   <table className="mv-table" style={{ fontSize: 12.5, marginBottom: 20 }}>
-                     <tbody>
-                       <tr>
-                         <td style={{ width: 160, fontWeight: 600, color: 'var(--mv-ink-60)' }}>Matched Service Code</td>
-                         <td><code>{selectedShipment.dc_service_id || 'DPD-12'}</code> ({selectedShipment.service_name || 'DPD Domestic Parcel Next Day'})</td>
-                       </tr>
-                       <tr>
-                         <td style={{ fontWeight: 600, color: 'var(--mv-ink-60)' }}>Weight & Parcels</td>
-                         <td>{selectedShipment.total_weight_kg || 1} kg ({selectedShipment.parcel_count || 1} parcel)</td>
-                       </tr>
-                       <tr>
-                         <td style={{ fontWeight: 600, color: 'var(--mv-ink-60)' }}>Destination Postcode</td>
-                         <td>{selectedShipment.ship_to_postcode || '—'} ({selectedShipment.ship_to_country_iso || 'GB'})</td>
-                       </tr>
-                       <tr>
-                         <td style={{ fontWeight: 600, color: 'var(--mv-ink-60)' }}>Matched Customer ID</td>
-                         <td><code>{selectedShipment.customer_id || 'Not linked'}</code></td>
-                       </tr>
-                     </tbody>
-                   </table>
+                  {/* Charges list */}
+                  <h4 style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', marginBottom: 10 }}>
+                    Linked Charges & Surcharges ({selectedShipment.charges?.length || 0})
+                  </h4>
+                  {selectedShipment.charges?.length ? (
+                    <table className="mv-table" style={{ fontSize: 12.5 }}>
+                      <thead>
+                        <tr>
+                          <th>Description</th>
+                          <th>Charge Type</th>
+                          <th className="tar">Cost Price</th>
+                          <th className="tar">Sell Price</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedShipment.charges.map((c, idx) => (
+                          <tr key={c.id || idx}>
+                            <td style={{ fontWeight: 600 }}>{c.description || 'Base Delivery'}</td>
+                            <td><span className="mv-chip">{c.charge_type}</span></td>
+                            <td className="tar mv-num">£{Number(c.cost_price || 0).toFixed(2)}</td>
+                            <td className="tar mv-num" style={{ fontWeight: 700 }}>£{Number(c.price || 0).toFixed(2)}</td>
+                            <td><span className={`mv-state ${c.verified ? 'settled' : 'waiting'}`} /> {c.status}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <div style={{ padding: 14, background: 'var(--mv-magenta-100)', border: '1px solid var(--mv-magenta-200)', borderRadius: 4, color: 'var(--mv-magenta-deep)', fontSize: 12.5 }}>
+                      No charges currently generated for this shipment. Click <strong>"Re-calculate Pricing"</strong> above to apply customer rates.
+                    </div>
+                  )}
+                </div>
+              )}
 
-                   {/* Charges list */}
-                   <h4 style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', marginBottom: 10 }}>
-                     Linked Charges & Surcharges ({selectedShipment.charges?.length || 0})
-                   </h4>
-                   {selectedShipment.charges?.length ? (
-                     <table className="mv-table" style={{ fontSize: 12.5 }}>
-                       <thead>
-                         <tr>
-                           <th>Description</th>
-                           <th>Charge Type</th>
-                           <th className="tar">Cost Price</th>
-                           <th className="tar">Sell Price</th>
-                           <th className="tar">Margin</th>
-                           <th>Status</th>
-                         </tr>
-                       </thead>
-                       <tbody>
-                         {selectedShipment.charges.map((c, idx) => {
-                           const cSell = Number(c.price || 0);
-                           const cCost = Number(c.cost_price || 0);
-                           const cMarg = cSell - cCost;
+              {activeModalTab === 'response' && (
+                <div>
+                  <div style={{ marginBottom: 12, fontSize: 12.5, color: 'var(--mv-ink-62)' }}>
+                    Carrier response details extracted from the webhook payload:
+                  </div>
+                  <pre style={{
+                    background: 'var(--mv-surface)', padding: 14, borderRadius: 4,
+                    fontSize: 12, fontFamily: 'monospace', margin: 0, overflow: 'auto'
+                  }}>
+                    {(() => {
+                      const raw = selectedShipment.raw_payload;
+                      let resp = raw?.response || raw?.json?.response || null;
+                      if (typeof resp === 'string') {
+                        try { resp = JSON.parse(resp); } catch (_) {}
+                      }
+                      return JSON.stringify(resp || { message: 'No carrier response embedded in this payload' }, null, 2);
+                    })()}
+                  </pre>
+                </div>
+              )}
 
-                           const chargeLabel = c.service_name || (c.charge_type === 'courier'
-                             ? `${selectedShipment.service_name || 'Base Courier Delivery'} (${selectedShipment.dc_service_id || 'DPD'})`
-                             : 'Carrier Surcharge');
-
-                           return (
-                             <tr key={c.id || idx}>
-                               <td style={{ fontWeight: 600 }}>
-                                 {chargeLabel}
-                                 {c.price_failure_reason && (
-                                   <div style={{ fontSize: 11, color: '#dc2626', fontWeight: 400 }}>
-                                     {c.price_failure_reason}
-                                   </div>
-                                 )}
-                               </td>
-                               <td><span className="mv-chip">{c.charge_type}</span></td>
-                               <td className="tar mv-num">£{cCost.toFixed(2)}</td>
-                               <td className="tar mv-num" style={{ fontWeight: 700 }}>£{cSell.toFixed(2)}</td>
-                               <td className="tar mv-num" style={{ fontWeight: 600, color: cMarg >= 0 ? 'var(--mv-green)' : 'var(--mv-red)' }}>
-                                 {cMarg >= 0 ? '+' : ''}£{cMarg.toFixed(2)}
-                               </td>
-                               <td><span className={`mv-state ${c.verified ? 'settled' : 'waiting'}`} /> {c.status || (c.verified ? 'verified' : 'pending')}</td>
-                             </tr>
-                           );
-                         })}
-                       </tbody>
-                     </table>
-                   ) : (
-                     <div style={{ padding: 14, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 4, color: '#991b1b', fontSize: 12.5 }}>
-                       No charges currently generated for this shipment. Click <strong>"Re-calculate Pricing"</strong> above to apply customer rates.
-                     </div>
-                   )}
-                 </div>
-               )}
-
-               {activeModalTab === 'response' && (
-                 <div>
-                   <div style={{ marginBottom: 12, fontSize: 12.5, color: 'var(--mv-ink-60)' }}>
-                     Carrier response details extracted from the webhook payload:
-                   </div>
-                   <pre style={{
-                     background: 'var(--mv-surface)', padding: 14, borderRadius: 4,
-                     fontSize: 12, fontFamily: 'monospace', margin: 0, overflow: 'auto'
-                   }}>
-                     {(() => {
-                       let raw = selectedShipment.raw_payload;
-                       if (typeof raw === 'string') {
-                         try { raw = JSON.parse(raw); } catch (_) {}
-                       }
-                       let resp = raw?.response || raw?.json?.response || null;
-                       if (typeof resp === 'string') {
-                         try { resp = JSON.parse(resp); } catch (_) {}
-                       }
-                       return JSON.stringify(resp || { message: 'No carrier response embedded in this payload' }, null, 2);
-                     })()}
-                   </pre>
-                 </div>
-               )}
-
-               {activeModalTab === 'raw' && (
-                 <pre style={{
-                   background: 'var(--mv-surface)', padding: 14, borderRadius: 4,
-                   fontSize: 12, fontFamily: 'monospace', margin: 0, overflow: 'auto', maxHeight: '55vh'
-                 }}>
-                   {(() => {
-                     let raw = selectedShipment.raw_payload;
-                     if (typeof raw === 'string') {
-                       try { raw = JSON.parse(raw); } catch (_) {}
-                     }
-                     return JSON.stringify(raw || selectedShipment, null, 2);
-                   })()}
-                 </pre>
-               )}
-             </div>
-           </div>
-         </div>
-       )}
-     </div>
-   );
+              {activeModalTab === 'raw' && (
+                <pre style={{
+                  background: 'var(--mv-surface)', padding: 14, borderRadius: 4,
+                  fontSize: 12, fontFamily: 'monospace', margin: 0, overflow: 'auto', maxHeight: '55vh'
+                }}>
+                  {JSON.stringify(selectedShipment.raw_payload || selectedShipment, null, 2)}
+                </pre>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }

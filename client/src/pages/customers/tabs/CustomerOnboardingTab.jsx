@@ -365,7 +365,7 @@ function ProcessTreeStepper({ onb, activeTracks, trackStats, activeFilter, onSel
       <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1.4fr auto 1fr', alignItems: 'center', gap: 12 }}>
         {/* Node 1: Core Trunk */}
         <div onClick={() => onSelectTrack(activeFilter === 'core' ? 'all' : 'core')} style={{
-          background: '#FFFFFF',
+          background: 'var(--mv-surface)',
           border: '1px solid var(--mv-hairline)',
           borderLeft: `3px solid ${activeFilter === 'core' ? 'var(--mv-purple)' : 'var(--mv-divider)'}`,
           padding: 12, cursor: 'pointer',
@@ -391,7 +391,7 @@ function ProcessTreeStepper({ onb, activeTracks, trackStats, activeFilter, onSel
             const isAct = activeFilter === trKey;
             return (
               <div key={trKey} onClick={() => onSelectTrack(isAct ? 'all' : trKey)} style={{
-                background: '#FFFFFF',
+                background: 'var(--mv-surface)',
                 border: '1px solid var(--mv-hairline)',
                 borderLeft: `3px solid ${isAct ? 'var(--mv-purple)' : 'var(--mv-green)'}`,
                 padding: '8px 10px', cursor: 'pointer',
@@ -415,7 +415,7 @@ function ProcessTreeStepper({ onb, activeTracks, trackStats, activeFilter, onSel
 
         {/* Node 3: Go-Live Canopy */}
         <div onClick={() => onSelectTrack(activeFilter === 'golive' ? 'all' : 'golive')} style={{
-          background: '#FFFFFF',
+          background: 'var(--mv-surface)',
           border: '1px solid var(--mv-hairline)',
           borderLeft: `3px solid ${activeFilter === 'golive' ? 'var(--mv-purple)' : 'var(--mv-green)'}`,
           padding: 12, cursor: 'pointer',
@@ -493,20 +493,20 @@ function DpdCollectionCard({ onb, onChange }) {
       </div>
 
       {!editing ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, fontSize: 12 }}>
-          <div style={{ background: '#FFFFFF', padding: '9px 12px', border: '1px solid var(--mv-hairline)' }}>
+        <div style={{ display: 'flex', fontSize: 12 }}>
+          <div style={{ flex: 1, padding: '0 14px 0 0' }}>
             <div className="mv-label">Requested Window</div>
             <div style={{ fontSize: 13, fontWeight: 700, marginTop: 3 }}>{window}</div>
           </div>
-          <div style={{ background: '#FFFFFF', padding: '9px 12px', border: '1px solid var(--mv-hairline)' }}>
+          <div style={{ flex: 1, padding: '0 14px', borderLeft: '1px solid var(--mv-hairline)' }}>
             <div className="mv-label">Parcels / Day</div>
             <div className="mv-num" style={{ fontSize: 13, fontWeight: 700, marginTop: 3 }}>{daily} pkts ({weekly}/wk)</div>
           </div>
-          <div style={{ background: '#FFFFFF', padding: '9px 12px', border: '1px solid var(--mv-hairline)' }}>
+          <div style={{ flex: 1, padding: '0 14px', borderLeft: '1px solid var(--mv-hairline)' }}>
             <div className="mv-label">Avg Weight & Dims</div>
             <div className="mv-num" style={{ fontSize: 13, fontWeight: 700, marginTop: 3 }}>{weight}kg · {dims}cm</div>
           </div>
-          <div style={{ background: '#FFFFFF', padding: '9px 12px', border: '1px solid var(--mv-hairline)' }}>
+          <div style={{ flex: 1, padding: '0 0 0 14px', borderLeft: '1px solid var(--mv-hairline)' }}>
             <div className="mv-label">Agreed Depot Slot</div>
             <div style={{ fontSize: 13, fontWeight: 700, color: depotSlot ? 'var(--mv-green-deep)' : 'var(--mv-ink-45)', marginTop: 3 }}>
               {depotSlot || 'Pending agree'}
@@ -844,7 +844,7 @@ function TaskDetail({ task, onChange }) {
         <div className="mv-label">Notes</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 8 }}>
           {(task.notes || []).map(n => (
-            <div key={n.id} style={{ fontSize: 12, color: 'var(--mv-ink-78)', background: '#FFFFFF', padding: '7px 9px', border: '1px solid var(--mv-hairline)' }}>
+            <div key={n.id} style={{ fontSize: 12, color: 'var(--mv-ink-78)', padding: '7px 0 7px 9px', borderLeft: '2px solid var(--mv-hairline-2)' }}>
               <div>{n.body}</div>
               <div style={{ fontSize: 10, color: 'var(--mv-ink-45)', marginTop: 3 }}>{n.author_name || 'Team member'} · {new Date(n.created_at).toLocaleString('en-GB')}</div>
             </div>

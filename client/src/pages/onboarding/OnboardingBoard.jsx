@@ -282,7 +282,7 @@ function BoardCard({ card, nowMs, onOpen }) {
     <div
       onClick={onOpen}
       style={{
-        background: '#FFFFFF',
+        background: 'var(--mv-surface)',
         border: '1px solid var(--mv-hairline)',
         borderLeft: `3px solid ${leftAccent}`,
         padding: '13px 14px',
@@ -385,7 +385,7 @@ function ProcessTreeMap() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1.1fr auto 1.4fr auto 1.1fr', gap: 14, alignItems: 'center' }}>
         {/* Node 1: Core Trunk */}
-        <div style={{ background: '#FFFFFF', border: '1px solid var(--mv-hairline)', borderLeft: '3px solid var(--mv-purple)', padding: 12 }}>
+        <div style={{ background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline)', borderLeft: '3px solid var(--mv-purple)', padding: 12 }}>
           <div className="mv-section" style={{ marginBottom: 4 }}>1. Intake & Verification (Trunk)</div>
           <div style={{ fontSize: 12, color: 'var(--mv-ink-78)' }}>JotForm / Sheet Ingest · Credit Check · Sensei Sync · Welcome Email</div>
         </div>
@@ -395,14 +395,14 @@ function ProcessTreeMap() {
 
         {/* Node 2: Courier Branches */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <div style={{ background: '#FFFFFF', border: '1px solid var(--mv-hairline)', borderLeft: '3px solid var(--mv-green)', padding: '7px 10px', fontSize: 11.5 }}>
+          <div style={{ background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline)', borderLeft: '3px solid var(--mv-green)', padding: '7px 10px', fontSize: 11.5 }}>
             <strong style={{ color: 'var(--mv-green-deep)' }}>DPD Master:</strong> Collection Form · Slot Negotiation · Label Setup
           </div>
-          <div style={{ background: '#FFFFFF', border: '1px solid var(--mv-hairline)', borderLeft: '3px solid #3B82F6', padding: '7px 10px', fontSize: 11.5 }}>
-            <strong style={{ color: '#2563EB' }}>DPD Sub:</strong> Sub-Account Request · Direct Carrier Link
+          <div style={{ background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline)', borderLeft: '3px solid var(--mv-teal)', padding: '7px 10px', fontSize: 11.5 }}>
+            <strong style={{ color: 'var(--mv-teal)' }}>DPD Sub:</strong> Sub-Account Request · Direct Carrier Link
           </div>
-          <div style={{ background: '#FFFFFF', border: '1px solid var(--mv-hairline)', borderLeft: '3px solid #F59E0B', padding: '7px 10px', fontSize: 11.5 }}>
-            <strong style={{ color: '#B45309' }}>UPS Direct:</strong> DC ID Link · Collection Schedule · Customs
+          <div style={{ background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline)', borderLeft: '3px solid var(--mv-amber)', padding: '7px 10px', fontSize: 11.5 }}>
+            <strong style={{ color: 'var(--mv-amber-deep)' }}>UPS Direct:</strong> DC ID Link · Collection Schedule · Customs
           </div>
         </div>
 
@@ -410,7 +410,7 @@ function ProcessTreeMap() {
         <div style={{ color: 'var(--mv-ink-45)' }}><ArrowRight size={16} /></div>
 
         {/* Node 3: Go-Live Canopy */}
-        <div style={{ background: '#FFFFFF', border: '1px solid var(--mv-hairline)', borderLeft: '3px solid var(--mv-green)', padding: 12 }}>
+        <div style={{ background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline)', borderLeft: '3px solid var(--mv-green)', padding: 12 }}>
           <div className="mv-section" style={{ marginBottom: 4, color: 'var(--mv-green-deep)' }}>3. Go-Live & Care (Canopy)</div>
           <div style={{ fontSize: 12, color: 'var(--mv-ink-78)' }}>Confirm Go-Live · CS Intro · Day 1 Care · Invoicing Handover</div>
         </div>

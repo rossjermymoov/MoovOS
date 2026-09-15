@@ -229,7 +229,7 @@ export default function InvoiceReconciliationPage() {
               Invoice Reconciliation & Courier Auditing
             </h1>
           </div>
-          <div style={{ fontSize: 13, color: 'var(--mv-ink-60)', marginTop: 4 }}>
+          <div style={{ fontSize: 13, color: 'var(--mv-ink-62)', marginTop: 4 }}>
             Multi-carrier invoice ingestion, automated 4-way matching (Country, Postcode, Zone, Weight), and customer margin billing.
           </div>
         </div>
@@ -237,12 +237,12 @@ export default function InvoiceReconciliationPage() {
         <div style={{ display: 'flex', gap: 10 }}>
           <button
             onClick={handleLoadSampleDPD}
-            className="mv-btn-ghost"
+            className="mv-btn"
             style={{ padding: '8px 14px', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6 }}
           >
             <FileText size={14} /> Load Sample DPD Invoice
           </button>
-          <label className="mv-btn" style={{ padding: '8px 14px', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+          <label className="mv-btn mv-btn--primary" style={{ padding: '8px 14px', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
             <Upload size={14} /> Upload Carrier Invoice CSV
             <input type="file" accept=".csv,.txt" onChange={handleFileUpload} style={{ display: 'none' }} />
           </label>
@@ -250,26 +250,16 @@ export default function InvoiceReconciliationPage() {
       </div>
 
       {/* ── Tab Navigation ──────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', gap: 20, borderBottom: '1px solid var(--mv-divider)', marginBottom: 20 }}>
+      <div className="mv-tabs" style={{ marginBottom: 20, marginTop: 0 }}>
         <button
           onClick={() => setActiveTab('reconcile')}
-          className={`mv-tab-btn ${activeTab === 'reconcile' ? 'active' : ''}`}
-          style={{
-            padding: '8px 4px', fontSize: 13, fontWeight: 600, background: 'none', border: 'none',
-            borderBottom: activeTab === 'reconcile' ? '2px solid var(--mv-ink)' : '2px solid transparent',
-            color: activeTab === 'reconcile' ? 'var(--mv-ink)' : 'var(--mv-ink-50)', cursor: 'pointer'
-          }}
+          className={`mv-tab ${activeTab === 'reconcile' ? 'is-active' : ''}`}
         >
           Active Invoice Audit ({reconciledLines.length} lines)
         </button>
         <button
           onClick={() => setActiveTab('mapping')}
-          className={`mv-tab-btn ${activeTab === 'mapping' ? 'active' : ''}`}
-          style={{
-            padding: '8px 4px', fontSize: 13, fontWeight: 600, background: 'none', border: 'none',
-            borderBottom: activeTab === 'mapping' ? '2px solid var(--mv-ink)' : '2px solid transparent',
-            color: activeTab === 'mapping' ? 'var(--mv-ink)' : 'var(--mv-ink-50)', cursor: 'pointer'
-          }}
+          className={`mv-tab ${activeTab === 'mapping' ? 'is-active' : ''}`}
         >
           Carrier Column Mapping Studio
         </button>
@@ -279,7 +269,7 @@ export default function InvoiceReconciliationPage() {
       {activeTab === 'reconcile' && (
         <>
           {/* Summary KPIs */}
-          <div className="mv-kpi-strip" style={{ marginBottom: 20 }}>
+          <div className="mv-kpis" style={{ marginBottom: 20 }}>
             <div className="mv-kpi">
               <div className="mv-kpi-label">Total Carrier Invoiced</div>
               <div className="mv-kpi-value mv-num">£{summaryStats.totalInvoiced.toFixed(2)}</div>
@@ -290,22 +280,22 @@ export default function InvoiceReconciliationPage() {
             </div>
             <div className="mv-kpi">
               <div className="mv-kpi-label">Customer Re-Billed Total</div>
-              <div className="mv-kpi-value mv-num" style={{ color: 'var(--mv-blue, #2563eb)' }}>
+              <div className="mv-kpi-value mv-num" style={{ color: 'var(--mv-purple)' }}>
                 £{summaryStats.expectedSell.toFixed(2)}
               </div>
             </div>
             <div className="mv-kpi">
               <div className="mv-kpi-label">Gross Margin (£ / %)</div>
-              <div className="mv-kpi-value mv-num" style={{ color: summaryStats.expectedMargin >= 0 ? '#00C853' : '#FF5252' }}>
+              <div className="mv-kpi-value mv-num" style={{ color: summaryStats.expectedMargin >= 0 ? 'var(--mv-green-deep)' : 'var(--mv-magenta-deep)' }}>
                 £{summaryStats.expectedMargin.toFixed(2)} ({summaryStats.marginPct}%)
               </div>
             </div>
             <div className="mv-kpi">
               <div className="mv-kpi-label">Match vs Discrepancy</div>
               <div className="mv-kpi-value mv-num" style={{ fontSize: 18 }}>
-                <span style={{ color: '#00C853' }}>{summaryStats.matchedCount} Matched</span>
+                <span style={{ color: 'var(--mv-green-deep)' }}>{summaryStats.matchedCount} Matched</span>
                 {summaryStats.discrepancyCount > 0 && (
-                  <span style={{ color: '#FF9800', marginLeft: 8 }}>/ {summaryStats.discrepancyCount} Flagged</span>
+                  <span style={{ color: 'var(--mv-magenta-deep)', marginLeft: 8 }}>/ {summaryStats.discrepancyCount} Flagged</span>
                 )}
               </div>
             </div>
@@ -324,18 +314,18 @@ export default function InvoiceReconciliationPage() {
                 <th>Post Code</th>
                 <th>Zone</th>
                 <th>Weight</th>
-                <th className="tar">Invoiced Buy</th>
-                <th className="tar">Audited Buy</th>
+                <th className="is-right">Invoiced Buy</th>
+                <th className="is-right">Audited Buy</th>
                 <th>Surcharges Breakdown</th>
-                <th className="tar">Customer Sell</th>
-                <th className="tar">Total Billable</th>
-                <th className="tar">Margin</th>
+                <th className="is-right">Customer Sell</th>
+                <th className="is-right">Total Billable</th>
+                <th className="is-right">Margin</th>
               </tr>
             </thead>
             <tbody>
               {reconciledLines.length === 0 ? (
                 <tr>
-                  <td colSpan={13} style={{ textAlign: 'center', padding: '48px 0', color: 'var(--mv-ink-50)' }}>
+                  <td colSpan={13} style={{ textAlign: 'center', padding: '48px 0', color: 'var(--mv-ink-52)' }}>
                     <FileCheck size={28} style={{ display: 'block', margin: '0 auto 10px', opacity: 0.4 }} />
                     No invoice loaded. Upload a carrier CSV or click <strong>"Load Sample DPD Invoice"</strong> above to preview.
                   </td>
@@ -353,11 +343,11 @@ export default function InvoiceReconciliationPage() {
                       <div className="mv-num" style={{ fontWeight: 600, fontSize: 13 }}>
                         {line.tracking_number}
                       </div>
-                      <div style={{ fontSize: 11, color: 'var(--mv-ink-50)' }}>
+                      <div style={{ fontSize: 11, color: 'var(--mv-ink-52)' }}>
                         {line.shipment_date} | Cons: {line.consignment_number}
                       </div>
                       {line.senders_ref && (
-                        <div style={{ fontSize: 11, color: 'var(--mv-ink-70)' }}>
+                        <div style={{ fontSize: 11, color: 'var(--mv-ink-78)' }}>
                           Ref: {line.senders_ref}
                         </div>
                       )}
@@ -366,7 +356,7 @@ export default function InvoiceReconciliationPage() {
                       <CourierLogo courier={selectedCourier} service={line.service_desc} size={20} />
                     </td>
                     <td>
-                      <span className="mv-chip" style={{ fontWeight: 700, fontSize: 11.5, background: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0' }}>
+                      <span className="mv-chip" style={{ fontWeight: 700, fontSize: 11.5, background: 'var(--mv-purple-100)', color: 'var(--mv-green-deep)', border: '1px solid var(--mv-purple-200)' }}>
                         {line.country_code}
                       </span>
                     </td>
@@ -376,17 +366,17 @@ export default function InvoiceReconciliationPage() {
                       </span>
                     </td>
                     <td>
-                      <span className="mv-chip" style={{ fontSize: 11, background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                      <span className="mv-chip" style={{ fontSize: 11 }}>
                         {line.zone_name}
                       </span>
                     </td>
                     <td className="mv-num" style={{ fontSize: 12.5, fontWeight: 600 }}>
                       {line.billed_weight_kg} kg
                     </td>
-                    <td className="tar mv-num" style={{ fontWeight: 500 }}>
+                    <td className="is-right mv-num" style={{ fontWeight: 500 }}>
                       £{line.carrier_base_amount.toFixed(2)}
                     </td>
-                    <td className="tar mv-num" style={{ fontWeight: 600 }}>
+                    <td className="is-right mv-num" style={{ fontWeight: 600 }}>
                       £{line.expected_base_cost.toFixed(2)}
                     </td>
                     <td>
@@ -395,32 +385,32 @@ export default function InvoiceReconciliationPage() {
                           <span>Fuel: £{line.surcharges.fuel_and_energy.toFixed(2)}</span>
                         )}
                         {line.surcharges.carriage_charge > 0 && (
-                          <span style={{ color: 'var(--mv-ink-50)' }}>Carriage: £{line.surcharges.carriage_charge.toFixed(2)} (Absorbed)</span>
+                          <span style={{ color: 'var(--mv-ink-52)' }}>Carriage: £{line.surcharges.carriage_charge.toFixed(2)} (Absorbed)</span>
                         )}
                         {line.surcharges.global_energy_charge > 0 && (
                           <span>Global Energy: £{line.surcharges.global_energy_charge.toFixed(2)}</span>
                         )}
                         {line.surcharges.congestion > 0 && (
-                          <span style={{ color: '#E91E8C', fontWeight: 600 }}>Congestion: £{line.surcharges.congestion.toFixed(2)}</span>
+                          <span style={{ color: 'var(--mv-magenta-deep)', fontWeight: 600 }}>Congestion: £{line.surcharges.congestion.toFixed(2)}</span>
                         )}
                         {line.surcharges.fourth_party_collection > 0 && (
-                          <span style={{ color: '#E91E8C', fontWeight: 600 }}>4th Party Col: £{line.surcharges.fourth_party_collection.toFixed(2)}</span>
+                          <span style={{ color: 'var(--mv-magenta-deep)', fontWeight: 600 }}>4th Party Col: £{line.surcharges.fourth_party_collection.toFixed(2)}</span>
                         )}
                         {line.surcharges.clearance > 0 && (
                           <span>Clearance: £{line.surcharges.clearance.toFixed(2)}</span>
                         )}
                       </div>
                     </td>
-                    <td className="tar mv-num">
+                    <td className="is-right mv-num">
                       £{line.customer_sell_base.toFixed(2)}
-                      <div style={{ fontSize: 10.5, color: 'var(--mv-ink-50)' }}>
+                      <div style={{ fontSize: 10.5, color: 'var(--mv-ink-52)' }}>
                         +£{line.customer_fuel.toFixed(2)} fuel
                       </div>
                     </td>
-                    <td className="tar mv-num" style={{ fontWeight: 700 }}>
+                    <td className="is-right mv-num" style={{ fontWeight: 700 }}>
                       £{line.total_customer_sell.toFixed(2)}
                     </td>
-                    <td className="tar mv-num" style={{ fontWeight: 600, color: line.margin_gbp >= 0 ? '#00C853' : '#FF5252' }}>
+                    <td className="is-right mv-num" style={{ fontWeight: 600, color: line.margin_gbp >= 0 ? 'var(--mv-green-deep)' : 'var(--mv-magenta-deep)' }}>
                       £{line.margin_gbp.toFixed(2)}
                       <div style={{ fontSize: 10.5 }}>
                         ({line.margin_pct}%)
@@ -442,7 +432,7 @@ export default function InvoiceReconciliationPage() {
               <h2 style={{ fontSize: 17, fontWeight: 700, margin: '0 0 4px 0' }}>
                 Carrier Invoice Column & Surcharge Mapping Studio
               </h2>
-              <div style={{ fontSize: 13, color: 'var(--mv-ink-60)' }}>
+              <div style={{ fontSize: 13, color: 'var(--mv-ink-62)' }}>
                 Configure how CSV column headers for {selectedCourier} map to Moov OS internal schema and billing engine.
               </div>
             </div>
@@ -474,7 +464,7 @@ export default function InvoiceReconciliationPage() {
                 className="mv-input"
                 style={{ width: '100%', height: 36, fontSize: 13 }}
               />
-              <span style={{ fontSize: 11, color: 'var(--mv-ink-50)' }}>DPD default: "Parcel No"</span>
+              <span style={{ fontSize: 11, color: 'var(--mv-ink-52)' }}>DPD default: "Parcel No"</span>
             </div>
 
             <div>
@@ -488,7 +478,7 @@ export default function InvoiceReconciliationPage() {
                 className="mv-input"
                 style={{ width: '100%', height: 36, fontSize: 13 }}
               />
-              <span style={{ fontSize: 11, color: 'var(--mv-ink-50)' }}>DPD default: "Consignment"</span>
+              <span style={{ fontSize: 11, color: 'var(--mv-ink-52)' }}>DPD default: "Consignment"</span>
             </div>
 
             <div>
@@ -502,7 +492,7 @@ export default function InvoiceReconciliationPage() {
                 className="mv-input"
                 style={{ width: '100%', height: 36, fontSize: 13 }}
               />
-              <span style={{ fontSize: 11, color: 'var(--mv-ink-50)' }}>DPD default: "Revenue"</span>
+              <span style={{ fontSize: 11, color: 'var(--mv-ink-52)' }}>DPD default: "Revenue"</span>
             </div>
 
             <div>
@@ -516,7 +506,7 @@ export default function InvoiceReconciliationPage() {
                 className="mv-input"
                 style={{ width: '100%', height: 36, fontSize: 13 }}
               />
-              <span style={{ fontSize: 11, color: 'var(--mv-ink-50)' }}>DPD default: "Weight"</span>
+              <span style={{ fontSize: 11, color: 'var(--mv-ink-52)' }}>DPD default: "Weight"</span>
             </div>
 
             <div>
@@ -530,7 +520,7 @@ export default function InvoiceReconciliationPage() {
                 className="mv-input"
                 style={{ width: '100%', height: 36, fontSize: 13 }}
               />
-              <span style={{ fontSize: 11, color: 'var(--mv-ink-50)' }}>DPD default: "Delivery"</span>
+              <span style={{ fontSize: 11, color: 'var(--mv-ink-52)' }}>DPD default: "Delivery"</span>
             </div>
 
             <div>
@@ -544,7 +534,7 @@ export default function InvoiceReconciliationPage() {
                 className="mv-input"
                 style={{ width: '100%', height: 36, fontSize: 13 }}
               />
-              <span style={{ fontSize: 11, color: 'var(--mv-ink-50)' }}>DPD default: "Collection Post Code" (Used for shipper lookup)</span>
+              <span style={{ fontSize: 11, color: 'var(--mv-ink-52)' }}>DPD default: "Collection Post Code" (Used for shipper lookup)</span>
             </div>
           </div>
 

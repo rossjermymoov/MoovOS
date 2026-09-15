@@ -3,19 +3,40 @@
 @tailwind utilities;
 
 :root {
-  --bg-primary:     #F1F5F9;   /* deeper warm beige — page background */
+  /* Moov brand palette (moov-color-palette.md), light mode. See moov.css for
+     the same tokens/reasoning — this legacy layer mirrors them so its 11
+     files retint consistently with the rest of the app. */
+  --bg-primary:     #F7F8FA;
   --bg-secondary:   #FFFFFF;   /* white — cards */
-  --bg-surface:     #F1F5F9;   /* same as primary */
-  --accent-green:   #00C853;   /* brand green — keep for status indicators */
-  --accent-purple:  #7B2FBE;
-  --accent-magenta: #E91E8C;
-  --accent-amber:   #F59E0B;
-  --accent-teal:    #00BCD4;
-  --text-primary:   #0F172A;
-  --text-secondary: #334155;
-  --text-muted:     #94A3B8;
-  --border-subtle:  rgba(0,0,0,0.06);
-  --border-medium:  rgba(0,0,0,0.10);
+  --bg-surface:     #F7F8FA;   /* same as primary */
+  --accent-green:   #0F7A46;   /* brand green — status indicators */
+  --accent-purple:  #0F7A46;   /* brand green — was purple */
+  --accent-magenta: #CD1D69;   /* brand red — was magenta (alarm colour) */
+  --accent-amber:   #FECA00;
+  --accent-teal:    #276E93;   /* brand blue */
+  --on-brand:       #FFFFFF;   /* text/icons on a solid brand-green fill */
+  --text-primary:   #171B2D;
+  --text-secondary: #454957;
+  --text-muted:     #6B7280;
+  --border-subtle:  rgba(23,27,45,0.06);
+  --border-medium:  rgba(23,27,45,0.10);
+}
+
+:root[data-theme="dark"] {
+  --bg-primary:     #12141D;
+  --bg-secondary:   #171B2D;
+  --bg-surface:     #12141D;
+  --accent-green:   #1DFB9D;
+  --accent-purple:  #1DFB9D;
+  --accent-magenta: #DE6C9E;
+  --accent-amber:   #FECA00;
+  --accent-teal:    #73A1B9;
+  --on-brand:       #171B2D;
+  --text-primary:   #FDFFFF;
+  --text-secondary: #C6C7CD;
+  --text-muted:     #9FA2B4;
+  --border-subtle:  rgba(255,255,255,0.08);
+  --border-medium:  rgba(255,255,255,0.14);
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -35,23 +56,23 @@ body {
 /* ── Scrollbar ───────────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.12); border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.20); }
+::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--text-primary) 12%, transparent); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--text-primary) 20%, transparent); }
 
 /* ── Card ────────────────────────────────────────────────────────────────────── */
 /* Clean white card — no green border, no shadow */
 .moov-card {
-  background: #FFFFFF;
+  background: var(--bg-secondary);
   border-radius: 12px;
-  border: 0.5px solid rgba(0,0,0,0.08);
+  border: 0.5px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
 }
 
 /* ── Table ───────────────────────────────────────────────────────────────────── */
 .moov-table { width: 100%; border-collapse: collapse; }
 
 .moov-table thead tr {
-  background: #F1F5F9;
-  border-bottom: 0.5px solid rgba(0,0,0,0.08);
+  background: var(--bg-primary);
+  border-bottom: 0.5px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
 }
 .moov-table thead th {
   padding: 10px 16px;
@@ -64,16 +85,16 @@ body {
   letter-spacing: 0.05em;
 }
 .moov-table tbody tr {
-  border-bottom: 0.5px solid rgba(0,0,0,0.05);
+  border-bottom: 0.5px solid color-mix(in srgb, var(--text-primary) 5%, transparent);
   transition: background 0.08s;
 }
-.moov-table tbody tr:hover { background: rgba(0,0,0,0.02); cursor: pointer; }
+.moov-table tbody tr:hover { background: color-mix(in srgb, var(--text-primary) 4%, transparent); cursor: pointer; }
 .moov-table tbody td { padding: 12px 16px; font-size: 13px; color: var(--text-primary); }
 
 /* ── Buttons ─────────────────────────────────────────────────────────────────── */
 .btn-primary {
-  background: #0F172A;
-  color: #FFFFFF;
+  background: var(--accent-green);
+  color: var(--on-brand);
   font-weight: 500;
   border-radius: 8px;
   padding: 7px 16px;
@@ -95,7 +116,7 @@ body {
   border-radius: 8px;
   padding: 6px 14px;
   font-size: 13px;
-  border: 0.5px solid rgba(0,0,0,0.14);
+  border: 0.5px solid color-mix(in srgb, var(--text-primary) 14%, transparent);
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -103,10 +124,10 @@ body {
   min-height: 34px;
   transition: background 0.1s;
 }
-.btn-ghost:hover { background: rgba(0,0,0,0.04); }
+.btn-ghost:hover { background: color-mix(in srgb, var(--text-primary) 4%, transparent); }
 
 .btn-danger {
-  background: #991B1B;
+  background: #CD1D69;
   color: #FFFFFF;
   font-weight: 500;
   border-radius: 8px;
@@ -137,8 +158,8 @@ body {
 input:not([type="checkbox"]):not([type="radio"]),
 select,
 textarea {
-  background: #FFFFFF;
-  border: 0.5px solid rgba(0,0,0,0.12);
+  background: var(--bg-secondary);
+  border: 0.5px solid color-mix(in srgb, var(--text-primary) 12%, transparent);
   border-radius: 8px;
   color: var(--text-primary);
   outline: none;
@@ -152,7 +173,7 @@ textarea::placeholder {
 input:not([type="checkbox"]):not([type="radio"]):focus,
 select:focus,
 textarea:focus {
-  border-color: rgba(0,0,0,0.28);
+  border-color: color-mix(in srgb, var(--text-primary) 28%, transparent);
 }
 textarea {
   border-radius: 8px;
@@ -160,7 +181,7 @@ textarea {
 
 /* Option elements */
 option {
-  background: #FFFFFF;
+  background: var(--bg-secondary);
   color: var(--text-primary);
 }
 
@@ -168,9 +189,9 @@ option {
 .pill-input-wrap {
   display: flex;
   align-items: center;
-  background: var(--mv-surface, #eae9e9);
-  border-radius: 0 !important;
-  border: 1px solid var(--mv-hairline-2, rgba(0,0,0,0.18));
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  border: 0.5px solid color-mix(in srgb, var(--text-primary) 12%, transparent);
   overflow: hidden;
   transition: border-color 0.12s, box-shadow 0.12s;
 }
@@ -178,6 +199,7 @@ option {
   border-color: var(--mv-purple, #7B2FBE);
   box-shadow: 0 0 0 1px var(--mv-purple, #7B2FBE);
 }
+.pill-input-wrap:focus-within { border-color: color-mix(in srgb, var(--text-primary) 28%, transparent); }
 .pill-input-wrap input,
 .pill-input-wrap select {
   flex: 1;
@@ -195,8 +217,8 @@ option {
   border-color: transparent;
 }
 .pill-input-wrap .green-cap {
-  background: var(--mv-ink, #201e1d);
-  color: #FFFFFF;
+  background: var(--accent-green);
+  color: var(--on-brand);
   padding: 0 14px;
   height: 100%;
   display: flex;
@@ -210,16 +232,18 @@ option {
 
 /* ── Pill-select (standalone) ────────────────────────────────────────────────── */
 .pill-select {
-  background: var(--mv-surface, #eae9e9) !important;
-  border: 1px solid var(--mv-hairline-2, rgba(0,0,0,0.18)) !important;
-  border-radius: 0 !important;
-  padding: 6px 12px;
+  background: var(--bg-secondary) !important;
+  border: 0.5px solid color-mix(in srgb, var(--text-primary) 12%, transparent) !important;
+  border-radius: 8px !important;
+  color: var(--text-primary) !important;
+  padding: 7px 12px !important;
+  height: 36px;
   font-size: 13px;
   color: var(--text-primary);
   outline: none;
   cursor: pointer;
 }
-.pill-select:focus { border-color: rgba(0,0,0,0.28) !important; }
+.pill-select:focus { border-color: color-mix(in srgb, var(--text-primary) 28%, transparent) !important; }
 
 /* ── Calendar / time picker ──────────────────────────────────────────────────── */
 input[type="date"]::-webkit-calendar-picker-indicator,
@@ -232,5 +256,5 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 /* ── Focus ring ──────────────────────────────────────────────────────────────── */
 .focus-green:focus {
   outline: none;
-  box-shadow: 0 0 0 2px rgba(0,0,0,0.12);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--text-primary) 12%, transparent);
 }

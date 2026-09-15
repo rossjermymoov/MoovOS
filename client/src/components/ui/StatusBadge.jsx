@@ -31,12 +31,12 @@ export function TierBadge({ tier }) {
 }
 
 export function CreditUtilisationBar({ pct = 0 }) {
-  const color = pct >= 100 ? '#EF4444' : pct >= 80 ? '#F59E0B' : '#00C853';
+  const color = pct >= 100 ? 'var(--mv-magenta)' : pct >= 80 ? 'var(--mv-amber)' : 'var(--mv-green)';
   // Bar fills up to 110% scale so values over 100% visually overflow the track
   const barPct = Math.min((pct / 110) * 100, 100);
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-      <div style={{ flex: 1, height: 6, background: 'rgba(0,0,0,0.08)', borderRadius: 3, overflow: 'hidden' }}>
+      <div style={{ flex: 1, height: 6, background: 'color-mix(in srgb, var(--mv-ink) 8%, transparent)', borderRadius: 3, overflow: 'hidden' }}>
         <div style={{ width: `${barPct}%`, height: '100%', background: color, borderRadius: 3, transition: 'width 0.3s' }} />
       </div>
       <span style={{ fontSize: 12, color, fontWeight: 700, minWidth: 40, textAlign: 'right' }}>

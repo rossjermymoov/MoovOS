@@ -92,186 +92,201 @@ export default function BillingSettings() {
     setForm(f => ({ ...f, [key]: value }));
   }
 
-  if (isLoading) return <div style={{ color: '#64748B', padding: 24 }}>Loading…</div>;
+  if (isLoading) return <div style={{ color: 'var(--mv-ink-52)', padding: 24 }}>Loading…</div>;
 
   const inputStyle = {
-    background: 'var(--mv-bg)', border: '1px solid var(--mv-hairline-2)',
-    borderRadius: 0, padding: '7px 11px', color: 'var(--mv-ink)', fontSize: 13,
-    outline: 'none', width: '100%', boxSizing: 'border-box',
+    background: 'color-mix(in srgb, var(--mv-ink) 6%, transparent)', border: '1px solid var(--mv-hairline)',
+    borderRadius: 8, color: 'var(--mv-ink)', fontSize: 13, padding: '8px 12px',
+    outline: 'none', width: '100%',
   };
-  const labelStyle = { fontSize: 10, fontWeight: 800, color: 'var(--mv-ink-52)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 6, display: 'block' };
-  const sectionStyle = { background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)', borderRadius: 0, padding: '20px 22px', marginBottom: 16 };
+  const labelStyle = { fontSize: 12, fontWeight: 600, color: 'var(--mv-ink-52)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6, display: 'block' };
+  const sectionStyle = { background: 'color-mix(in srgb, var(--mv-ink) 3%, transparent)', border: '1px solid var(--mv-hairline)', borderRadius: 12, padding: '20px 24px', marginBottom: 16 };
 
   return (
-    <div className="mv-page">
-      <div className="mv-page-inner">
-        <SettingsNav />
+    <div style={{ maxWidth: 700 }}>
+      <SettingsNav />
 
-        <div className="mv-head">
+      <div style={{ marginBottom: 24 }}>
+        <h2 style={{ color: 'var(--mv-ink)', fontWeight: 700, fontSize: 18, margin: 0 }}>Billing Settings</h2>
+        <p style={{ color: 'var(--mv-ink-52)', fontSize: 13, margin: '6px 0 0' }}>
+          Configure when verified charges are automatically moved to <em>Awaiting Reconciliation</em>.
+        </p>
+      </div>
+
+      {/* Enabled toggle */}
+      <div style={sectionStyle}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
-            <div className="mv-kicker">Settings &amp; Finance</div>
-            <h1 className="mv-title">Billing Schedules</h1>
-            <p className="mv-blurb">
-              Configure automated invoice batching, reconciliation run frequency, and volume mix refresh cycles.
-            </p>
+            <div style={{ color: 'var(--mv-ink)', fontWeight: 600, fontSize: 14 }}>Automatic billing run</div>
+            <div style={{ color: 'var(--mv-ink-52)', fontSize: 12, marginTop: 3 }}>When enabled, the server runs the billing cycle on the schedule below.</div>
           </div>
-          <div className="mv-actions">
-            <button
-              onClick={() => { setRunResult(null); setRunError(null); runNowMutation.mutate(); }}
-              disabled={runNowMutation.isPending}
-              className="mv-btn-ghost"
-            >
-              <Play size={14} />
-              {runNowMutation.isPending ? 'Running…' : 'Run Cycle Now'}
-            </button>
-            <button
-              onClick={() => saveMutation.mutate(form)}
-              disabled={saveMutation.isPending}
-              className="mv-btn-primary"
-            >
-              {saved ? <CheckCircle size={14} /> : <Save size={14} />}
-              {saved ? 'Saved' : 'Save Settings'}
-            </button>
+          <button
+            onClick={() => field('enabled', !form.enabled)}
+            style={{
+              background: form.enabled ? 'var(--mv-purple-100)' : 'color-mix(in srgb, var(--mv-ink) 6%, transparent)',
+              border: `1px solid ${form.enabled ? 'var(--mv-purple-200)' : 'var(--mv-hairline)'}`,
+              borderRadius: 20, padding: '6px 18px', fontSize: 13, fontWeight: 700,
+              color: form.enabled ? 'var(--mv-green)' : 'var(--mv-ink-52)', cursor: 'pointer',
+            }}
+          >
+            {form.enabled ? 'Enabled' : 'Disabled'}
+          </button>
+        </div>
+      </div>
+
+      {/* Weekly / fortnightly schedule */}
+      <div style={sectionStyle}>
+        <div style={{ color: 'var(--mv-ink)', fontWeight: 600, fontSize: 14, marginBottom: 16 }}>Weekly &amp; fortnightly billing</div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div>
+            <label style={labelStyle}>Billing day</label>
+            <select value={form.billing_day_of_week} onChange={e => field('billing_day_of_week', parseInt(e.target.value))} style={inputStyle}>
+              {DAYS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={labelStyle}>Billing time</label>
+            <select value={form.billing_hour} onChange={e => field('billing_hour', parseInt(e.target.value))} style={inputStyle}>
+              {HOURS.map(h => <option key={h.value} value={h.value}>{h.label}</option>)}
+            </select>
           </div>
         </div>
-
-        <div className="mv-rule" style={{ marginBottom: 20 }} />
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(380px, 1fr))', gap: 20 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {/* Enabled toggle */}
-            <div style={sectionStyle}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div>
-                  <div style={{ color: 'var(--mv-ink)', fontWeight: 800, fontSize: 14 }}>Automatic Billing Run</div>
-                  <div style={{ color: 'var(--mv-ink-52)', fontSize: 12, marginTop: 3 }}>When enabled, the server runs the billing cycle on the schedule below.</div>
-                </div>
-                <button
-                  onClick={() => field('enabled', !form.enabled)}
-                  className={form.enabled ? 'mv-btn-primary' : 'mv-btn-ghost'}
-                  style={{ padding: '6px 16px', fontSize: 12 }}
-                >
-                  {form.enabled ? 'Enabled' : 'Disabled'}
-                </button>
-              </div>
-            </div>
-
-            {/* Weekly / fortnightly schedule */}
-            <div style={sectionStyle}>
-              <div style={{ color: 'var(--mv-ink)', fontWeight: 800, fontSize: 14, marginBottom: 16 }}>Weekly &amp; Fortnightly Billing</div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                <div>
-                  <label style={labelStyle}>Billing Day</label>
-                  <select value={form.billing_day_of_week} onChange={e => field('billing_day_of_week', parseInt(e.target.value))} style={inputStyle}>
-                    {DAYS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label style={labelStyle}>Billing Time</label>
-                  <select value={form.billing_hour} onChange={e => field('billing_hour', parseInt(e.target.value))} style={inputStyle}>
-                    {HOURS.map(h => <option key={h.value} value={h.value}>{h.label}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div style={{ marginTop: 16 }}>
-                <label style={labelStyle}>Fortnightly parity — which week runs for fortnightly customers?</label>
-                <div style={{ display: 'flex', gap: 10 }}>
-                  {[0, 1].map(p => (
-                    <button key={p} onClick={() => field('fortnightly_parity', p)} style={{
-                      flex: 1, padding: '8px 0', borderRadius: 0, fontSize: 13, fontWeight: 700, cursor: 'pointer',
-                      background: form.fortnightly_parity === p ? 'var(--mv-ink)' : 'var(--mv-bg)',
-                      border: `1px solid ${form.fortnightly_parity === p ? 'var(--mv-ink)' : 'var(--mv-hairline-2)'}`,
-                      color: form.fortnightly_parity === p ? 'var(--mv-bg)' : 'var(--mv-ink)',
-                    }}>
-                      Week {p === 0 ? 'A' : 'B'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Monthly schedule */}
-            <div style={sectionStyle}>
-              <div style={{ color: 'var(--mv-ink)', fontWeight: 800, fontSize: 14, marginBottom: 16 }}>Monthly Billing</div>
-              <div style={{ maxWidth: 220 }}>
-                <label style={labelStyle}>Day of Month</label>
-                <select value={form.monthly_billing_date} onChange={e => field('monthly_billing_date', parseInt(e.target.value))} style={inputStyle}>
-                  {Array.from({ length: 28 }, (_, i) => i + 1).map(d => (
-                    <option key={d} value={d}>{d}{d === 1 ? 'st' : d === 2 ? 'nd' : d === 3 ? 'rd' : 'th'} of the month</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {/* Next run preview */}
-            <div style={{ ...sectionStyle, background: 'var(--mv-surface)', border: '1px solid var(--mv-purple)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--mv-purple)' }}>
-                <Clock size={15} />
-                <span style={{ fontSize: 13, fontWeight: 700 }}>
-                  Next weekly run: {nextRunDate(form.billing_day_of_week, form.billing_hour, form.billing_minute)}
-                </span>
-              </div>
-              {settings?.last_run_at && (
-                <div style={{ color: 'var(--mv-ink-52)', fontSize: 12, marginTop: 6 }}>
-                  Last run: {new Date(settings.last_run_at).toLocaleString('en-GB')}
-                </div>
-              )}
-            </div>
-
-            {/* Volume mix refresh */}
-            <div style={sectionStyle}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                <BarChart2 size={15} style={{ color: 'var(--mv-purple)' }} />
-                <div style={{ color: 'var(--mv-ink)', fontWeight: 800, fontSize: 14 }}>Volume Mix Refresh</div>
-              </div>
-              <div style={{ color: 'var(--mv-ink-52)', fontSize: 12, marginBottom: 16, lineHeight: 1.55 }}>
-                Controls when rate card projection volume mixes are automatically updated from actual billing data.
-                The DPD-ND2KG service is always counted as DPD-32 in the mix.
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                <div>
-                  <label style={labelStyle}>Refresh Day</label>
-                  <select value={form.volume_mix_refresh_day} onChange={e => field('volume_mix_refresh_day', parseInt(e.target.value))} style={inputStyle}>
-                    {DAYS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label style={labelStyle}>Refresh Time</label>
-                  <select value={form.volume_mix_refresh_hour} onChange={e => field('volume_mix_refresh_hour', parseInt(e.target.value))} style={inputStyle}>
-                    {HOURS.map(h => <option key={h.value} value={h.value}>{h.label}</option>)}
-                  </select>
-                </div>
-              </div>
-              <div style={{ marginTop: 10, fontSize: 12, color: 'var(--mv-ink-52)' }}>
-                Next refresh: {nextRunDate(form.volume_mix_refresh_day, form.volume_mix_refresh_hour, 0)}
-              </div>
-            </div>
+        <div style={{ marginTop: 14 }}>
+          <label style={labelStyle}>Fortnightly parity — which week runs for fortnightly customers?</label>
+          <div style={{ display: 'flex', gap: 10 }}>
+            {[0, 1].map(p => (
+              <button key={p} onClick={() => field('fortnightly_parity', p)} style={{
+                flex: 1, padding: '8px 0', borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                background: form.fortnightly_parity === p ? 'var(--mv-purple-100)' : 'color-mix(in srgb, var(--mv-ink) 3%, transparent)',
+                border: `1px solid ${form.fortnightly_parity === p ? 'var(--mv-purple-200)' : 'var(--mv-hairline)'}`,
+                color: form.fortnightly_parity === p ? 'var(--mv-green)' : 'var(--mv-ink-52)',
+              }}>
+                Week {p === 0 ? 'A' : 'B'}
+              </button>
+            ))}
           </div>
         </div>
+      </div>
 
-        {/* Run result */}
-        {runResult && (
-          <div style={{ marginTop: 16, background: 'rgba(0,200,83,0.08)', border: '1px solid var(--mv-green)', padding: '14px 18px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--mv-green)', fontWeight: 800, marginBottom: 8 }}>
-              <CheckCircle size={15} /> Billing Run Complete
-            </div>
-            <div style={{ color: 'var(--mv-ink)', fontSize: 13 }}>
-              <div>{runResult.charges_queued} charges moved to Awaiting Reconciliation</div>
-              <div style={{ color: 'var(--mv-ink-52)', fontSize: 12, marginTop: 4 }}>
-                {runResult.customers_processed} customers processed · Cycles: {runResult.due_cycles?.join(', ') || 'none due'}
-              </div>
-            </div>
+      {/* Monthly schedule */}
+      <div style={sectionStyle}>
+        <div style={{ color: 'var(--mv-ink)', fontWeight: 600, fontSize: 14, marginBottom: 16 }}>Monthly billing</div>
+        <div style={{ maxWidth: 200 }}>
+          <label style={labelStyle}>Day of month</label>
+          <select value={form.monthly_billing_date} onChange={e => field('monthly_billing_date', parseInt(e.target.value))} style={inputStyle}>
+            {Array.from({ length: 28 }, (_, i) => i + 1).map(d => (
+              <option key={d} value={d}>{d}{d === 1 ? 'st' : d === 2 ? 'nd' : d === 3 ? 'rd' : 'th'} of the month</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Volume mix refresh */}
+      <div style={sectionStyle}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+          <BarChart2 size={14} color="var(--mv-purple)" />
+          <div style={{ color: 'var(--mv-ink)', fontWeight: 600, fontSize: 14 }}>Volume mix refresh</div>
+        </div>
+        <div style={{ color: 'var(--mv-ink-52)', fontSize: 12, marginBottom: 16, lineHeight: 1.55 }}>
+          Controls when rate card projection volume mixes are automatically updated from actual billing data.
+          The DPD-ND2KG service is always counted as DPD-32 in the mix.
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div>
+            <label style={labelStyle}>Refresh day</label>
+            <select value={form.volume_mix_refresh_day} onChange={e => field('volume_mix_refresh_day', parseInt(e.target.value))} style={inputStyle}>
+              {DAYS.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
+            </select>
           </div>
-        )}
+          <div>
+            <label style={labelStyle}>Refresh time</label>
+            <select value={form.volume_mix_refresh_hour} onChange={e => field('volume_mix_refresh_hour', parseInt(e.target.value))} style={inputStyle}>
+              {HOURS.map(h => <option key={h.value} value={h.value}>{h.label}</option>)}
+            </select>
+          </div>
+        </div>
+        <div style={{ marginTop: 10, fontSize: 12, color: 'var(--mv-ink-52)' }}>
+          Next refresh: {nextRunDate(form.volume_mix_refresh_day, form.volume_mix_refresh_hour, 0)}
+        </div>
+      </div>
 
-        {runError && (
-          <div style={{ marginTop: 16, background: 'rgba(233,30,140,0.08)', border: '1px solid var(--mv-magenta)', padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 10, color: 'var(--mv-magenta-deep)', fontSize: 13 }}>
-            <AlertCircle size={15} /> {runError}
+      {/* Next run preview */}
+      <div style={{ ...sectionStyle, background: 'color-mix(in srgb, var(--mv-teal) 5%, transparent)', border: '1px solid var(--mv-teal-200)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--mv-teal)' }}>
+          <Clock size={15} />
+          <span style={{ fontSize: 13, fontWeight: 600 }}>
+            Next weekly run: {nextRunDate(form.billing_day_of_week, form.billing_hour, form.billing_minute)}
+          </span>
+        </div>
+        {settings?.last_run_at && (
+          <div style={{ color: 'var(--mv-ink-52)', fontSize: 12, marginTop: 6 }}>
+            Last run: {new Date(settings.last_run_at).toLocaleString('en-GB')}
           </div>
         )}
       </div>
+
+      {/* Actions */}
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+        <button
+          onClick={() => saveMutation.mutate(form)}
+          disabled={saveMutation.isPending}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            background: 'var(--mv-purple-100)',
+            border: `1px solid ${saved ? 'color-mix(in srgb, var(--mv-green) 50%, transparent)' : 'var(--mv-purple-200)'}`,
+            borderRadius: 8, padding: '9px 20px', fontSize: 13, fontWeight: 700,
+            color: 'var(--mv-green)', cursor: 'pointer',
+          }}
+        >
+          {saved ? <CheckCircle size={14} /> : <Save size={14} />}
+          {saved ? 'Saved' : 'Save settings'}
+        </button>
+
+        <button
+          onClick={() => { setRunResult(null); setRunError(null); runNowMutation.mutate(); }}
+          disabled={runNowMutation.isPending}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            background: 'var(--mv-teal-100)', border: '1px solid var(--mv-teal-200)',
+            borderRadius: 8, padding: '9px 20px', fontSize: 13, fontWeight: 700,
+            color: 'var(--mv-teal)', cursor: 'pointer',
+          }}
+        >
+          <Play size={14} />
+          {runNowMutation.isPending ? 'Running…' : 'Run now'}
+        </button>
+      </div>
+
+      {/* Run result */}
+      {runResult && (
+        <div style={{ marginTop: 16, background: 'color-mix(in srgb, var(--mv-green) 7%, transparent)', border: '1px solid var(--mv-purple-200)', borderRadius: 10, padding: '14px 18px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--mv-green)', fontWeight: 700, marginBottom: 8 }}>
+            <CheckCircle size={15} /> Billing run complete
+          </div>
+          <div style={{ color: 'var(--mv-ink-78)', fontSize: 13 }}>
+            <div>{runResult.charges_queued} charges moved to Awaiting Reconciliation</div>
+            <div style={{ color: 'var(--mv-ink-52)', fontSize: 12, marginTop: 4 }}>
+              {runResult.customers_processed} customers processed · Cycles: {runResult.due_cycles?.join(', ') || 'none due'}
+            </div>
+          </div>
+          {runResult.details?.length > 0 && (
+            <div style={{ marginTop: 10, borderTop: '1px solid var(--mv-hairline)', paddingTop: 10 }}>
+              {runResult.details.map((d, i) => (
+                <div key={i} style={{ fontSize: 12, color: 'var(--mv-ink-52)', display: 'flex', justifyContent: 'space-between' }}>
+                  <span>{d.name} ({d.account})</span>
+                  <span style={{ color: 'var(--mv-green)' }}>{d.charges_queued} charges</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {runError && (
+        <div style={{ marginTop: 16, background: 'color-mix(in srgb, var(--mv-magenta) 7%, transparent)', border: '1px solid var(--mv-magenta-200)', borderRadius: 10, padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 10, color: 'var(--mv-magenta)', fontSize: 13 }}>
+          <AlertCircle size={15} /> {runError}
+        </div>
+      )}
     </div>
   );
 }

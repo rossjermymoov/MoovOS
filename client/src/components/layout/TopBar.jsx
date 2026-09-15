@@ -3,6 +3,7 @@ import { Search, Settings } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import NotificationBell from '../NotificationBell';
+import ThemeToggle from '../ui/ThemeToggle';
 
 function getGreeting() {
   const h = new Date().getHours();
@@ -63,6 +64,7 @@ export default function TopBar() {
       </div>
 
       <NotificationBell />
+      <ThemeToggle />
       <button className="mv-icon-btn" onClick={() => navigate('/settings')} title="Settings"><Settings size={17} /></button>
     </header>
   );

@@ -18,22 +18,31 @@ Four marks, and they mean the same thing on every screen:
 
 | Mark | Meaning | Colour |
 | --- | --- | --- |
-| Filled square | Settled, live, on track | green `#00C853`, text `#0A8F43` |
-| Triangle | In flight, in progress, automated | purple `#7B2FBE` |
-| Filled square | Needs a person | magenta `#E91E8C`, text `#B81470` |
+| Filled square | Settled, live, on track | brand green `#0F7A46` (dark mode `#1DFB9D`), text same |
+| Triangle | In flight, in progress, automated | brand green `#0F7A46` (dark mode `#1DFB9D`) — same colour as settled; the shape is what distinguishes them |
+| Filled square | Needs a person | brand red `#CD1D69` (dark mode `#DE6C9E`), text same |
 | Hollow square | Waiting on someone else | grey, `color-mix(in srgb, ink 45%, transparent)` |
 
 Status text is 11px, uppercase, `.09em` tracking, in the mark's own colour. Never a pill,
 never a rounded badge, never a fifth colour.
 
 **3. Colour means something or it isn't used.**
-Purple = interactive and automated (buttons, links, active nav, AI drafts).
-Green = good and settled. Magenta = needs a human. Everything else is ink on grey.
-Never colour something for decoration. Never use red — magenta is the alarm colour.
+Brand green = interactive, automated, and settled/good (buttons, links, active nav, AI
+drafts, and the "on track" mark — one hue, two meanings, told apart by the mark's shape).
+Brand red = needs a human. Brand blue = secondary numeric values only (e.g. per-kg rates).
+Everything else is ink on grey. Never colour something for decoration.
+
+*(This reverses the project's original "never red" rule — as of the MOS-4 brand redesign,
+red is the alarm colour, matching the real Moov Webapp brand palette. Magenta is retired.)*
+
+*(Pragmatic fifth addition: brand amber `#FECA00` (text-safe variant `#8A6200` in light mode)
+is used as a genuine third state — pending / at-risk / flagged — on the finance and
+reconciliation screens, where it's load-bearing business meaning distinct from settled-green
+and alarm-red, not decoration. `--mv-amber`/`--mv-amber-deep` in moov.css.)*
 
 **4. Archivo, flush left, tabular numerals.**
 Headings 800 weight with negative tracking. Body 400. Section labels 9px uppercase at
-`.15em`, weight 600, in purple. Every column of money or time uses
+`.15em`, weight 600, in the brand-green accent colour. Every column of money or time uses
 `font-variant-numeric: tabular-nums` so figures line up. Nothing is centred — not headings,
 not button labels, not hero copy.
 
@@ -47,30 +56,47 @@ Errors say what to do. No exclamation marks, no emoji, no "Oops".
 ## Tokens
 
 ```css
---color-bg:        #f3f2f2;   /* page ground */
---color-surface:   #eae9e9;   /* left rail, raised areas */
---color-text:      #201e1d;   /* ink */
---color-divider:   rgba(32,30,29,.4);  /* 2px section rules */
+/* Light mode (default) */
+--color-bg:        #F7F8FA;   /* page ground */
+--color-surface:   #FFFFFF;   /* left rail, raised areas */
+--color-text:      #171B2D;   /* ink */
+--color-divider:   #DFE0EB;   /* 2px section rules */
 
---color-accent:    #7B2FBE;   /* Moov purple — interactive, automation */
---color-accent-600:#6A28A5;   /* pressed */
---color-accent-100:#F4EDFA;   /* tinted fill */
+--color-accent:    #0F7A46;   /* Moov brand green — interactive, automation */
+--color-accent-600:#065F39;   /* pressed */
+--color-accent-100:#E7F2EC;   /* tinted fill */
+--color-on-accent: #FFFFFF;   /* text/icons on a solid --color-accent fill */
 
---moov-green:      #00C853;   /* fills, marks, bars */
---moov-green-deep: #0A8F43;   /* green text (contrast) */
---moov-magenta:    #E91E8C;   /* fills, marks, bars */
---moov-magenta-deep:#B81470;  /* magenta text (contrast) */
---moov-teal:       #00BCD4;   /* per-kg rates only */
+--moov-green:      #0F7A46;   /* fills, marks, bars */
+--moov-green-deep: #065F39;   /* green text (contrast) */
+--moov-magenta:    #CD1D69;   /* fills, marks, bars — brand red, the alarm colour */
+--moov-magenta-deep:#CD1D69;  /* magenta text (contrast) */
+--moov-teal:       #276E93;   /* per-kg rates only — brand blue */
+
+/* Dark mode — set via [data-theme="dark"], toggled by ThemeContext */
+--color-bg:        #12141D;
+--color-surface:   #171B2D;
+--color-text:      #FDFFFF;
+--color-accent:    #1DFB9D;   /* neon in dark mode — pairs with --color-on-accent, not white */
+--color-on-accent: #171B2D;
+--moov-green:      #1DFB9D;
+--moov-magenta:    #DE6C9E;
+--moov-teal:       #73A1B9;
 
 --radius-md: 0;               /* not negotiable */
 font-family: Archivo;
 ```
 
+Variable *names* above are historical (`--color-accent` etc. predate the MOS-4 brand
+redesign) and were kept as-is so existing call sites didn't need touching — only the
+*values* changed. Don't read anything semantic into the names; the token table above is
+the source of truth for what each one means now.
+
 Hairlines between rows: `1px solid color-mix(in srgb, var(--color-text) 12%, transparent)`.
 Section rules: `2px solid var(--color-divider)`.
 Muted text: `color-mix(in srgb, var(--color-text) 55%, transparent)`.
 
-**Deep steps for text.** Green and magenta at full strength are for fills and marks. Any
+**Deep steps for text.** Green and red at full strength are for fills and marks. Any
 text in those colours uses the `-deep` variant, or it fails contrast.
 
 ---
@@ -79,35 +105,35 @@ text in those colours uses the `-deep` variant, or it fails contrast.
 
 **Left rail** — 238px, surface ground, 2px right rule. Wordmark MOOV in Archivo 800 30px
 with a green square full stop. Nav items are flush-left labels with a 3px left border:
-purple when active (label goes 800 weight, faint ink tint behind), transparent otherwise.
+brand green when active (label goes 800 weight, faint ink tint behind), transparent otherwise.
 Counts derive from data, never hardcoded.
 
-**Page header** — purple kicker (9px uppercase tracked), h1 33px Archivo 800 at -.025em,
+**Page header** — brand green kicker (9px uppercase tracked), h1 33px Archivo 800 at -.025em,
 one sentence of blurb in muted ink, actions right-aligned. Then a 2px rule.
 
 **Figure strip** — a flex row under the header, each cell separated by a 1px vertical rule,
 no boxes. Label 9px uppercase muted, value 31px Archivo 800 tabular, sub-line 11px muted.
-Where a figure leads somewhere, the whole cell is clickable with a purple uppercase
+Where a figure leads somewhere, the whole cell is clickable with a brand green uppercase
 destination line ("Show me the 6 →") at 42% opacity, full on hover.
 
 **Tables** — no card wrapper. Header row 9px uppercase muted with a 2px rule under. Rows
-separated by hairlines, hover tints 4% ink and reveals a 3px purple tick at the row start.
+separated by hairlines, hover tints 4% ink and reveals a 3px brand green tick at the row start.
 Money and dates right-aligned and tabular. A secondary line under a cell's main value
 (contact under business name) at 11px muted.
 
-**Editable money** — a field with a visible underline that darkens on hover and turns purple
+**Editable money** — a field with a visible underline that darkens on hover and turns brand green
 on focus, £ outside the field, right-aligned tabular figures, tidied to 2dp on blur (never
-mid-keystroke). An overridden value goes purple so edits are visible at a glance.
+mid-keystroke). An overridden value goes brand green so edits are visible at a glance.
 
 **Chips / pickers** — 1px bordered rectangles, ink fill when selected. Used for filters,
 segmented choices, tier and priority pickers. Never a native `<select>`.
 
-**Modals** — centred overlay, purple 3px top rule, kicker + title + blurb header on surface
+**Modals** — centred overlay, brand green 3px top rule, kicker + title + blurb header on surface
 ground, body scrolls, footer states what will be recorded and against whom. Primary action
 disabled with a reason in the footer until the form is valid.
 
-**Buttons** — `.btn-primary` is a purple fill, `.btn-secondary` is a 1px outlined rectangle.
-Labels flush left. Destructive actions (place on stop) take a magenta outline, never a fill.
+**Buttons** — `.btn-primary` is a brand green fill, `.btn-secondary` is a 1px outlined rectangle.
+Labels flush left. Destructive actions (place on stop) take a red outline, never a fill.
 
 ---
 

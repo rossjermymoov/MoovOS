@@ -565,6 +565,25 @@ function EventTimeline({ events, isInternational }) {
   );
 }
 
+// ─── Courier tracking-URL fallback ─────────────────────────────
+// When a parcel has no stored tracking_url (older webhooks, some couriers
+// never send one), build a best-effort deep link to the courier's own
+// tracking page from the consignment number so the drawer link still works.
+function getFallbackTrackingUrl(consignment, courierCode, postcode) {
+  const code = (courierCode || '').toLowerCase();
+  const post = encodeURIComponent((postcode || '').trim());
+  const isYodel = consignment?.toUpperCase().startsWith('JJD') || code === 'yodel' || code === 'agl';
+  if (isYodel) return `https://www.yodel.co.uk/tracking/${consignment}/${post}`;
+  if (code === 'dpd' || code === 'dpd_local' || code === 'dpdlocal') return `https://www.dpd.co.uk/apps/tracking/?reference=${consignment}`;
+  if (code.startsWith('dhl')) return `https://track.dhlparcel.co.uk/?con=${consignment}`;
+  if (code === 'evri' || code === 'hermes') return `https://www.evri.com/track-a-parcel/${consignment}`;
+  if (code === 'royal_mail' || code === 'royalmail') return `https://www.royalmail.com/track-your-item#/tracking-results/${consignment}`;
+  if (code === 'parcelforce') return `https://www.parcelforce.com/track-trace?trackNumber=${consignment}`;
+  if (code === 'ups') return `https://www.ups.com/track?loc=en_GB&tracknum=${consignment}`;
+  if (code === 'fedex') return `https://www.fedex.com/en-gb/tracking.html?tracknumbers=${consignment}`;
+  return null;
+}
+
 // ─── Parcel drawer ────────────────────────────────────────────
 function ParcelDrawer({ consignment, onClose }) {
   const [activeTab, setActiveTab] = useState('events');
@@ -590,6 +609,7 @@ function ParcelDrawer({ consignment, onClose }) {
   };
 
   const isIntl = data?.is_international || (data?.country_code && data.country_code !== 'GB' && data.country_code !== 'UK');
+  const trackingUrl = data?.tracking_url || getFallbackTrackingUrl(consignment, data?.courier_code, data?.recipient_postcode);
 
   return (
     <>
@@ -764,10 +784,10 @@ function ParcelDrawer({ consignment, onClose }) {
                     <span style={{ fontSize: 12.5, color: 'var(--mv-ink)', fontWeight: 600 }}>{value}</span>
                   </div>
                 ))}
-                {data?.tracking_url && (
+                {trackingUrl && (
                   <div style={{ marginTop: 12 }}>
                     <a
-                      href={data.tracking_url}
+                      href={trackingUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="mv-btn-ghost"
@@ -822,9 +842,15 @@ const DATE_PRESETS = [
   { label: 'This Month', getFrom: () => startOfMonth(new Date()),                   getTo: () => endOfDay(new Date()) },
 ];
 
+const selectStyle = {
+  fontSize: 11.5, height: 28, padding: '0 10px',
+  border: '1px solid var(--mv-hairline-2)', color: 'var(--mv-ink-78)',
+  background: 'var(--mv-bg)', fontFamily: 'inherit', borderRadius: 0, cursor: 'pointer',
+};
+
 export default function TrackingPage() {
   const [searchParams] = useSearchParams();
-  const initialSearch = searchParams.get('search') || '';
+  const initialSearch = searchParams.get('search') || searchParams.get('q') || '';
 
   const [search, setSearch]                 = useState(initialSearch);
   const [debouncedSearch, setDebouncedSearch] = useState(initialSearch);
@@ -836,10 +862,12 @@ export default function TrackingPage() {
   const [datePreset, setDatePreset]         = useState('');
   const [dateFrom, setDateFrom]             = useState('');
   const [dateTo, setDateTo]                 = useState('');
+  const [showCustomDate, setShowCustomDate] = useState(false);
   const [staleRunning, setStaleRunning]     = useState(false);
   const [staleResult, setStaleResult]       = useState(null);
 
   const searchRef = useRef(null);
+  const LIMIT = 50;
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search), 250);
@@ -853,22 +881,19 @@ export default function TrackingPage() {
     refetchInterval: 30000,
   });
 
-  // Query parcel list
+  // Query parcel list — params must match the /api/tracking GET route exactly
   const { data: listData, isLoading, refetch: refetchList } = useQuery({
     queryKey: ['tracking-parcels', debouncedSearch, customerFilter, statusFilter, courierFilter, dateFrom, dateTo, page],
-    queryFn: () => {
-      const p = new URLSearchParams({
-        page,
-        limit: 50,
-        ...(debouncedSearch && { q: debouncedSearch }),
-        ...(customerFilter  && { customer_id: customerFilter }),
-        ...(statusFilter    && { status: statusFilter }),
-        ...(courierFilter   && { courier: courierFilter }),
-        ...(dateFrom        && { from: dateFrom }),
-        ...(dateTo          && { to: dateTo }),
-      });
-      return api.get(`/tracking?${p}`).then(r => r.data);
-    },
+    queryFn: () => api.get('/tracking', { params: {
+      search:       debouncedSearch || undefined,
+      status:       statusFilter    || undefined,
+      courier_code: courierFilter   || undefined,
+      customer_id:  customerFilter  || undefined,
+      date_from:    dateFrom        || undefined,
+      date_to:      dateTo          || undefined,
+      limit:  LIMIT,
+      offset: page * LIMIT,
+    }}).then(r => r.data),
     refetchInterval: 30000,
   });
 
@@ -882,12 +907,23 @@ export default function TrackingPage() {
     setStaleResult(null);
     try {
       const res = await api.post('/tracking/refresh-stale');
-      setStaleResult({ ok: true, msg: `Updated ${res.data?.updated || 0} stale parcels` });
+      setStaleResult({ ok: true, msg: res.data?.message || `Queued ${res.data?.queued || 0} stale parcels for refresh` });
       refresh();
-    } catch (e) {
-      setStaleResult({ ok: false, msg: 'Failed to refresh stale parcels' });
+    } catch (err) {
+      setStaleResult({ ok: false, msg: err?.response?.data?.error || 'Failed to refresh stale parcels' });
     } finally {
       setStaleRunning(false);
+    }
+  }
+
+  async function handlePurgePriorToday() {
+    if (!window.confirm('Delete all tracking events and parcel records from before today?')) return;
+    try {
+      const res = await api.post('/tracking/delete-before-today');
+      alert(`Purged ${res.data.events_deleted || 0} events and ${res.data.parcels_deleted || 0} parcels from before today.`);
+      refresh();
+    } catch (err) {
+      alert('Failed to purge tracking data: ' + (err.response?.data?.error || err.message));
     }
   }
 
@@ -900,6 +936,20 @@ export default function TrackingPage() {
       setDatePreset(p.label);
       setDateFrom(format(p.getFrom(), 'yyyy-MM-dd'));
       setDateTo(format(p.getTo(), 'yyyy-MM-dd'));
+      setShowCustomDate(false);
+    }
+    setPage(0);
+  }
+
+  function toggleCustomDate() {
+    if (datePreset === 'Custom') {
+      setDatePreset('');
+      setDateFrom('');
+      setDateTo('');
+      setShowCustomDate(false);
+    } else {
+      setDatePreset('Custom');
+      setShowCustomDate(true);
     }
     setPage(0);
   }
@@ -909,12 +959,20 @@ export default function TrackingPage() {
     setPage(0);
   }
 
+  function clearAll() {
+    setStatusFilter(''); setCourierFilter(''); setCustomerFilter(''); setSearch('');
+    setDatePreset(''); setDateFrom(''); setDateTo(''); setShowCustomDate(false);
+    setPage(0);
+  }
+
   const parcels  = listData?.parcels || [];
   const total    = listData?.total || 0;
-  const pages    = Math.ceil(total / 50);
+  const pages    = Math.ceil(total / LIMIT);
   const bs       = stats?.by_status || {};
-  const customers= listData?.filter_options?.customers || [];
-  const couriers = listData?.filter_options?.couriers || [];
+  const customers= stats?.by_customer || [];
+  const couriers = stats?.by_courier  || [];
+  const activeStatuses = Object.entries(bs).filter(([, count]) => count > 0).map(([status]) => status);
+  const hasFilters = statusFilter || courierFilter || customerFilter || search || dateFrom || dateTo;
 
   return (
     <div className="mv-page">
@@ -941,8 +999,26 @@ export default function TrackingPage() {
               <RotateCcw size={13} style={{ animation: staleRunning ? 'spin 1s linear infinite' : 'none' }} />
               {staleRunning ? 'Refreshing…' : 'Refresh Stale'}
             </button>
+            <button
+              onClick={handlePurgePriorToday}
+              className="mv-btn-ghost"
+              style={{ padding: '8px 14px', fontSize: 12.5, display: 'flex', alignItems: 'center', gap: 6, color: 'var(--mv-magenta-deep)', borderColor: 'var(--mv-magenta)' }}
+              title="Delete all tracking events and parcels from before today"
+            >
+              <X size={13} /> Purge Prior to Today
+            </button>
           </div>
         </div>
+
+        {staleResult && (
+          <div style={{
+            marginBottom: 10, fontSize: 12, padding: '7px 12px',
+            border: `1px solid ${staleResult.ok ? 'var(--mv-green)' : 'var(--mv-magenta)'}`,
+            color: staleResult.ok ? 'var(--mv-green-deep)' : 'var(--mv-magenta-deep)',
+          }}>
+            {staleResult.msg}
+          </div>
+        )}
 
         <div className="mv-rule" />
 
@@ -1007,10 +1083,56 @@ export default function TrackingPage() {
               {p.label}
             </button>
           ))}
+          <button
+            className={`mv-chip ${datePreset === 'Custom' ? 'is-on' : ''}`}
+            onClick={toggleCustomDate}
+          >
+            Custom
+          </button>
+          {showCustomDate && (
+            <>
+              <input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); setDatePreset('Custom'); setPage(0); }} style={selectStyle} />
+              <span style={{ color: 'var(--mv-ink-45)', fontSize: 12 }}>–</span>
+              <input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setDatePreset('Custom'); setPage(0); }} style={selectStyle} />
+            </>
+          )}
 
           {statusFilter && (
             <button className="mv-chip is-on" onClick={() => setStatusFilter('')}>
-              Status: {statusFilter} <X size={11} style={{ marginLeft: 4 }} />
+              Status: {getStatusState(statusFilter).label} <X size={11} style={{ marginLeft: 4 }} />
+            </button>
+          )}
+
+          {customers.length > 0 && (
+            <select value={customerFilter} onChange={e => { setCustomerFilter(e.target.value); setPage(0); }} style={selectStyle}>
+              <option value="">All customers</option>
+              {customers.map(c => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          )}
+
+          <select value={statusFilter} onChange={e => { setStatusFilter(e.target.value); setPage(0); }} style={selectStyle}>
+            <option value="">All statuses</option>
+            {activeStatuses.map(s => (
+              <option key={s} value={s}>{getStatusState(s).label}</option>
+            ))}
+          </select>
+
+          {couriers.length > 0 && (
+            <select value={courierFilter} onChange={e => { setCourierFilter(e.target.value); setPage(0); }} style={selectStyle}>
+              <option value="">All couriers</option>
+              {couriers.map(c => (
+                <option key={c.courier_code || c.courier_name} value={c.courier_code || c.courier_name}>
+                  {c.courier_name} ({c.count})
+                </option>
+              ))}
+            </select>
+          )}
+
+          {hasFilters && (
+            <button className="mv-chip" onClick={clearAll} style={{ color: 'var(--mv-magenta-deep)', borderColor: 'var(--mv-magenta)' }}>
+              <X size={11} style={{ marginRight: 4 }} /> Clear all
             </button>
           )}
 
@@ -1097,7 +1219,7 @@ export default function TrackingPage() {
                     </td>
                     <td>
                       <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ fontSize: 16, lineHeight: 1 }} title={COUNTRY_MAP[p.country_code] || p.country_code}>
+                        <span style={{ fontSize: 16, lineHeight: 1 }} title={formatCountryName(p.country_code)}>
                           {getCountryFlag(p.country_code)}
                         </span>
                         <span className="mv-num" style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--mv-ink)' }}>

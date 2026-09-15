@@ -13,14 +13,14 @@ import { Bell, AlertTriangle, Clock, MessageSquare, UserPlus, Check, Dot, AtSign
 import { useMe } from '../hooks/useMe';
 import { notificationsApi } from '../api/notifications';
 
-const MUTED = 'rgba(32,30,29,0.55)';
+const MUTED = 'var(--mv-ink-62)';
 
 // RAG-aligned severities: red = overdue/bad, amber = due soon / in progress, green = good, slate = info
 const SEV = {
-  red:   { colour: '#E91E8C', soft: '#FDECEC' },
-  amber: { colour: '#F59E0B', soft: '#FEF3E2' },
-  green: { colour: '#00C853', soft: '#E7F8EE' },
-  info:  { colour: '#2563EB', soft: '#E7EEFD' },
+  red:   { colour: 'var(--mv-magenta)', soft: 'var(--mv-magenta-100)' },
+  amber: { colour: 'var(--mv-amber)', soft: 'var(--mv-amber-100)' },
+  green: { colour: 'var(--mv-green)', soft: 'var(--mv-purple-100)' },
+  info:  { colour: 'var(--mv-teal)', soft: 'var(--mv-teal-100)' },
 };
 function relTime(d) {
   if (!d) return '';
@@ -95,14 +95,14 @@ export default function NotificationBell() {
   const panel = (
     <div ref={panelRef} style={{
       position: 'fixed', top: pos.top, right: pos.right, width: 380, maxHeight: '70vh',
-      background: 'var(--mv-bg)', borderRadius: 0, boxShadow: '0 12px 32px rgba(32,30,29,0.18)',
-      border: '2px solid var(--mv-divider)', zIndex: 1000, overflow: 'hidden', display: 'flex', flexDirection: 'column',
-      fontFamily: 'var(--mv-font)', color: 'var(--mv-ink)',
+      background: 'var(--mv-surface)', borderRadius: 14, boxShadow: '0 18px 50px rgba(0,0,0,.22)',
+      border: '1px solid var(--mv-divider)', zIndex: 1000, overflow: 'hidden', display: 'flex', flexDirection: 'column',
+      fontFamily: "'Inter',system-ui,sans-serif", color: 'var(--mv-ink)',
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderBottom: '2px solid var(--mv-divider)', background: 'var(--mv-surface)' }}>
-        <span style={{ fontSize: 13, fontWeight: 800, letterSpacing: '-.01em', textTransform: 'uppercase' }}>Notifications</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 16px', borderBottom: '1px solid var(--mv-divider)' }}>
+        <span style={{ fontSize: 14, fontWeight: 700 }}>Notifications</span>
         {items.some(i => !i.read_at) && (
-          <button onClick={markAll} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, color: 'var(--mv-purple)', background: 'none', border: 'none', cursor: 'pointer' }}>
+          <button onClick={markAll} style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 600, color: 'var(--mv-teal)', background: 'none', border: 'none', cursor: 'pointer' }}>
             <Check size={13} />Mark all read
           </button>
         )}
@@ -112,18 +112,18 @@ export default function NotificationBell() {
         {/* live urgency nudges */}
         {nudges.length > 0 && (
           <div style={{ padding: '6px 0' }}>
-            <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--mv-magenta-deep)', padding: '6px 16px' }}>Needs your attention</div>
+            <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', color: 'var(--mv-ink-45)', padding: '6px 16px' }}>Needs your attention</div>
             {nudges.map(n => {
               const sev = SEV[n.severity] || SEV.amber;
               return (
                 <button key={n.id} onClick={() => go(n)} style={{ display: 'flex', gap: 11, alignItems: 'flex-start', width: '100%', textAlign: 'left', padding: '10px 16px', background: 'none', border: 'none', borderLeft: `3px solid ${sev.colour}`, cursor: 'pointer' }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--mv-surface)'} onMouseLeave={e => e.currentTarget.style.background = 'none'}>
-                  <span style={{ width: 24, height: 24, borderRadius: 0, background: sev.soft, color: sev.colour, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    {n.kind === 'overdue' ? <AlertTriangle size={14} /> : <Clock size={14} />}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--mv-bg)'} onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                  <span style={{ width: 26, height: 26, borderRadius: 7, background: sev.soft, color: sev.colour, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    {n.kind === 'overdue' ? <AlertTriangle size={15} /> : <Clock size={15} />}
                   </span>
                   <span style={{ minWidth: 0 }}>
                     <span style={{ display: 'block', fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n.title}</span>
-                    <span style={{ fontSize: 11.5, fontWeight: 600, color: sev.colour }}>{dueLabel(n.due_date)}</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: sev.colour }}>{dueLabel(n.due_date)}</span>
                   </span>
                 </button>
               );
@@ -134,19 +134,19 @@ export default function NotificationBell() {
         {/* event notifications */}
         {items.length > 0 && (
           <div style={{ padding: '6px 0', borderTop: nudges.length ? '1px solid var(--mv-hairline)' : 'none' }}>
-            {nudges.length > 0 && <div style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--mv-ink-45)', padding: '6px 16px' }}>Activity</div>}
+            {nudges.length > 0 && <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', color: 'var(--mv-ink-45)', padding: '6px 16px' }}>Activity</div>}
             {items.map(n => {
               const sev = SEV[n.severity] || SEV.info;
               return (
-                <button key={n.id} onClick={() => go(n)} style={{ display: 'flex', gap: 11, alignItems: 'flex-start', width: '100%', textAlign: 'left', padding: '10px 16px', background: n.read_at ? 'none' : 'rgba(123,47,190,0.04)', border: 'none', cursor: 'pointer' }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--mv-surface)'} onMouseLeave={e => e.currentTarget.style.background = n.read_at ? 'none' : 'rgba(123,47,190,0.04)'}>
-                  <span style={{ width: 24, height: 24, borderRadius: 0, background: sev.soft, color: sev.colour, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{typeIcon(n.type)}</span>
+                <button key={n.id} onClick={() => go(n)} style={{ display: 'flex', gap: 11, alignItems: 'flex-start', width: '100%', textAlign: 'left', padding: '10px 16px', background: n.read_at ? 'none' : 'var(--mv-teal-100)', border: 'none', cursor: 'pointer' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--mv-bg)'} onMouseLeave={e => e.currentTarget.style.background = n.read_at ? 'none' : 'var(--mv-teal-100)'}>
+                  <span style={{ width: 26, height: 26, borderRadius: 7, background: sev.soft, color: sev.colour, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{typeIcon(n.type)}</span>
                   <span style={{ minWidth: 0, flex: 1 }}>
                     <span style={{ display: 'block', fontSize: 13, fontWeight: 600 }}>{n.title}</span>
-                    {n.body && <span style={{ display: 'block', fontSize: 12, color: 'var(--mv-ink-62)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n.body}</span>}
-                    <span style={{ fontSize: 11, color: 'var(--mv-ink-45)' }}>{n.actor_name ? n.actor_name + ' · ' : ''}{relTime(n.created_at)}</span>
+                    {n.body && <span style={{ display: 'block', fontSize: 12.5, color: 'var(--mv-ink-62)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{n.body}</span>}
+                    <span style={{ fontSize: 11.5, color: 'var(--mv-ink-45)' }}>{n.actor_name ? n.actor_name + ' · ' : ''}{relTime(n.created_at)}</span>
                   </span>
-                  {!n.read_at && <span style={{ width: 6, height: 6, borderRadius: 0, background: 'var(--mv-purple)', flexShrink: 0, marginTop: 5 }} />}
+                  {!n.read_at && <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--mv-teal)', flexShrink: 0, marginTop: 5 }} />}
                 </button>
               );
             })}
@@ -155,7 +155,7 @@ export default function NotificationBell() {
 
         {nudges.length === 0 && items.length === 0 && (
           <div style={{ padding: '38px 20px', textAlign: 'center', color: 'var(--mv-ink-45)' }}>
-            <Bell size={24} strokeWidth={1.4} style={{ opacity: .5 }} />
+            <Bell size={26} strokeWidth={1.4} style={{ opacity: .5 }} />
             <div style={{ fontSize: 13, marginTop: 10, fontWeight: 500 }}>{me ? 'You’re all caught up' : 'Sign in as a team member to see your alerts'}</div>
           </div>
         )}
@@ -165,16 +165,18 @@ export default function NotificationBell() {
 
   return (
     <div ref={btnRef} style={{ position: 'relative' }}>
-      <button onClick={toggle} className="mv-icon-btn" style={{
-        background: open ? 'rgba(32,30,29,0.08)' : 'transparent',
-        position: 'relative',
-      }}>
+      <button onClick={toggle} style={{
+        width: 32, height: 32, borderRadius: 8, background: open ? 'color-mix(in srgb, var(--mv-ink) 8%, transparent)' : 'transparent',
+        border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: MUTED, position: 'relative',
+      }}
+        onMouseEnter={e => e.currentTarget.style.background = 'color-mix(in srgb, var(--mv-ink) 8%, transparent)'}
+        onMouseLeave={e => e.currentTarget.style.background = open ? 'color-mix(in srgb, var(--mv-ink) 8%, transparent)' : 'transparent'}>
         <Bell size={16} strokeWidth={1.5} />
         {count > 0 && (
           <span style={{
-            position: 'absolute', top: 2, right: 2, minWidth: 14, height: 14, padding: '0 3px',
-            borderRadius: 0, background: 'var(--mv-magenta)', color: '#fff', fontSize: 9, fontWeight: 800,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            position: 'absolute', top: 2, right: 2, minWidth: 15, height: 15, padding: '0 4px',
+            borderRadius: 99, background: 'var(--mv-magenta)', color: 'var(--mv-on-brand)', fontSize: 9.5, fontWeight: 700,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 0 2px var(--mv-bg)',
           }}>{count > 99 ? '99+' : count}</span>
         )}
       </button>

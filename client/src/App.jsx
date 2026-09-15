@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
 import AppShell from './components/layout/AppShell';
 import LoginPage from './pages/auth/LoginPage';
 import CustomerList from './pages/customers/CustomerList';
@@ -142,8 +143,10 @@ function AppRoutes() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <AppRoutes />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
