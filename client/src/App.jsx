@@ -127,7 +127,7 @@ function AppRoutes() {
           <Route path="automation-rules" element={<AutomationRules />} />
           <Route path="onboarding-templates" element={<OnboardingTemplates />} />
           <Route path="comms-templates" element={<CommsTemplates />} />
-          <Route path="switchboard"     element={<AutomationRules />} />
+          <Route path="switchboard"     element={<Switchboard />} />
           <Route path="volumetric"  element={<VolumetricSettings />} />
           <Route path="billing"     element={<BillingSettings />} />
           <Route path="xero"        element={<XeroSettings />} />
