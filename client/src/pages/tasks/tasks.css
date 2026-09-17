@@ -37,7 +37,48 @@
   background: var(--mt-bg); color: var(--mt-text);
   font-family: var(--mv-font);
 }
-.moov-tasks * { box-sizing: border-box; border-radius: 0 !important; }
+.moov-tasks * { box-sizing: border-box; }
+/* Radius — direction 1c "Command Console" (see moov-v2.css). Real <button>/<input>
+   elements already pick up border-radius from the global .mv-app rules (higher
+   specificity than anything here); these are the div-based custom controls and
+   cards that have no such hook and need an explicit value. */
+.moov-tasks .avatar,
+.moov-tasks .mt-count,
+.moov-tasks .mt-pill,
+.moov-tasks .mt-status-tag,
+.moov-tasks .mt-sq,
+.moov-tasks .mt-badge,
+.moov-tasks .mt-progress,
+.moov-tasks .mt-progress > div { border-radius: var(--v2-r-pill); }
+.moov-tasks .mt-space,
+.moov-tasks .mt-tab,
+.moov-tasks .mt-gchip,
+.moov-tasks .mt-crumb,
+.moov-tasks .mt-rec,
+.moov-tasks .mt-seg-opt,
+.moov-tasks .mt-doc-ico,
+.moov-tasks .mt-iconbtn,
+.moov-tasks .mt-sub-check { border-radius: var(--v2-r-sm); }
+.moov-tasks .mt-tabs { border-radius: var(--v2-r-sm); overflow: hidden; }
+.moov-tasks .mt-card,
+.moov-tasks .mt-col,
+.moov-tasks .mt-empty,
+.moov-tasks .mt-sub-row,
+.moov-tasks .mt-doc,
+.moov-tasks .mt-link-panel,
+.moov-tasks .mt-sub-add,
+.moov-tasks .mt-control,
+.moov-tasks .mt-menu,
+.moov-tasks .mt-drop,
+.moov-tasks .mt-title-input,
+.moov-tasks .mt-desc,
+.moov-tasks .mt-input,
+.moov-tasks .mt-date { border-radius: var(--v2-r-md); }
+.moov-tasks .mt-drawer,
+.moov-tasks .mt-sheet { border-radius: var(--v2-r-lg); }
+.moov-tasks .mt-modal { border-radius: var(--v2-r-lg); overflow: hidden; }
+.moov-tasks .mt-opt { border-radius: var(--v2-r-sm); }
+.moov-tasks table { border-radius: 0; }
 .moov-tasks ::-webkit-scrollbar { width: 5px; height: 5px; }
 .moov-tasks ::-webkit-scrollbar-thumb { background: rgba(32,30,29,.2); }
 .moov-tasks ::-webkit-scrollbar-thumb:hover { background: rgba(32,30,29,.35); }

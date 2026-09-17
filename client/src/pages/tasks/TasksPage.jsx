@@ -26,13 +26,13 @@ const api = axios.create({ baseURL: '/api' });
 // Spaces and statuses are user-configurable (edited in board Settings, persisted
 // server-side). Keys are stable — renaming only changes the label, so existing
 // tasks keep working. These defaults seed a board that has never been configured.
-// NOTE: these colours are deliberately literal hex, not var(--mv-*) — they're fed
-// through hexToRgb()/darken() below (and bound directly to native <input type="color">
-// pickers in SettingsModal), both of which require a real hex string and silently
-// break (NaN) on a CSS var() reference. That means these particular chips are
-// theme-static (their brand-green/red/blue values don't adapt to dark mode) rather
-// than fully token-driven — a known, structural limitation of this component, not
-// an oversight. Values are the new brand palette's light-mode hex equivalents.
+// NOTE: these colours are deliberately literal hex, not var(--mv-*) — they're bound
+// directly to native <input type="color"> pickers in SettingsModal, which require a
+// real hex string and silently break (blank swatch) on a CSS var() reference. The
+// swatch dots (SPACES) stay this literal hex in both themes; the derived label
+// background/text for STATUS chips (chipColours(), below) is blended against the
+// live theme tokens via color-mix() so it stays readable in both themes even though
+// the base hex itself doesn't change.
 const DEFAULT_SPACES = [
   { key: 'cs',      label: 'Customer Service', colour: '#276E93' },
   { key: 'sales',   label: 'Sales',            colour: '#CD1D69' },
@@ -53,10 +53,17 @@ const PRIORITY = {
 };
 
 // ── colour helpers — derive a soft background + readable text from any base hex ──
-function hexToRgb(hex) { const h = String(hex || '#000').replace('#', ''); const f = h.length === 3 ? h.split('').map(c => c + c).join('') : h; const n = parseInt(f, 16); return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 }; }
-function softBg(hex) { const { r, g, b } = hexToRgb(hex); return `rgba(${r},${g},${b},0.15)`; }
-function darken(hex, amt) { const { r, g, b } = hexToRgb(hex); const f = x => Math.round(x * (1 - amt)); return `rgb(${f(r)},${f(g)},${f(b)})`; }
-function chipColours(hex) { return { colour: hex, soft: softBg(hex), text: darken(hex, 0.4) }; }
+// Blended against the live --mv-surface/--mv-ink tokens via color-mix(), so the
+// derived pair stays readable in both themes automatically — a fixed-direction
+// darken() (the previous approach) always darkened the text, which read fine in
+// light mode but produced near-invisible dark-on-dark text in dark mode.
+function chipColours(hex) {
+  return {
+    colour: hex,
+    soft: `color-mix(in srgb, ${hex} 16%, var(--mv-surface))`,
+    text: `color-mix(in srgb, ${hex} 65%, var(--mv-ink))`,
+  };
+}
 
 // Live board config — rebuilt from server config by applyConfig(); all render
 // code reads these module bindings, so a config change re-colours the whole board.

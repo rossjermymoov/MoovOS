@@ -1160,12 +1160,12 @@ function ServiceCodeMappingBanner({ unmatchedLines, runId, courierId, onMapped }
   }
 
   return (
-    <div style={{
+    <div className="v2-panel" style={{
       background: 'var(--mv-amber-100)',
       border: '1px solid var(--mv-amber-200)',
-      borderRadius: 10, padding: 20, marginBottom: 16,
+      marginBottom: 16,
     }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
           <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--mv-amber)', display: 'flex', alignItems: 'center', gap: 7 }}>
             <AlertTriangle size={15} />
@@ -1309,7 +1309,7 @@ function ShipmentLookupPanel() {
   const statusColor = v => v ? 'var(--mv-green)' : 'var(--mv-magenta)';
 
   return (
-    <div style={card}>
+    <div className="v2-panel">
       <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--mv-ink)', marginBottom: 12 }}>
         Shipment Lookup
       </div>
@@ -1343,17 +1343,15 @@ function ShipmentLookupPanel() {
 
           {result.shipments_found === 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div style={{
-                padding: '12px 16px', borderRadius: 8,
-                background: 'var(--mv-magenta-100)', border: '1px solid var(--mv-magenta-200)',
+              <div className="v2-tile v2-tile--alert" style={{
+                border: '1px solid var(--mv-magenta-200)',
                 fontSize: 12, color: 'var(--mv-magenta)', fontWeight: 600,
               }}>
                 ✗ No shipment found — the shipment-created webhook may never have fired for this tracking number.
               </div>
 
               {/* Manual backfill — recover a missed shipment using sender ref + tracking */}
-              <div style={{
-                padding: '12px 16px', borderRadius: 8,
+              <div className="v2-tile" style={{
                 background: 'var(--mv-amber-100)', border: '1px solid var(--mv-amber-200)',
               }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--mv-amber)', marginBottom: 4 }}>
@@ -1389,9 +1387,9 @@ function ShipmentLookupPanel() {
                   <div style={{ marginTop: 8, fontSize: 11, color: 'var(--mv-magenta)' }}>{backfillErr}</div>
                 )}
                 {backfillResult && (
-                  <div style={{
-                    marginTop: 8, padding: '8px 12px', borderRadius: 6,
-                    background: 'var(--mv-purple-100)', border: '1px solid var(--mv-purple-200)',
+                  <div className="v2-tile v2-tile--brand" style={{
+                    marginTop: 8, padding: '8px 12px',
+                    border: '1px solid var(--mv-purple-200)',
                     fontSize: 11, color: 'var(--mv-green)',
                   }}>
                     ✓ Created and verified {backfillResult.created} charge{backfillResult.created !== 1 ? 's' : ''} for ref{' '}
@@ -1411,8 +1409,8 @@ function ShipmentLookupPanel() {
           )}
 
           {result.results.map((r, i) => (
-            <div key={i} style={{
-              marginBottom: 12, padding: '12px 14px', borderRadius: 8,
+            <div key={i} className="v2-tile" style={{
+              marginBottom: 12, padding: '12px 14px',
               background: 'rgba(255,255,255,0.025)',
               border: `1px solid ${r.pool_eligible ? 'var(--mv-purple-200)' : 'var(--mv-amber-200)'}`,
             }}>
@@ -1456,8 +1454,8 @@ function ShipmentLookupPanel() {
 
               {/* Reconciliation expected_amount summary */}
               {r.total_cost_price != null && (
-                <div style={{
-                  marginBottom: 10, padding: '7px 10px', borderRadius: 6,
+                <div className="v2-tile" style={{
+                  marginBottom: 10, padding: '7px 10px',
                   background: 'var(--mv-teal-100)', border: '1px solid var(--mv-teal-200)',
                   fontSize: 11,
                 }}>
@@ -2213,7 +2211,7 @@ function CustomerPreviewPanel({ runId }) {
 
   if (isLoading) return <div style={{ color: 'var(--mv-ink-52)', fontSize: 12, padding: 20 }}>Loading preview…</div>;
   if (!customers.length) return (
-    <div style={{ ...card, color: 'var(--mv-ink-52)', fontSize: 12, textAlign: 'center', padding: 30 }}>
+    <div className="v2-panel" style={{ color: 'var(--mv-ink-52)', fontSize: 12, textAlign: 'center', padding: 30 }}>
       No matched or corrected lines yet — process lines first to see a billing preview
     </div>
   );
@@ -2227,8 +2225,8 @@ function CustomerPreviewPanel({ runId }) {
   }
 
   return (
-    <div style={card}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+    <div className="v2-panel">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--mv-ink)' }}>Customer Billing Preview</div>
           <div style={{ fontSize: 11, color: 'var(--mv-ink-52)', marginTop: 2 }}>
@@ -2423,7 +2421,7 @@ function CustomerSummaryPanel({ runId, run }) {
   }
 
   if (!customers.length) return (
-    <div style={{ ...card, color: 'var(--mv-ink-52)', fontSize: 12, textAlign: 'center', padding: 30 }}>
+    <div className="v2-panel" style={{ color: 'var(--mv-ink-52)', fontSize: 12, textAlign: 'center', padding: 30 }}>
       No finalized billing lines found
     </div>
   );
@@ -2432,8 +2430,8 @@ function CustomerSummaryPanel({ runId, run }) {
   const allPushed     = customers.every(c => c.xero_pushed_count > 0);
 
   return (
-    <div style={card}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+    <div className="v2-panel">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--mv-ink)' }}>Customer Billing Summary</div>
           <div style={{ fontSize: 11, color: 'var(--mv-ink-52)', marginTop: 2 }}>
@@ -2808,9 +2806,9 @@ function CourierQueriesPanel({ runId, carrierId }) {
   const activeCount   = queries.filter(q => !['credited','rejected','written_off'].includes(q.status)).length;
 
   return (
-    <div style={card}>
+    <div className="v2-panel">
       {/* Summary header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div>
           <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--mv-ink)' }}>Carrier Queries</div>
           <div style={{ fontSize: 11, color: 'var(--mv-ink-52)', marginTop: 2 }}>
@@ -3035,9 +3033,9 @@ function BulkSurchargeResolver({ unmatchedLines, runId, courierId, onResolved })
   const selectedSur = surcharges.find(s => s.id === surchargeId);
 
   return (
-    <div style={{
+    <div className="v2-panel" style={{
       background: 'var(--mv-teal-100)', border: '1px solid var(--mv-teal-200)',
-      borderRadius: 8, padding: '12px 16px', marginBottom: 16,
+      padding: '12px 16px', marginBottom: 16,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
         <div>
@@ -3218,13 +3216,13 @@ function WarningTab({ lines, runId, onResolved, onOpenDrawer }) {
       )}
 
       {lines.length === 0 && (
-        <div style={{ ...card, textAlign: 'center', color: 'var(--mv-ink-52)', padding: '32px 20px' }}>
+        <div className="v2-panel" style={{ textAlign: 'center', color: 'var(--mv-ink-52)', padding: '32px 20px' }}>
           No warning lines — all surcharges accounted for.
         </div>
       )}
 
       {lines.length > 0 && (
-        <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
+        <div className="v2-panel v2-panel--flush">
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: 'var(--mv-amber-100)' }}>
@@ -3460,8 +3458,8 @@ export default function RunDetailPage() {
     <div style={{ maxWidth: 1200, margin: '0 auto' }}>
       {/* Processing banner — shown while background reconciliation thread is running */}
       {run?.status === 'processing' && (
-        <div style={{ background: 'var(--mv-teal-100)', border: '1px solid var(--mv-teal-200)',
-          borderRadius: 8, padding: '12px 18px', marginBottom: 16,
+        <div className="v2-panel" style={{ background: 'var(--mv-teal-100)', border: '1px solid var(--mv-teal-200)',
+          marginBottom: 16,
           display: 'flex', alignItems: 'center', gap: 10, color: 'var(--mv-teal)', fontWeight: 600, fontSize: 13 }}>
           <RefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} />
           Processing invoice… pricing engine is running. Results will appear automatically when complete.
@@ -3548,7 +3546,7 @@ export default function RunDetailPage() {
       </div>
 
       {/* KPI strip */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 12, marginBottom: 24 }}>
+      <div className="v2-grid v2-grid--figures" style={{ marginBottom: 24 }}>
         {/* Pool size — first tile, most diagnostic value */}
         {(() => {
           const ps = run.pool_size;
@@ -3556,10 +3554,10 @@ export default function RunDetailPage() {
           const psValue  = ps == null ? 'Pending…' : ps.toLocaleString();
           const psBorder = ps === 0 ? '1px solid color-mix(in srgb, var(--mv-magenta) 40%, transparent)' : card.border;
           return (
-            <div key="pool" style={{ ...card, border: psBorder }}>
-              <div style={{ fontSize: 10, color: 'var(--mv-ink-52)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Verified Pool</div>
+            <div key="pool" className="v2-panel" style={{ border: psBorder }}>
+              <div style={{ fontSize: 10, color: 'var(--mv-ink-52)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Verified Pool</div>
               <div style={{ fontSize: 20, fontWeight: 800, color: psColor }}>{psValue}</div>
-              {ps === 0 && <div style={{ fontSize: 10, color: 'var(--mv-magenta)', marginTop: 4 }}>Carrier name mismatch?</div>}
+              {ps === 0 && <div style={{ fontSize: 10, color: 'var(--mv-magenta)' }}>Carrier name mismatch?</div>}
             </div>
           );
         })()}
@@ -3571,8 +3569,8 @@ export default function RunDetailPage() {
           { label: 'Warnings', value: `${run.warning_count || 0}`, color: (run.warning_count || 0) > 0 ? 'var(--mv-amber)' : 'var(--mv-ink-62)' },
           { label: 'Automation Rate', value: run.automation_rate != null ? `${run.automation_rate}%` : '—', color: parseFloat(run.automation_rate) >= 80 ? 'var(--mv-green)' : 'var(--mv-amber)' },
         ].map(({ label, value, color }) => (
-          <div key={label} style={card}>
-            <div style={{ fontSize: 10, color: 'var(--mv-ink-52)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>{label}</div>
+          <div key={label} className="v2-panel">
+            <div style={{ fontSize: 10, color: 'var(--mv-ink-52)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{label}</div>
             <div style={{ fontSize: 20, fontWeight: 800, color }}>{value}</div>
           </div>
         ))}
@@ -3604,14 +3602,14 @@ export default function RunDetailPage() {
         <>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
           {/* Breakdown chart */}
-          <div style={card}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--mv-ink)', marginBottom: 16 }}>Result breakdown</div>
+          <div className="v2-panel">
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--mv-ink)' }}>Result breakdown</div>
             {[
               { label: 'Matched',   count: run.matched_count   || 0, color: 'var(--mv-green)' },
               { label: 'Corrected', count: run.corrected_count || 0, color: 'var(--mv-amber)' },
               { label: 'Unmatched', count: run.unmatched_count || 0, color: 'var(--mv-amber)' },
             ].map(({ label, count, color }) => (
-              <div key={label} style={{ marginBottom: 12 }}>
+              <div key={label}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginBottom: 5 }}>
                   <span style={{ color: 'var(--mv-ink-52)' }}>{label}</span>
                   <span style={{ color, fontWeight: 700 }}>{count.toLocaleString()} / {total.toLocaleString()}</span>
@@ -3624,7 +3622,7 @@ export default function RunDetailPage() {
           </div>
 
           {/* Run details */}
-          <div style={card}>
+          <div className="v2-panel" style={{ gap: 0 }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--mv-ink)', marginBottom: 16 }}>Run details</div>
             {[
               ['Carrier',       run.carrier_name],
@@ -3643,14 +3641,14 @@ export default function RunDetailPage() {
 
           {/* Finalize error */}
           {finalizeError && (
-            <div style={{ ...card, border: '1px solid var(--mv-magenta-200)', background: 'var(--mv-magenta-100)', gridColumn: 'span 2', color: 'var(--mv-magenta)', fontSize: 12 }}>
+            <div className="v2-panel v2-panel--alert" style={{ background: 'var(--mv-magenta-100)', gridColumn: 'span 2', color: 'var(--mv-magenta)', fontSize: 12 }}>
               ✗ {finalizeError}
             </div>
           )}
 
           {/* Quick action — unmatched */}
           {(run.unmatched_count || 0) > 0 && (
-            <div style={{ ...card, border: '1px solid var(--mv-amber-200)', background: 'var(--mv-amber-100)', gridColumn: 'span 2', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="v2-panel" style={{ border: '1px solid var(--mv-amber-200)', background: 'var(--mv-amber-100)', gridColumn: 'span 2', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--mv-amber)' }}>
                   {run.unmatched_count} line{run.unmatched_count !== 1 ? 's' : ''} need manual review
@@ -3667,8 +3665,8 @@ export default function RunDetailPage() {
 
           {/* Failed run banner */}
           {run.status === 'failed' && (
-            <div style={{ ...card, border: '1px solid var(--mv-magenta-200)', background: 'var(--mv-magenta-100)', gridColumn: 'span 2' }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--mv-magenta)', marginBottom: 4 }}>✗ Run Failed</div>
+            <div className="v2-panel v2-panel--alert" style={{ background: 'var(--mv-magenta-100)', gridColumn: 'span 2' }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--mv-magenta)' }}>✗ Run Failed</div>
               <div style={{ fontSize: 12, color: 'var(--mv-ink-52)' }}>
                 The reconciliation engine encountered an error during processing. Check Railway logs for details, then delete this run and re-upload the CSV.
               </div>
@@ -3677,7 +3675,7 @@ export default function RunDetailPage() {
 
           {/* Finalize CTA — show when no unmatched, run completed successfully, not yet finalized */}
           {(run.unmatched_count || 0) === 0 && !run.finalized && (run.status === 'complete' || run.status === 'needs_review') && (
-            <div style={{ ...card, border: '1px solid var(--mv-purple-200)', background: 'var(--mv-purple-100)', gridColumn: 'span 2', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div className="v2-panel v2-panel--brand" style={{ background: 'var(--mv-purple-100)', gridColumn: 'span 2', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--mv-green)' }}>Ready to finalize</div>
                 <div style={{ fontSize: 12, color: 'var(--mv-ink-52)', marginTop: 3 }}>
@@ -3722,10 +3720,9 @@ export default function RunDetailPage() {
 
           {/* Cancelled booking notice — download is on the main reconciliation page */}
           {unmatchedLines.some(l => l.unmatched_reason === 'cancelled_booking_invoiced') && (
-            <div style={{
-              background: 'var(--mv-magenta-100)', border: '1px solid var(--mv-magenta-200)',
-              borderRadius: 8, padding: '10px 14px', marginBottom: 16,
-              display: 'flex', alignItems: 'center', gap: 10,
+            <div className="v2-panel v2-panel--alert" style={{
+              background: 'var(--mv-magenta-100)', padding: '10px 14px', marginBottom: 16,
+              flexDirection: 'row', alignItems: 'center', gap: 10,
             }}>
               <span style={{ fontSize: 15, lineHeight: 1 }}>🚫</span>
               <div style={{ fontSize: 12, color: 'var(--mv-magenta-deep)', lineHeight: 1.5 }}>
@@ -3748,7 +3745,7 @@ export default function RunDetailPage() {
               refetchRun();
             }}
           />
-          <div style={card}>
+          <div className="v2-panel">
             <LinesTable
               lines={unmatchedLines}
               showResolve
@@ -3791,7 +3788,7 @@ export default function RunDetailPage() {
 
       {/* Line tables for other tabs */}
       {activeTab !== 'overview' && activeTab !== 'unmatched' && activeTab !== 'warning' && activeTab !== 'customers' && activeTab !== 'queries' && (
-        <div style={card}>
+        <div className="v2-panel">
           <LinesTable
             lines={currentLines}
             showResolve={false}
