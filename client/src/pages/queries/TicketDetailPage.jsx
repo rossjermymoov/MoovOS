@@ -330,11 +330,17 @@ function EmailHtml({ html }) {
       .replace(/\son\w+\s*=\s*'[^']*'/gi, '')
       .replace(/\son\w+\s*=\s*[^\s>]+/gi, '')
       .replace(/(href|src)\s*=\s*(["'])\s*javascript:[^"']*\2/gi, '$1="#"');
+    // Fixed light backing regardless of app theme — email HTML almost always
+    // carries its own inline colors (typically defaulting to black), authored
+    // assuming a white canvas. Those colors override our wrapper's `color` inside
+    // the shadow root, so on a dark app background the text goes near-invisible.
+    // Emails get a small white document pane instead of trying to reinterpret
+    // arbitrary inline colors, which risks making some emails worse (white-on-white).
     root.innerHTML =
       `<style>:host{display:block}` +
       `img{max-width:100%!important;height:auto}table{max-width:100%!important}` +
-      `a{color:var(--mv-teal)}*{word-break:break-word;overflow-wrap:break-word}</style>` +
-      `<div style="font:13px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:var(--mv-ink-78)">${safe}</div>`;
+      `a{color:#1a73e8}*{word-break:break-word;overflow-wrap:break-word}</style>` +
+      `<div style="font:13px/1.6 -apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;color:#1a1a1a;background:#fff;padding:14px 16px;border-radius:var(--v2-r-md, 10px)">${safe}</div>`;
   }, [html]);
   return <div ref={hostRef} />;
 }
