@@ -20,17 +20,18 @@ const SUPPORT_FROM = 'service@moovparcel.co.uk';
 // Issue types that should route to the courier's claims/disputes inbox.
 const CLAIM_ISSUES = new Set(['DAMAGED', 'LOST', 'RETURN_TO_SENDER']);
 
-export async function insertDraft(queryId, direction, subject, body, toAddress = null) {
+export async function insertDraft(queryId, direction, subject, body, toAddress = null, requiredFieldsPresent = null) {
   const r = await query(
     `INSERT INTO query_emails
-       (query_id, direction, subject, body_text, from_address, to_address, is_ai_draft, reply_to_message_id, created_at)
+       (query_id, direction, subject, body_text, from_address, to_address, is_ai_draft, reply_to_message_id, required_fields_present, created_at)
      VALUES ($1, $2::email_direction, $3, $4, $5, $6, true,
        (SELECT id FROM query_emails
          WHERE query_id = $1 AND direction IN ('inbound_customer','inbound_courier')
          ORDER BY COALESCE(received_at, created_at) DESC LIMIT 1),
+       $7,
        NOW())
      RETURNING id`,
-    [queryId, direction, subject, body, SUPPORT_FROM, toAddress],
+    [queryId, direction, subject, body, SUPPORT_FROM, toAddress, requiredFieldsPresent],
   );
   return r.rows[0]?.id || null;
 }
@@ -315,6 +316,18 @@ export async function processCustomerEmail(queryId, { subject = '', body = '' } 
   // courier inquiry, and record exactly what's missing for the UI.
   const missing = new Set(triage.missing_variables || []);
   if (!tracking && template) missing.add('tracking_number');   // can't chase without it
+
+  // Courier inquiry required fields (WISMO plan §9.2, confirmed by Sam): DPD, Yodel,
+  // and DHL won't investigate without a parcel description, its contents, and its
+  // declared value. Hard backstop regardless of triage source (Gemini/Anthropic/
+  // regex) — mirrors the tracking_number backstop above, since an LLM's own
+  // has_required_context call can't be trusted as the only gate before a courier
+  // inquiry is allowed to go out.
+  if (template) {
+    if (!triage.parcel_description) missing.add('parcel_description');
+    if (!triage.parcel_contents) missing.add('parcel_contents');
+    if (!triage.parcel_value) missing.add('parcel_value');
+  }
   const needsContext = triage.has_required_context === false || missing.size > 0;
 
   if (needsContext) {
@@ -356,10 +369,15 @@ export async function processCustomerEmail(queryId, { subject = '', body = '' } 
   const courierEmail = await resolveCourierEmail(courierCode, triage.issue_type);
 
   // Courier inquiry — header + concise (greeting-free) middle ask + footer.
+  // Parcel description/contents/value are always present here — the missing-context
+  // branch above withholds this draft and asks the customer instead until they are.
   const issueLabel = (triage.issue_type || 'GENERAL').replace(/_/g, ' ').toLowerCase();
   const courierMiddle =
     `Please could you assist with consignment ${vars.tracking_code} regarding a ${issueLabel} issue ` +
-    `for our customer ${vars.customer_name}? Please investigate and confirm the current status and next steps.`;
+    `for our customer ${vars.customer_name}? Please investigate and confirm the current status and next steps.\n\n` +
+    `Parcel description: ${triage.parcel_description}\n` +
+    `Contents: ${triage.parcel_contents}\n` +
+    `Declared value: ${triage.parcel_value}`;
   const courierBody = stitch(tpl.courier_header_template, courierMiddle, tpl.courier_footer_template, vars);
 
   // Customer confirmation — header + greeting-free middle ack + footer.
@@ -379,7 +397,8 @@ export async function processCustomerEmail(queryId, { subject = '', body = '' } 
   await insertDraft(queryId, 'outbound_courier',
     `[Ref: ${ref}] ${template.courierName} — ${triage.issue_type} — ${vars.tracking_code}`,
     courierBody,
-    courierEmail);
+    courierEmail,
+    true);   // required_fields_present — always true here, see missing-context branch above
 
   const expiresAt = new Date(Date.now() + (template.slaHours || DEFAULT_SLA_HOURS) * 3600 * 1000);
   await query(
