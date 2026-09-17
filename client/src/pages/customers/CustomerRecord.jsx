@@ -131,7 +131,7 @@ function TestAccountSection({ customer, onToggle }) {
     finally { setBusy(false); }
   }
   return (
-    <div style={{ marginBottom: 18, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14, borderLeft: `3px solid ${enabled ? 'var(--mv-magenta)' : 'var(--mv-divider)'}`, background: enabled ? 'rgba(205,29,105,.06)' : 'transparent' }}>
+    <div style={{ marginBottom: 18, padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 14, borderLeft: `3px solid ${enabled ? 'var(--mv-magenta)' : 'var(--mv-divider)'}`, background: enabled ? 'rgba(205,29,105,.06)' : 'transparent', borderRadius: 'var(--v2-r-md)' }}>
       <FlaskConical size={18} color={enabled ? 'var(--mv-magenta)' : 'var(--mv-ink-45)'} strokeWidth={1.5} />
       <div style={{ flex: 1 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -477,7 +477,7 @@ function PerformanceTab({ customerId }) {
         <button className="mv-btn mv-btn--sm" onClick={() => setShowPerfDebug(d => !d)}><Bug size={12} /> {showPerfDebug ? 'Hide debug' : 'Debug numbers'}</button>
       </div>
       {showPerfDebug && (
-        <div style={{ marginBottom: 20, border: '1px solid var(--mv-hairline-2)', fontSize: 11 }}>
+        <div style={{ marginBottom: 20, border: '1px solid var(--mv-hairline-2)', fontSize: 11, borderRadius: 'var(--v2-r-md)', overflow: 'hidden' }}>
           <div style={{ padding: '8px 14px', background: 'var(--mv-purple-100)' }}><span style={{ fontSize: 10, fontWeight: 700, color: 'var(--mv-purple-700)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Performance debug</span></div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)' }}>
             {[{ label: 'Last 7 days', d: perfData.last7 }, { label: 'Last 30 days', d: perfData.last30 }, { label: 'All time', d: perfData.all }].map(({ label, d }) => (
@@ -605,7 +605,7 @@ function FinancialTab({ c }) {
           </div>
         </div>
         {showStopForm && (
-          <div style={{ marginTop: 16, borderLeft: '3px solid var(--mv-magenta)', background: 'rgba(205,29,105,.05)', padding: 16 }}>
+          <div style={{ marginTop: 16, borderLeft: '3px solid var(--mv-magenta)', background: 'rgba(205,29,105,.05)', padding: 16, borderRadius: 'var(--v2-r-md)' }}>
             <div className="mv-label">Reason for placing on stop</div>
             <textarea className="mv-input" value={stopReason} onChange={e => setStopReason(e.target.value)} rows={2} placeholder="e.g. Credit limit exceeded — awaiting payment of overdue invoices" style={{ minHeight: 60 }} />
             <div style={{ display: 'flex', gap: 8, marginTop: 10, justifyContent: 'flex-end' }}>
