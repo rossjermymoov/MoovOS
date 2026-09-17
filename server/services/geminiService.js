@@ -99,6 +99,9 @@ function regexFallback(subject, body) {
     has_required_context: true,        // fallback can't assess — let validators decide
     missing_variables: [],
     contextual_clarification_draft: null,
+    parcel_description: null,          // fallback can't extract these — code-level backstop still applies
+    parcel_contents: null,
+    parcel_value: null,
     source: 'regex_fallback',
   };
 }
@@ -115,7 +118,7 @@ function buildTriagePrompt(subject, body, trackingExamples) {
     : '';
   return (
     `You are triaging a parcel support email for a courier reseller.\n` +
-    `Return STRICT JSON only with keys: intent, courier_code, tracking_code, issue_type, needs_human, requires_reply, reason, has_required_context, missing_variables, contextual_clarification_draft.\n` +
+    `Return STRICT JSON only with keys: intent, courier_code, tracking_code, issue_type, needs_human, requires_reply, reason, has_required_context, missing_variables, contextual_clarification_draft, parcel_description, parcel_contents, parcel_value.\n` +
     `- intent: the transactional intent — one of ["courier_chase","ticket_closure","information_request","complaint","other"]. ` +
     `Use "ticket_closure" when the customer is simply confirming resolution, saying thanks, or otherwise needs no further outward action.\n` +
     `  HIGH-CONFIDENCE RULE: if the latest message uses final-state language (e.g. "parcel has now been delivered", ` +
@@ -134,10 +137,18 @@ function buildTriagePrompt(subject, body, trackingExamples) {
     `- reason: short string when needs_human is true, else null.\n` +
     `- has_required_context: given the inferred intent, do we have EVERY mandatory operational detail needed to action ` +
     `or escalate this? false if anything essential is missing (tracking number, order reference, item description, ` +
-    `delivery address, etc.), else true.\n` +
-    `- missing_variables: array of the specific missing detail names, e.g. ["tracking_number"], ["order_number","delivery_address"]; [] when nothing is missing.\n` +
+    `delivery address, etc.), else true. When intent is "courier_chase", the courier will refuse to investigate without ` +
+    `a description of the parcel, its contents, and its declared value — treat these as mandatory alongside the tracking ` +
+    `number, not optional extras.\n` +
+    `- missing_variables: array of the specific missing detail names, e.g. ["tracking_number"], ["order_number","delivery_address"]; ` +
+    `use exactly "parcel_description", "parcel_contents", "parcel_value" for those three when missing; [] when nothing is missing.\n` +
     `- contextual_clarification_draft: when has_required_context is false, a warm, professional British-English email BODY ` +
-    `(NO greeting, NO sign-off — body paragraphs only) that clearly asks the customer to provide exactly the missing_variables; else null.\n\n` +
+    `(NO greeting, NO sign-off — body paragraphs only) that clearly asks the customer to provide exactly the missing_variables; else null.\n` +
+    `- parcel_description: a short description of the parcel/item itself (e.g. "cardboard box, shoebox-sized"), if the ` +
+    `customer stated one, else null.\n` +
+    `- parcel_contents: what's inside the parcel, if the customer stated it, else null.\n` +
+    `- parcel_value: the declared value of the contents as stated by the customer (keep their currency/format as a string, ` +
+    `e.g. "£45" or "120 GBP"), if stated, else null.\n\n` +
     `Subject: ${subject || '(none)'}\nBody: ${(body || '').slice(0, 2000)}`
   );
 }
@@ -167,6 +178,9 @@ function normalizeTriage(parsed, source) {
     has_required_context: parsed.has_required_context !== false,
     missing_variables: Array.isArray(parsed.missing_variables) ? parsed.missing_variables.map(v => String(v).trim()).filter(Boolean) : [],
     contextual_clarification_draft: parsed.contextual_clarification_draft ? String(parsed.contextual_clarification_draft).trim() : null,
+    parcel_description: parsed.parcel_description ? String(parsed.parcel_description).trim() : null,
+    parcel_contents: parsed.parcel_contents ? String(parsed.parcel_contents).trim() : null,
+    parcel_value: parsed.parcel_value ? String(parsed.parcel_value).trim() : null,
     source,
   };
 }
