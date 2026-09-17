@@ -8,10 +8,16 @@ rest of the product without anyone checking it.
 
 ## The five rules
 
-**1. No boxes.**
-Structure comes from rules and whitespace, not from cards inside cards. A 2px rule under a
-section heading, 1px hairlines between rows, generous space between blocks. Zero border
-radius anywhere. If something feels like it needs a card, it needs more space instead.
+**1. No boxes — softened, not squared.**
+Structure comes from rules, whitespace, and surface separation, not from cards inside cards.
+A 2px rule under a section heading, 1px hairlines between rows, generous space between
+blocks, panels lifted off the page ground with `--mv-surface` and a light-mode shadow. If
+something feels like it needs a card, it needs more space instead.
+
+*(As of design direction 1c "Command Console", the original "zero border radius anywhere"
+rule is retired — that read as Windows-98. Radius now follows a three-step scale:
+`--v2-r-sm` (8px, controls), `--v2-r-md` (12px, nested blocks), `--v2-r-lg` (16px, panels/
+modals/tables), plus `--v2-r-pill` (999px, chips and status dots). See Tokens below.)*
 
 **2. One status language.**
 Four marks, and they mean the same thing on every screen:
@@ -83,7 +89,15 @@ Errors say what to do. No exclamation marks, no emoji, no "Oops".
 --moov-magenta:    #DE6C9E;
 --moov-teal:       #73A1B9;
 
---radius-md: 0;               /* not negotiable */
+/* Radius scale — direction 1c "Command Console" (moov-v2.css), replaces the
+   old --radius-md: 0. Applied via class-specificity rules with !important,
+   so moov-design.css's .moov-ds *{border-radius:0!important} reset does not
+   need to change. */
+--v2-r-sm:   8px;     /* controls: buttons, inputs, icon buttons */
+--v2-r-md:   12px;    /* nested blocks inside a panel */
+--v2-r-lg:   16px;    /* panels, cards, tables, modals */
+--v2-r-pill: 999px;   /* chips, group badges, status dots */
+
 font-family: Archivo;
 ```
 
@@ -153,7 +167,9 @@ Labels flush left. Destructive actions (place on stop) take a red outline, never
 
 ## Don't
 
-- Don't round a corner.
+- Don't use a radius outside the `--v2-r-*` scale, or invent a one-off corner value.
+- Don't round a dense numeric grid — rate matrices, weight bands and money cells keep flush
+  edges; a rounded input in every cell of a 40-row matrix is unreadable.
 - Don't add a fifth status colour, or a sixth.
 - Don't use a coloured pill or badge.
 - Don't centre anything.

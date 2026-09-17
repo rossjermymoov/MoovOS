@@ -63,17 +63,15 @@ const STATUS_CFG = {
   escalated:               { label: 'Escalated',         kind: 'attention' },
 };
 
-// Colour carries meaning, not category: red = needs a person, amber = caution,
-// green = informational. Values resolve through tokens so they flip with theme.
 const TYPE_CFG = {
-  whereabouts:    { label: 'WISMO',           color: 'var(--mv-purple)' },
-  not_delivered:  { label: 'Not Delivered',   color: 'var(--mv-magenta-deep)' },
-  wrong_address:  { label: 'Wrong Address',   color: 'var(--mv-magenta-deep)' },
-  damaged:        { label: 'Damaged',         color: 'var(--mv-magenta-deep)' },
-  missing_items:  { label: 'Missing Items',   color: 'var(--mv-magenta-deep)' },
-  failed_delivery:{ label: 'Failed Delivery', color: 'var(--mv-amber-deep)' },
-  returned:       { label: 'Returned',        color: 'var(--mv-amber-deep)' },
-  delay:          { label: 'Delay',           color: 'var(--mv-amber-deep)' },
+  whereabouts:    { label: 'WISMO',           color: '#7B2FBE' },
+  not_delivered:  { label: 'Not Delivered',   color: '#E91E8C' },
+  wrong_address:  { label: 'Wrong Address',   color: '#E91E8C' },
+  damaged:        { label: 'Damaged',         color: '#E91E8C' },
+  missing_items:  { label: 'Missing Items',   color: '#E91E8C' },
+  failed_delivery:{ label: 'Failed Delivery', color: '#D97706' },
+  returned:       { label: 'Returned',        color: '#D97706' },
+  delay:          { label: 'Delay',           color: '#D97706' },
   other:          { label: 'Other',           color: 'var(--mv-ink-52)' },
 };
 

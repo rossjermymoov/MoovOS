@@ -6,6 +6,7 @@ import App from './App';
 import './index.css';
 import './styles/moov-design.css';
 import './styles/moov.css';
+import './styles/moov-v2.css';
 
 const queryClient = new QueryClient({
   defaultOptions: {

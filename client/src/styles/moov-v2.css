@@ -1,0 +1,539 @@
+/* ============================================================================
+   moov-v2.css — the "Command Console" visual layer (design direction 1c)
+
+   WHAT THIS IS
+   A purely additive override layer. It does not introduce a single new colour:
+   every value below resolves through the existing --mv-* / --color-* custom
+   properties in moov.css and moov-design.css, so light/dark and the four
+   status meanings keep working exactly as they do today.
+
+   WHAT IT CHANGES
+   1. Radius. The old "zero radius, ever" rule is retired — that was the
+      Windows-98 read. A three-step scale replaces it (see --v2-r-*). The
+      `.moov-ds *{border-radius:0!important}` reset is defeated below by
+      class-specificity rules that also carry !important, so you do NOT need
+      to edit moov-design.css.
+   2. Grounds. Page = --mv-bg, panels = --mv-surface with a radius and (light
+      mode only) a 1px shadow. Structure now comes from surface separation
+      rather than 2px rules alone; the rules remain, softened.
+   3. Controls. Buttons, chips and the search field become pill/rounded, and
+      the four status marks become dots (the progress mark keeps its triangle
+      so the shape distinction survives for colour-blind users).
+
+   INSTALL
+   Import LAST, after both existing sheets:
+
+     import './styles/moov.css';
+     import './styles/moov-design.css';
+     import './styles/moov-v2.css';   // ← add this line
+
+   That single line is the whole redesign for every screen already on the
+   .mv-* / .ds-* classes. Screens still on raw inline style={{}} (RunDetail,
+   Finance, Queries, ReconciliationTab, RateCardEditor, CustomerRecord,
+   Pricing) are unaffected until they are migrated — see INTEGRATION.md.
+   ============================================================================ */
+
+:root {
+  --v2-r-sm: 8px;    /* controls: buttons, inputs, icon buttons */
+  --v2-r-md: 12px;   /* nested blocks inside a panel */
+  --v2-r-lg: 16px;   /* panels, cards, tables, modals */
+  --v2-r-pill: 999px;
+
+  /* Panel elevation. Dark mode relies on surface contrast instead of shadow,
+     so these collapse to none below — a shadow on #171B2D over #12141D reads
+     as dirt, not depth. */
+  --v2-lift:       0 1px 2px color-mix(in srgb, #2d2b2b 10%, transparent);
+  --v2-lift-hover: 0 3px 12px color-mix(in srgb, #2d2b2b 14%, transparent);
+  --v2-panel-pad: 18px;
+  --v2-ease: 140ms cubic-bezier(.4, 0, .2, 1);
+
+  /* Referenced by the patched screens. Kept here so there is one place to
+     change them rather than a hunt through inline styles. */
+  --v2-lift-modal: 0 24px 48px -12px color-mix(in srgb, #2d2b2b 30%, transparent);
+
+  /* Plate behind a courier logo. Carrier logos are drawn for white, so this
+     stays light in both themes — it is a substrate, not a surface. */
+  --v2-logo-plate: #FFFFFF;
+
+  /* Payload / JSON viewers in RunDetail. Deliberately dark in BOTH themes,
+     the way a code block is: it reads as machine output, not as app chrome.
+     Was hardcoded #0d1117 in four places. */
+  --v2-code-bg: #0D1117;
+}
+
+:root[data-theme="dark"] {
+  --v2-lift: none;
+  --v2-lift-hover: none;
+  --v2-lift-modal: 0 24px 48px -12px rgba(0, 0, 0, .55);
+}
+
+/* ── 0. defeat the zero-radius reset ────────────────────────────────────────
+   Every selector here is class-level (0,1,0)+ and therefore outranks the
+   universal `.moov-ds *` rule at equal !important weight. */
+.moov-ds .ds-btn,
+.moov-ds .ds-chip,
+.moov-ds .ds-field,
+.moov-ds .ds-modal,
+.moov-ds .ds-table,
+.moov-ds .ds-nav-item,
+.moov-ds .ds-mark,
+.moov-ds .v2-panel,
+.mv-app .mv-btn,
+.mv-app .mv-chip,
+.mv-app .mv-input,
+.mv-app .mv-search,
+.mv-app .mv-icon-btn,
+.mv-app .mv-avatar,
+.mv-app .mv-rail-item,
+.mv-app .mv-table,
+.mv-app .v2-panel {
+  border-radius: revert-layer;
+}
+
+/* ── 0b. reaching the un-migrated screens ───────────────────────────────────
+   An author !important declaration outranks a normal inline style, so the
+   rules in this section fix square corners on screens that set
+   `borderRadius: 0` (or nothing) inline — WITHOUT editing those files.
+   This is what makes the redesign land on RunDetail, Finance, Queries,
+   ReconciliationTab, RateCardEditor, CustomerRecord and Pricing before any
+   of them are migrated.
+
+   Scope is deliberately narrow: controls, tables and marks — the things that
+   carry the Windows-98 read. Hand-built PANELS on those screens cannot be
+   reached this way (CSS cannot match on an inline border value), so they stay
+   square until migrated; see the table in INTEGRATION.md.
+
+   Exclusions matter. Dense numeric grids (rate matrices, weight bands, money
+   cells) keep flush edges on purpose — a rounded input in every cell of a
+   40-row matrix is unreadable. */
+
+.mv-app button,
+.moov-ds button {
+  border-radius: 9px !important;
+}
+
+/* Dense-grid and in-table controls stay flush. */
+.mv-app td button,
+.mv-app th button,
+.mv-app .mv-money,
+.mv-app .mv-cell,
+.mv-app [class*="matrix"] button,
+.mv-app [class*="matrix"] input,
+.mv-app [class*="band"] input,
+.moov-ds td button,
+.moov-ds th button {
+  border-radius: 0 !important;
+}
+
+/* Icon-only square buttons read better with a tighter radius. */
+.mv-app button.mv-icon-btn,
+.mv-app button[class*="icon"] {
+  border-radius: var(--v2-r-sm) !important;
+}
+
+.mv-app input:not([type="checkbox"]):not([type="radio"]):not(td input),
+.mv-app select,
+.mv-app textarea,
+.moov-ds input:not([type="checkbox"]):not([type="radio"]),
+.moov-ds select,
+.moov-ds textarea {
+  border-radius: var(--v2-r-sm) !important;
+}
+.mv-app td input,
+.mv-app td select,
+.moov-ds td input,
+.moov-ds td select {
+  border-radius: 0 !important;
+}
+
+.mv-app input[type="checkbox"],
+.mv-app input[type="radio"] {
+  border-radius: 4px !important;
+}
+.mv-app input[type="radio"] { border-radius: var(--v2-r-pill) !important; }
+
+/* Anything already circular stays circular. */
+.mv-app [style*="borderRadius: 99"],
+.mv-app [style*="border-radius: 99"] {
+  border-radius: var(--v2-r-pill) !important;
+}
+
+/* SVG glyphs are never surfaces — leave them alone. */
+.mv-app svg,
+.moov-ds svg,
+.mv-app img,
+.moov-ds img {
+  border-radius: revert !important;
+}
+
+/* ── 1. panels ──────────────────────────────────────────────────────────────
+   .v2-panel is the one new class. Use it for any new region; it is what the
+   rewritten TodayPage uses. */
+.v2-panel {
+  background: var(--mv-surface, var(--color-surface));
+  border-radius: var(--v2-r-lg) !important;
+  box-shadow: var(--v2-lift);
+  padding: var(--v2-panel-pad);
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  min-width: 0;
+}
+.v2-panel--flush { padding: 0; gap: 0; overflow: hidden; }
+.v2-panel--alert { border-top: 2px solid var(--mv-magenta, var(--moov-magenta)); }
+.v2-panel--brand { border-top: 2px solid var(--mv-purple, var(--color-accent)); }
+.v2-panel--quiet { border-top: 2px solid var(--mv-divider, var(--color-divider)); }
+.v2-panel.is-clickable { cursor: pointer; transition: box-shadow var(--v2-ease); }
+.v2-panel.is-clickable:hover { box-shadow: var(--v2-lift-hover); }
+
+/* A nested block inside a panel — the "Decide first" cards. */
+.v2-tile {
+  border-radius: var(--v2-r-md) !important;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  background: color-mix(in srgb, var(--mv-ink) 4%, transparent);
+}
+.v2-tile--alert { background: var(--mv-magenta-100); }
+.v2-tile--brand { background: var(--mv-purple-100); }
+
+.v2-grid { display: grid; gap: 13px; min-width: 0; }
+.v2-grid--figures { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+.v2-grid--tiles   { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+
+/* ── 2. rail ────────────────────────────────────────────────────────────────
+   Structure is unchanged (Sidebar.jsx needs no edit); the active item becomes
+   a tinted rounded plate instead of a left-border tick. */
+.mv-rail {
+  border-right: 1px solid var(--mv-divider) !important;
+  padding: 20px 0;
+}
+.mv-rail-scroll { padding: 0 10px; }
+.mv-rail-group + .mv-rail-group {
+  border-top: 1px solid var(--mv-hairline);
+  padding-top: 18px;
+  margin-top: 16px;
+}
+.mv-rail-group-label { padding-left: 13px !important; }
+.mv-rail-item {
+  border-radius: var(--v2-r-sm + 1px) !important;
+  border-radius: 9px !important;
+  border-left: 0 !important;
+  padding: 8px 13px !important;
+  gap: 10px;
+  transition: background var(--v2-ease), color var(--v2-ease);
+}
+.mv-rail-item:hover { background: color-mix(in srgb, var(--mv-ink) 6%, transparent); }
+.mv-rail-item.is-active {
+  background: var(--mv-purple-100) !important;
+  color: var(--mv-purple-700, var(--mv-purple)) !important;
+  font-weight: 800;
+}
+:root[data-theme="dark"] .mv-rail-item.is-active { color: var(--mv-purple) !important; }
+.mv-rail-count {
+  border-radius: 6px !important;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.mv-rail-item.is-active .mv-rail-count {
+  background: var(--mv-purple);
+  color: var(--mv-on-brand);
+}
+.mv-rail-dot { border-radius: var(--v2-r-pill) !important; }
+.mv-rail-foot { border-top: 1px solid var(--mv-divider) !important; }
+.mv-avatar { border-radius: 9px !important; }
+
+/* ── 3. topbar ──────────────────────────────────────────────────────────────*/
+.mv-top {
+  border-bottom: 1px solid var(--mv-divider) !important;
+  background: var(--mv-bg);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+.mv-search {
+  border-radius: var(--v2-r-sm + 2px) !important;
+  border-radius: 10px !important;
+  border: 1px solid var(--mv-hairline-2) !important;
+  transition: border-color var(--v2-ease), box-shadow var(--v2-ease);
+}
+.mv-search:focus-within {
+  border-color: var(--mv-purple) !important;
+  box-shadow: 0 0 0 3px var(--mv-purple-100) !important;
+}
+.mv-icon-btn {
+  border-radius: 9px !important;
+  width: 34px;
+  height: 34px;
+  transition: background var(--v2-ease);
+}
+
+/* Pill theme toggle — pairs with the rewritten ThemeToggle.jsx. Falls back
+   gracefully if you keep the existing icon-only button. */
+.v2-theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: var(--v2-r-pill) !important;
+  border: 1px solid var(--mv-hairline-2);
+  background: var(--mv-surface);
+  color: var(--mv-ink-78);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background var(--v2-ease), border-color var(--v2-ease);
+}
+.v2-theme-toggle:hover { border-color: var(--mv-ink-45); }
+:root[data-theme="dark"] .v2-theme-toggle { background: color-mix(in srgb, #fff 4%, transparent); }
+.v2-theme-track {
+  position: relative;
+  width: 24px;
+  height: 14px;
+  flex-shrink: 0;
+  border-radius: var(--v2-r-pill);
+  background: color-mix(in srgb, var(--mv-ink) 22%, transparent);
+  transition: background 180ms var(--v2-ease);
+}
+:root[data-theme="dark"] .v2-theme-track { background: color-mix(in srgb, var(--mv-purple) 45%, transparent); }
+.v2-theme-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--v2-r-pill);
+  background: var(--mv-surface);
+  transition: left 180ms var(--v2-ease), background 180ms var(--v2-ease);
+}
+:root[data-theme="dark"] .v2-theme-knob { left: 12px; background: var(--mv-purple); }
+
+/* ── 4. buttons ─────────────────────────────────────────────────────────────*/
+.mv-btn, .ds-btn {
+  border-radius: 9px !important;
+  transition: background var(--v2-ease), border-color var(--v2-ease), box-shadow var(--v2-ease);
+}
+.mv-btn--primary, .ds-btn-primary { font-weight: 800; }
+.mv-btn--primary:hover, .ds-btn-primary:hover { box-shadow: var(--v2-lift-hover); }
+.mv-btn:focus-visible, .ds-btn:focus-visible {
+  outline: 2px solid var(--mv-purple, var(--color-accent));
+  outline-offset: 2px;
+}
+.mv-btn--sm { border-radius: var(--v2-r-sm) !important; }
+
+/* ── 5. chips, tabs, filters ────────────────────────────────────────────────*/
+.mv-chip, .ds-chip {
+  border-radius: var(--v2-r-pill) !important;
+  padding: 5px 13px !important;
+  transition: background var(--v2-ease), border-color var(--v2-ease), color var(--v2-ease);
+}
+.mv-chip.is-on, .ds-chip--sel {
+  background: var(--mv-purple, var(--color-accent)) !important;
+  border-color: var(--mv-purple, var(--color-accent)) !important;
+  color: var(--mv-on-brand, var(--color-on-accent)) !important;
+}
+.mv-tab { border-radius: var(--v2-r-sm) var(--v2-r-sm) 0 0 !important; padding-inline: 4px; }
+
+/* ── 6. fields ──────────────────────────────────────────────────────────────
+   Underline fields stay underlines — they are load-bearing in the rate
+   editors, where a boxed input per cell would be unreadable. Only the focus
+   treatment softens. */
+.mv-input:focus, .ds-field:focus {
+  box-shadow: 0 1px 0 var(--mv-purple, var(--color-accent));
+}
+.mv-money { border-radius: 0 !important; }
+.mv-switch { border-radius: var(--v2-r-pill) !important; }
+.mv-switch > span { border-radius: var(--v2-r-pill) !important; }
+
+/* ── 7. status marks — squares become dots ──────────────────────────────────
+   The progress/flight mark keeps its triangle: shape, not colour, is what
+   distinguishes it from settled. */
+.mv-mark, .ds-mark { border-radius: var(--v2-r-pill) !important; }
+.mv-mark--flight, .ds-mark--progress { border-radius: 0 !important; }
+
+/* ── 8. tables ──────────────────────────────────────────────────────────────
+   Tables become the panel rather than sitting loose on the page. Corners are
+   rounded via the first/last cells since overflow:hidden does not clip a
+   <table>. Wrap in .v2-table-wrap if you need horizontal scroll. */
+.v2-table-wrap {
+  background: var(--mv-surface, var(--color-surface));
+  border-radius: var(--v2-r-lg) !important;
+  box-shadow: var(--v2-lift);
+  overflow-x: auto;
+  min-width: 0;
+}
+.v2-table-wrap > .mv-table,
+.v2-table-wrap > .ds-table { min-width: 720px; }
+
+.mv-table, .ds-table { border-collapse: separate; border-spacing: 0; }
+.mv-table thead th, .ds-table thead th {
+  border-bottom: 1px solid var(--mv-divider, var(--color-divider)) !important;
+  padding-block: 10px !important;
+}
+.mv-table tbody td, .ds-table tbody td {
+  border-bottom: 1px solid var(--mv-hairline) !important;
+}
+.mv-table tbody tr:last-child td, .ds-table tbody tr:last-child td { border-bottom: 0 !important; }
+.mv-table tbody tr, .ds-table tbody tr {
+  transition: background var(--v2-ease), box-shadow var(--v2-ease);
+}
+.mv-table tbody tr:hover, .ds-table tbody tr:hover {
+  background: color-mix(in srgb, var(--mv-ink, var(--color-text)) 4%, transparent);
+  box-shadow: inset 3px 0 0 var(--mv-purple, var(--color-accent));
+}
+/* Rows needing a person keep a persistent red mark, not just red text. */
+.mv-table tbody tr.is-attention, .ds-table tbody tr.is-attention {
+  background: var(--mv-magenta-100);
+  box-shadow: inset 3px 0 0 var(--mv-magenta);
+}
+.mv-table tbody tr.is-waiting, .ds-table tbody tr.is-waiting {
+  box-shadow: inset 3px 0 0 var(--mv-ink-45);
+}
+.mv-row-tick { border-radius: var(--v2-r-pill) !important; }
+
+/* ── 9. figure / KPI strip ──────────────────────────────────────────────────
+   The hairline-separated strip becomes a card row. Each figure keeps its
+   click-through affordance. */
+.mv-kpis {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  border-bottom: 0 !important;
+}
+.mv-kpi {
+  background: var(--mv-surface);
+  border-radius: var(--v2-r-lg) !important;
+  box-shadow: var(--v2-lift);
+  border-left: 0 !important;
+  border-top: 2px solid var(--mv-divider);
+  padding: 16px 18px !important;
+  transition: box-shadow var(--v2-ease);
+}
+.mv-kpi + .mv-kpi { border-left: 0 !important; }
+.mv-kpi.is-clickable:hover { background: var(--mv-surface); box-shadow: var(--v2-lift-hover); }
+.mv-kpi:has(.mv-kpi-value.is-attention) { border-top-color: var(--mv-magenta); }
+.mv-kpi-go { opacity: 1 !important; }
+
+/* Same treatment for the .ds-* figure strip on migrated screens. */
+.ds-figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+.ds-figure {
+  background: var(--color-surface);
+  border-radius: var(--v2-r-lg) !important;
+  box-shadow: var(--v2-lift);
+  border-left: 0 !important;
+  border-top: 2px solid var(--color-divider);
+  padding: 16px 18px !important;
+}
+.ds-figure:first-child { padding-left: 18px !important; }
+.ds-figure .go { opacity: 1 !important; }
+
+/* ── 10. banners ────────────────────────────────────────────────────────────*/
+.mv-banner {
+  border-radius: var(--v2-r-md) !important;
+  border-left: 0 !important;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--mv-magenta-100) !important;
+}
+.mv-banner--good { background: var(--mv-purple-100) !important; }
+.mv-banner--note { background: var(--mv-purple-100) !important; }
+
+/* ── 11. modals ─────────────────────────────────────────────────────────────*/
+.ds-modal-scrim {
+  background: color-mix(in srgb, var(--color-text) 48%, transparent);
+  backdrop-filter: blur(2px);
+}
+.ds-modal {
+  border-radius: var(--v2-r-lg) !important;
+  overflow: hidden;
+  border-top: 2px solid var(--color-accent) !important;
+}
+
+/* ── 12. rules ──────────────────────────────────────────────────────────────
+   2px section rules drop to 1px: panel edges already carry the separation,
+   and doubling both reads as noise. */
+.mv-rule { height: 1px !important; }
+.ds-rule { border-top-width: 1px !important; }
+
+/* ── 13. scrollbars ─────────────────────────────────────────────────────────*/
+.mv-app *::-webkit-scrollbar { width: 10px; height: 10px; }
+.mv-app *::-webkit-scrollbar-thumb {
+  border-radius: var(--v2-r-pill);
+  background: color-mix(in srgb, var(--mv-ink) 18%, transparent);
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+.mv-app *::-webkit-scrollbar-thumb:hover { background-color: color-mix(in srgb, var(--mv-ink) 30%, transparent); }
+.mv-app *::-webkit-scrollbar-track { background: transparent; }
+
+/* ── 14. the inline-panel idiom ─────────────────────────────────────────────
+   Roughly 25 places build a panel in style={{}} rather than with a class:
+
+     background: 'var(--mv-surface)', padding: 18,
+     borderTop: '2px solid var(--mv-divider)'
+
+   An inline style only wins for the properties it actually declares — and
+   none of these declare border-radius or box-shadow. So they can be reached
+   from here by matching the style attribute, with no JSX edit at all.
+
+   React serialises inline styles as kebab-case with a space after each colon,
+   which is what makes these substrings stable. If a future edit reorders or
+   reformats one of these declarations the selector stops matching — the panel
+   simply reverts to square, it does not break. Convert them to .v2-panel as
+   you touch each file and this section shrinks.
+
+   Covers: CustomerOnboardingTab (6), OnboardingTemplates (8),
+   OnboardingBoard (2), HappinessScore, CustomerRecord (3), TrackingPage,
+   CustomerAI, CustomerNew.
+   ============================================================================ */
+.mv-app [style*="border-top: 2px solid var(--mv-divider)"],
+.mv-app [style*="border-top: 2px solid var(--color-divider)"],
+.moov-ds [style*="border-top: 2px solid var(--color-divider)"] {
+  border-radius: var(--v2-r-lg);
+  border-top-width: 2px;
+}
+/* Only the ones that are actually a raised surface get elevation — a bare
+   borderTop on a page section is a rule, not a panel. */
+.mv-app [style*="background: var(--mv-surface)"][style*="border-top: 2px solid var(--mv-divider)"] {
+  box-shadow: var(--v2-lift);
+  overflow: hidden;
+}
+.mv-app [style*="background: var(--mv-surface)"][style*="border-left: 2px solid var(--mv-divider)"] {
+  border-radius: var(--v2-r-md);
+  box-shadow: var(--v2-lift);
+}
+/* Nested note/quote strips. */
+.mv-app [style*="border-left: 2px solid var(--mv-hairline-2)"] {
+  border-radius: 0 var(--v2-r-sm) var(--v2-r-sm) 0;
+}
+/* The two success ticks in CustomerNew / CustomerAI — 64px squares. */
+.moov-ds [style*="border: 2px solid var(--mv-green)"] {
+  border-radius: var(--v2-r-pill);
+}
+/* CountryPickerModal builds its own shell. */
+.mv-app [style*="border: 2px solid var(--mv-ink)"] {
+  border-radius: var(--v2-r-lg);
+  overflow: hidden;
+}
+/* TicketDetailPage avatar ring + TrackingPage detail pane. */
+.mv-app [style*="border: 2px solid var(--mv-teal-200)"] { border-radius: var(--v2-r-pill); }
+.mv-app [style*="border-left: 2px solid var(--mv-divider)"] { border-radius: var(--v2-r-lg) 0 0 var(--v2-r-lg); }
+
+/* Carrier/pricing tab underlines stay square — they are rules sitting under a
+   label, and rounding them makes the active tab look detached. Listed here so
+   the omission is visibly deliberate rather than an oversight:
+     borderBottom: '2px solid var(--mv-purple)'  ×9 across pages/carriers/ */
+
+/* ── 15. motion ─────────────────────────────────────────────────────────────*/
+@media (prefers-reduced-motion: reduce) {
+  .mv-app *, .moov-ds * { transition-duration: 1ms !important; animation-duration: 1ms !important; }
+}
