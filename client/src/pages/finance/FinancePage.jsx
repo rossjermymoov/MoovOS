@@ -29,22 +29,20 @@ function fmtTime(dt) {
 function StatCard({ label, value, sub, color = 'var(--mv-ink-52)', bg = 'color-mix(in srgb, var(--mv-ink) 3%, transparent)', onClick }) {
   return (
     <div
+      className="v2-panel"
       onClick={onClick}
       style={{
         background: bg || 'var(--mv-surface)',
-        border: `1px solid var(--mv-purple-200)`,
-        boxShadow: '0 0 12px color-mix(in srgb, var(--mv-green) 7%, transparent)',
-        borderRadius: 10,
-        padding: '14px 18px',
         minWidth: 140,
         flex: 1,
+        gap: 6,
         cursor: onClick ? 'pointer' : 'default',
         transition: 'background 0.15s, border-color 0.15s',
       }}
     >
-      <div style={{ fontSize: 11, color: 'var(--mv-ink-52)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>{label}</div>
+      <div style={{ fontSize: 11, color: 'var(--mv-ink-52)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</div>
       <div style={{ fontSize: 22, fontWeight: 800, color }}>{value}</div>
-      {sub && <div style={{ fontSize: 11, color: 'var(--mv-ink-52)', marginTop: 4 }}>{sub}</div>}
+      {sub && <div style={{ fontSize: 11, color: 'var(--mv-ink-52)' }}>{sub}</div>}
     </div>
   );
 }
@@ -931,38 +929,35 @@ function AwaitingReconciliationTab({ customers, gbp, fmt, getCourierLogo }) {
     <div>
       {/* Summary strip */}
       <div style={{ display: 'flex', gap: 12, marginBottom: 18, flexWrap: 'wrap' }}>
-        <div style={{
-          background: 'color-mix(in srgb, var(--mv-amber) 5%, transparent)', border: '1px solid var(--mv-amber-200)',
-          borderRadius: 10, padding: '14px 18px', minWidth: 140, flex: 1,
+        <div className="v2-panel" style={{
+          background: 'color-mix(in srgb, var(--mv-amber) 5%, transparent)',
+          minWidth: 140, flex: 1, gap: 6,
         }}>
-          <div style={{ fontSize: 11, color: 'var(--mv-ink-52)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Awaiting</div>
+          <div style={{ fontSize: 11, color: 'var(--mv-ink-52)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Awaiting</div>
           <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--mv-amber-deep)' }}>{total}</div>
-          <div style={{ fontSize: 11, color: 'var(--mv-ink-52)', marginTop: 4 }}>Charges pending reconciliation</div>
+          <div style={{ fontSize: 11, color: 'var(--mv-ink-52)' }}>Charges pending reconciliation</div>
         </div>
-        <div style={{
-          background: 'color-mix(in srgb, var(--mv-green) 4%, transparent)', border: '1px solid var(--mv-purple-200)',
-          borderRadius: 10, padding: '14px 18px', minWidth: 140, flex: 1,
+        <div className="v2-panel" style={{
+          background: 'color-mix(in srgb, var(--mv-green) 4%, transparent)',
+          minWidth: 140, flex: 1, gap: 6,
         }}>
-          <div style={{ fontSize: 11, color: 'var(--mv-ink-52)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Total Sell</div>
+          <div style={{ fontSize: 11, color: 'var(--mv-ink-52)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Total Sell</div>
           <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--mv-green)' }}>{totalSell != null ? gbp(totalSell) : '—'}</div>
-          <div style={{ fontSize: 11, color: 'var(--mv-ink-52)', marginTop: 4 }}>All charges (excl. surcharges)</div>
+          <div style={{ fontSize: 11, color: 'var(--mv-ink-52)' }}>All charges (excl. surcharges)</div>
         </div>
-        <div style={{
-          background: 'color-mix(in srgb, var(--mv-purple) 4%, transparent)', border: '1px solid var(--mv-purple-200)',
-          borderRadius: 10, padding: '14px 18px', minWidth: 140, flex: 1,
+        <div className="v2-panel" style={{
+          background: 'color-mix(in srgb, var(--mv-purple) 4%, transparent)',
+          minWidth: 140, flex: 1, gap: 6,
         }}>
-          <div style={{ fontSize: 11, color: 'var(--mv-ink-52)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Total Cost</div>
+          <div style={{ fontSize: 11, color: 'var(--mv-ink-52)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Total Cost</div>
           <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--mv-purple)' }}>{totalCost != null ? gbp(totalCost) : '—'}</div>
-          <div style={{ fontSize: 11, color: 'var(--mv-ink-52)', marginTop: 4 }}>All charges (excl. surcharges)</div>
+          <div style={{ fontSize: 11, color: 'var(--mv-ink-52)' }}>All charges (excl. surcharges)</div>
         </div>
         {margin != null && (
-          <div style={{
-            background: 'color-mix(in srgb, var(--mv-ink) 3%, transparent)', border: '1px solid color-mix(in srgb, var(--mv-ink) 8%, transparent)',
-            borderRadius: 10, padding: '14px 18px', minWidth: 140, flex: 1,
-          }}>
-            <div style={{ fontSize: 11, color: 'var(--mv-ink-52)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Margin</div>
+          <div className="v2-panel" style={{ minWidth: 140, flex: 1, gap: 6 }}>
+            <div style={{ fontSize: 11, color: 'var(--mv-ink-52)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Margin</div>
             <div style={{ fontSize: 22, fontWeight: 800, color: parseFloat(margin) >= 15 ? 'var(--mv-green)' : parseFloat(margin) >= 5 ? 'var(--mv-amber-deep)' : 'var(--mv-magenta)' }}>{margin}%</div>
-            <div style={{ fontSize: 11, color: 'var(--mv-ink-52)', marginTop: 4 }}>Base courier charges</div>
+            <div style={{ fontSize: 11, color: 'var(--mv-ink-52)' }}>Base courier charges</div>
           </div>
         )}
       </div>
@@ -1005,7 +1000,7 @@ function AwaitingReconciliationTab({ customers, gbp, fmt, getCourierLogo }) {
       </div>
 
       {/* Table */}
-      <div style={{ background: 'color-mix(in srgb, var(--mv-ink) 2%, transparent)', border: '1px solid color-mix(in srgb, var(--mv-ink) 6%, transparent)', borderRadius: 12, overflow: 'hidden' }}>
+      <div className="v2-panel v2-panel--flush">
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 800 }}>
             <thead>
@@ -1482,11 +1477,10 @@ export default function FinancePage() {
 
       {/* Batch reprice result banner */}
       {batchResult && (
-        <div style={{
+        <div className={`v2-panel ${batchResult.error ? 'v2-panel--alert' : 'v2-panel--brand'}`} style={{
           background: batchResult.error ? 'color-mix(in srgb, var(--mv-magenta) 8%, transparent)' : 'color-mix(in srgb, var(--mv-green) 8%, transparent)',
-          border: `1px solid ${batchResult.error ? 'var(--mv-magenta-200)' : 'var(--mv-purple-200)'}`,
-          borderRadius: 10, padding: '12px 16px', marginBottom: 16,
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+          padding: '12px 16px', marginBottom: 16,
+          flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12,
         }}>
           {batchResult.error ? (
             <span style={{ color: 'var(--mv-magenta)', fontSize: 13 }}>Error: {batchResult.error}</span>
@@ -1536,11 +1530,10 @@ export default function FinancePage() {
 
       {/* Full reprice result banner */}
       {fullRepriceResult && (
-        <div style={{
+        <div className={`v2-panel ${fullRepriceResult.error ? 'v2-panel--alert' : 'v2-panel--brand'}`} style={{
           background: fullRepriceResult.error ? 'color-mix(in srgb, var(--mv-magenta) 8%, transparent)' : 'color-mix(in srgb, var(--mv-purple) 8%, transparent)',
-          border: `1px solid ${fullRepriceResult.error ? 'var(--mv-magenta-200)' : 'var(--mv-purple-200)'}`,
-          borderRadius: 10, padding: '12px 16px', marginBottom: 16,
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+          padding: '12px 16px', marginBottom: 16,
+          flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12,
         }}>
           {fullRepriceResult.error ? (
             <span style={{ color: 'var(--mv-magenta)', fontSize: 13 }}>Error: {fullRepriceResult.error}</span>
@@ -1577,11 +1570,10 @@ export default function FinancePage() {
 
       {/* Fix Costs result banner */}
       {fixCostsResult && (
-        <div style={{
+        <div className={`v2-panel ${fixCostsResult.error ? 'v2-panel--alert' : 'v2-panel--brand'}`} style={{
           background: fixCostsResult.error ? 'color-mix(in srgb, var(--mv-magenta) 8%, transparent)' : 'color-mix(in srgb, var(--mv-green) 8%, transparent)',
-          border: `1px solid ${fixCostsResult.error ? 'var(--mv-magenta-200)' : 'var(--mv-purple-200)'}`,
-          borderRadius: 10, padding: '12px 16px', marginBottom: 16,
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+          padding: '12px 16px', marginBottom: 16,
+          flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12,
         }}>
           {fixCostsResult.error ? (
             <span style={{ color: 'var(--mv-magenta)', fontSize: 13 }}>Error: {fixCostsResult.error}</span>
@@ -1615,13 +1607,12 @@ export default function FinancePage() {
 
       {/* Aged unbilled alert banner */}
       {showAlerts && agedAlerts.length > 0 && (
-        <div style={{
+        <div className="v2-panel" style={{
           background: 'color-mix(in srgb, var(--mv-amber) 8%, transparent)',
           border: '1px solid var(--mv-amber-200)',
-          borderRadius: 10,
           padding: '12px 16px',
           marginBottom: 16,
-          display: 'flex',
+          flexDirection: 'row',
           alignItems: 'flex-start',
           gap: 12,
         }}>
@@ -1869,11 +1860,10 @@ export default function FinancePage() {
 
       {/* Customer reprice result banner */}
       {customerRepriceResult && (
-        <div style={{
+        <div className={`v2-panel ${customerRepriceResult.error ? 'v2-panel--alert' : 'v2-panel--brand'}`} style={{
           background: customerRepriceResult.error ? 'color-mix(in srgb, var(--mv-magenta) 8%, transparent)' : 'color-mix(in srgb, var(--mv-purple) 8%, transparent)',
-          border: `1px solid ${customerRepriceResult.error ? 'var(--mv-magenta-200)' : 'var(--mv-purple-200)'}`,
-          borderRadius: 10, padding: '12px 16px', marginBottom: 14,
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+          padding: '12px 16px', marginBottom: 14,
+          flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12,
         }}>
           {customerRepriceResult.error ? (
             <span style={{ color: 'var(--mv-magenta)', fontSize: 13 }}>Reprice error: {customerRepriceResult.error}</span>
