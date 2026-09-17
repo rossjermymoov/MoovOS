@@ -1986,7 +1986,7 @@ export default function FinancePage() {
                       {charge.courier && (() => {
                         const logo = getCourierLogo(charge.courier);
                         return logo ? (
-                          <div style={{ width: 20, height: 20, borderRadius: 4, background: '#fff', flexShrink: 0, overflow: 'hidden', border: '1px solid color-mix(in srgb, var(--mv-ink) 12%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <div style={{ width: 20, height: 20, borderRadius: 5, background: '#fff', flexShrink: 0, overflow: 'hidden', border: '1px solid color-mix(in srgb, var(--mv-ink) 12%, transparent)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                             <img src={logo} alt={charge.courier} style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 2 }} onError={e => { e.currentTarget.style.display='none'; }} />
                           </div>
                         ) : null;

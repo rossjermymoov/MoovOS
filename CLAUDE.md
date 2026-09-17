@@ -15,9 +15,11 @@ function components under `client/src/pages/**`, using the design tokens.
 
 ### The five rules (summary — the detail is in docs/design-rules.md)
 
-1. **No boxes.** Structure comes from 2px section rules and 1px hairlines and whitespace, never
-   cards inside cards. **Zero border radius anywhere.** If it feels like it needs a card, give it
-   more space instead.
+1. **No boxes.** Structure comes from 2px section rules, 1px hairlines, whitespace, and surface
+   separation, never cards inside cards. **Radius follows the `--v2-r-*` scale** (8/12/16px,
+   999px for pills) introduced by design direction 1c "Command Console" — the original
+   zero-radius rule is retired. Dense numeric grids (rate matrices, weight bands, money cells)
+   stay flush regardless. If it feels like it needs a card, give it more space instead.
 2. **One status language.** Four marks, same meaning everywhere: filled green square = settled/on
    track; purple triangle = in progress/automated; filled magenta square = needs a person; hollow
    grey square = waiting on someone else. Status text is 11px uppercase `.09em` in the mark's
