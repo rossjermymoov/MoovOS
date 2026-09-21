@@ -34,10 +34,15 @@ const api = axios.create({ baseURL: '/api' });
 // live theme tokens via color-mix() so it stays readable in both themes even though
 // the base hex itself doesn't change.
 const DEFAULT_SPACES = [
-  { key: 'cs',      label: 'Customer Service', colour: '#276E93' },
-  { key: 'sales',   label: 'Sales',            colour: '#CD1D69' },
-  { key: 'ops',     label: 'Operations',       colour: '#D97706' },
-  { key: 'product', label: 'Product & Data',   colour: '#0F7A46' },
+  { key: 'cs',        label: 'Customer Service', colour: '#276E93' },
+  { key: 'sales',     label: 'Sales',            colour: '#CD1D69' },
+  { key: 'ops',       label: 'Operations',       colour: '#D97706' },
+  { key: 'product',   label: 'Product & Data',   colour: '#0F7A46' },
+  // Added for email-triage automation (Phase 0) — emailTaskRouter.js's
+  // CATEGORY_SPACE routes claim/billing/technical email into these.
+  { key: 'claims',    label: 'Claims',           colour: '#8A6200' },
+  { key: 'accounts',  label: 'Accounts',         colour: '#5B21B6' },
+  { key: 'technical', label: 'Technical',        colour: '#1D4ED8' },
 ];
 const DEFAULT_STATUSES = [
   { key: 'todo',     label: 'To do',       colour: '#6B7280', isComplete: false },
