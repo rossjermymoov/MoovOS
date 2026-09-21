@@ -21,12 +21,14 @@ import { query } from '../db/index.js';
 import { geminiGenerate } from './geminiService.js';
 
 export const CATEGORY_SPACE = {
-  query:     'cs',
-  claim:     'claims',
-  billing:   'accounts',
-  technical: 'technical',
-  sales:     'sales',
-  other:     'cs',
+  query:      'cs',
+  claim:      'claims',
+  billing:    'accounts',
+  technical:  'technical',
+  sales:      'sales',
+  returns:    'returns',
+  collection: 'collection',
+  other:      'cs',
 };
 
 const CLAIM_HARD_RULES = [
@@ -73,6 +75,30 @@ export async function checkClaimIntent({ subject = '', body = '' } = {}) {
     console.warn('[ClaimIntent] check failed, defaulting to NOT flagged:', e.message);
     return { claim_requested: false, source: 'fallback', reasoning: null };
   }
+}
+
+// Courier-side claim signal — a claim usually starts life looking exactly like a
+// query (customers rarely say "I want to claim"; they report "it hasn't been
+// scanned" or "it's lost", same as any other WISMO query). Studying real Freshdesk
+// conversations (email-triage-automation-plan.md research) showed the far more
+// reliable trigger is the COURIER's own reply: couriers send a fixed-template
+// "claim form" / "claim reference" email once a depot investigation confirms
+// loss/damage. That template is consistent enough that hard rules alone are
+// reliable here — no Gemini call needed (unlike checkClaimIntent's customer-
+// language check, which has to interpret free-form phrasing).
+const COURIER_CLAIM_HARD_RULES = [
+  ...CLAIM_HARD_RULES,
+  /\bclaim reference\b/i,
+  /\bclaim number\b/i,
+  /\bCLM-\d+\b/,
+  /\bstart a claim\b/i,
+  /\bwe(?:'ve| have) raised a claim\b/i,
+  /\bi have raised a claim\b/i,
+];
+
+export function checkCourierClaimSignal({ subject = '', body = '' } = {}) {
+  const text = `${subject}\n${body}`;
+  return { claim_detected: COURIER_CLAIM_HARD_RULES.some(re => re.test(text)) };
 }
 
 async function insertTask({ title, description, space, priority, customerId, queryId, gmailThreadId }) {
