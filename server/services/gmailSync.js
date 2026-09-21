@@ -19,7 +19,12 @@ function triageFallback(subject, body) {
     /claim|compensation|refund|damaged|lost/.test(text)        ? 'claim' :
     /invoice|billing|statement|payment|account|charge/.test(text) ? 'billing' :
     /login|error|bug|portal|dashboard|api|technical|access/.test(text) ? 'technical' :
-    'query';
+    /quote|pricing|new account|sign ?up|reseller|partnership/.test(text) ? 'sales' :
+    /track|delivery|parcel|where is|courier|consignment|deliver/.test(text) ? 'query' :
+    // Unmatched/ambiguous email is NOT assumed to be a WISMO delivery enquiry —
+    // that would wrongly trigger courier-chase automation downstream. Land it as
+    // a catch-all task instead (see docs/email-triage-automation-plan.md Phase 0).
+    'other';
   const courier =
     /\bdpd\b/.test(text)            ? 'DPD' :
     /\bdhl\b/.test(text)            ? 'DHL' :
@@ -49,7 +54,14 @@ export async function triageAndSummarize(subject, body) {
 
   const prompt =
     `You are triaging a parcel-courier support email. Return STRICT JSON only with keys:\n` +
-    `- ticket_type: exactly one of ["query","claim","billing","technical"].\n` +
+    `- ticket_type: exactly one of ["query","claim","billing","technical","sales","other"].\n` +
+    `  "query" = delivery/tracking status (where's my parcel, collection issue).\n` +
+    `  "claim" = compensation for a lost/damaged/missing parcel.\n` +
+    `  "billing" = invoices, statements, payments, account charges.\n` +
+    `  "technical" = portal/dashboard/API login or bug reports.\n` +
+    `  "sales" = quotes, pricing, new account sign-up, reseller/partnership enquiries.\n` +
+    `  "other" = anything that doesn't clearly fit the above — do NOT default to "query" ` +
+    `just because it's unclear; an ambiguous email is "other", not an assumed delivery enquiry.\n` +
     `- summary: max 2 sentences describing the core issue (no "The email"/"This email").\n` +
     `- courier: the courier name (e.g. "DPD","DHL","Evri") or null if none mentioned.\n` +
     `- tracking_number: the tracking/consignment number if present, else null.\n` +
@@ -59,9 +71,12 @@ export async function triageAndSummarize(subject, body) {
   try {
     const raw = await geminiGenerate(prompt, { json: true, temperature: 0 });
     const parsed = JSON.parse(raw || '{}');
-    const allowed = ['query', 'claim', 'billing', 'technical'];
+    const allowed = ['query', 'claim', 'billing', 'technical', 'sales', 'other'];
     return {
-      ticket_type: allowed.includes(parsed.ticket_type) ? parsed.ticket_type : 'query',
+      // Unrecognized/malformed model output falls back to 'other', not 'query' —
+      // same reasoning as triageFallback(): never assume an unclear email is a
+      // WISMO delivery enquiry, that would wrongly trigger courier-chase automation.
+      ticket_type: allowed.includes(parsed.ticket_type) ? parsed.ticket_type : 'other',
       summary: (parsed.summary || subject || 'Customer enquiry').toString().slice(0, 400),
       courier: parsed.courier || null,
       tracking_number: isLikelyTracking(parsed.tracking_number) ? String(parsed.tracking_number).trim() : null,
@@ -87,6 +102,8 @@ const GROUP_BY_TICKET_TYPE = {
   claim:     'Claims',
   billing:   'Billing',
   technical: 'Technical',
+  sales:     'Sales',
+  other:     'Customer Service',
 };
 
 
@@ -97,6 +114,7 @@ import { triagePriority } from './triageEngine.js';
 import { isLikelyTracking, geminiGenerate, GEMINI_MODEL } from './geminiService.js';
 import { identifyCourierByTracking, getAllTrackingExamples } from './courierAutomation.js';
 import { interpretCourierReply } from './replyInterpreter.js';
+import { routeEmailToTask, checkClaimIntent, updateTaskSpaceForClaim } from './emailTaskRouter.js';
 
 // Sender domains that are couriers / our wholesaler (AGL) — never the customer.
 const COURIER_DOMAINS = /@(?:[a-z0-9-]+\.)*(dpd|dhl|evri|hermes|myhermes|yodel|ups|parcelforce|royalmail|fedex|agl)\.[a-z.]{2,}/i;
@@ -330,6 +348,13 @@ async function upsertTicket(msg, gmail = null) {
     console.log(`[Gmail sync] Courier reply from ${senderEmail} routed to original ticket ${queryId} via tracking`);
   }
 
+  // Set below when this message creates a brand-new ticket — used to route the
+  // Phase 0 companion Task (email-triage-automation-plan.md) without re-triaging
+  // an existing ticket's follow-up messages.
+  let newTicketCategory = null;
+  let newTicketSummary  = null;
+  let newTicketPriority = 'medium';
+
   if (!queryId) {
     // Only skip an outbound message when the thread has NO ticket at all (e.g. a
     // cold outbound we initiated) — never create a ticket from our own reply.
@@ -339,6 +364,8 @@ async function upsertTicket(msg, gmail = null) {
     }
     // Gemini triage — drives group routing, summary, courier and tracking.
     const triage      = await triageAndSummarize(subject, body);
+    newTicketCategory = triage.ticket_type;
+    newTicketSummary  = triage.summary;
     const groupName   = GROUP_BY_TICKET_TYPE[triage.ticket_type] || 'Queries';
     const tracking    = triage.tracking_number || null;
 
@@ -389,12 +416,14 @@ async function upsertTicket(msg, gmail = null) {
     } catch (e) {
       console.warn('[Gmail sync] Automation rule evaluation failed:', e.message);
     }
+    if (triggerPriority) newTicketPriority = triggerPriority;
 
     // Hybrid triage — only when no automation rule already forced a priority.
     // Phase 1 hard rules (P1 → urgent) then Phase 2 Gemini grader (high/medium/low).
     if (!triggerPriority) {
       try {
         const { priority } = await triagePriority({ subject, body });
+        newTicketPriority = priority;
         await query(`UPDATE queries SET priority = $1 WHERE id = $2`, [priority, queryId]);
       } catch (e) {
         console.warn('[Gmail sync] Hybrid triage failed:', e.message);
@@ -412,6 +441,37 @@ async function upsertTicket(msg, gmail = null) {
     await query(`UPDATE queries SET last_courier_response_at = NOW(), track_b_status = 'Replied', updated_at = NOW() WHERE id = $1`, [queryId]);
   } else if (!isOurs) {
     await query(`UPDATE queries SET last_customer_response_at = NOW(), updated_at = NOW() WHERE id = $1`, [queryId]);
+
+    // Companion Task on the Tasks board (Phase 0, email-triage-automation-plan.md)
+    // — every category gets a visible task alongside its `queries` row, which
+    // keeps working exactly as before. routeEmailToTask() dedupes on `queryId`,
+    // so this both creates the task on the first message and comments on it for
+    // every reply after.
+    try {
+      await routeEmailToTask({
+        category: newTicketCategory,
+        subject, body,
+        summary: newTicketSummary,
+        customerId: customer?.id || null,
+        queryId,
+        gmailThreadId,
+        priority: newTicketPriority,
+      });
+    } catch (e) { console.warn('[Gmail sync] task routing failed:', e.message); }
+
+    // Claim-intent watch — a claim is frequently a state change mid-conversation
+    // on an already-open ticket, not a fresh email (Section 6.2 of the plan).
+    // Only checked on a FOLLOW-UP (newTicketCategory is null here) — a brand-new
+    // claim email is already classified 'claim' by triage above, no need to ask twice.
+    if (!newTicketCategory) {
+      try {
+        const claimCheck = await checkClaimIntent({ subject, body });
+        if (claimCheck.claim_requested) {
+          await updateTaskSpaceForClaim(queryId, { customerId: customer?.id || null });
+        }
+      } catch (e) { console.warn('[Gmail sync] claim-intent check failed:', e.message); }
+    }
+
     // Dissatisfaction check (WISMO Phase 3, MOS-6) — this is a customer follow-up
     // on an ALREADY-OPEN ticket (brand-new tickets are triaged above, courier
     // replies are excluded by this branch). Previously nothing automated ran here
