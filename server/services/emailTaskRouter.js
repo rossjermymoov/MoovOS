@@ -28,6 +28,7 @@ export const CATEGORY_SPACE = {
   sales:      'sales',
   returns:    'returns',
   collection: 'collection',
+  supplies:   'supplies',
   other:      'cs',
 };
 
@@ -99,6 +100,25 @@ const COURIER_CLAIM_HARD_RULES = [
 export function checkCourierClaimSignal({ subject = '', body = '' } = {}) {
   const text = `${subject}\n${body}`;
   return { claim_detected: COURIER_CLAIM_HARD_RULES.some(re => re.test(text)) };
+}
+
+// Automated third-party portal notifications — not genuine correspondence from
+// a customer or courier at all. Real Freshdesk history showed a "ClearView"
+// portal auto-generating "Ticket Comment: Non Delivery [...]" emails with no
+// substantive content, misfiled across several groups (Claims-Yodel, Collection
+// Issues-Yodel, etc.) purely because they landed in the shared inbox. Classifying
+// these into a real category just creates a noise task nobody needs to act on —
+// skip them entirely, the same way an unmatched courier reply is skipped.
+const AUTOMATED_NOTIFICATION_HARD_RULES = [
+  /please do not reply to this email/i,
+  /do not reply to this email/i,
+  /this is an automated (message|notification|email)/i,
+  /^ticket comment:/i,
+];
+
+export function isAutomatedNotification({ subject = '', body = '' } = {}) {
+  const text = `${subject}\n${body}`;
+  return AUTOMATED_NOTIFICATION_HARD_RULES.some(re => re.test(text));
 }
 
 async function insertTask({ title, description, space, priority, customerId, queryId, gmailThreadId }) {

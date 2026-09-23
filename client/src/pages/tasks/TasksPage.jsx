@@ -39,12 +39,13 @@ const DEFAULT_SPACES = [
   { key: 'ops',       label: 'Operations',       colour: '#D97706' },
   { key: 'product',   label: 'Product & Data',   colour: '#0F7A46' },
   // Added for email-triage automation (Phase 0) — emailTaskRouter.js's
-  // CATEGORY_SPACE routes claim/billing/technical/returns/collection email into these.
-  { key: 'claims',     label: 'Claims',           colour: '#8A6200' },
-  { key: 'accounts',   label: 'Accounts',         colour: '#5B21B6' },
-  { key: 'technical',  label: 'Technical',        colour: '#1D4ED8' },
-  { key: 'returns',    label: 'Returns',          colour: '#0891B2' },
+  // CATEGORY_SPACE routes claim/billing/technical/returns/collection/supplies email into these.
+  { key: 'claims',     label: 'Claims',            colour: '#8A6200' },
+  { key: 'accounts',   label: 'Accounts',          colour: '#5B21B6' },
+  { key: 'technical',  label: 'Technical',         colour: '#1D4ED8' },
+  { key: 'returns',    label: 'Returns',           colour: '#0891B2' },
   { key: 'collection', label: 'Collection Issues', colour: '#B45309' },
+  { key: 'supplies',   label: 'Supplies',          colour: '#7C3AED' },
 ];
 const DEFAULT_STATUSES = [
   { key: 'todo',     label: 'To do',       colour: '#6B7280', isComplete: false },

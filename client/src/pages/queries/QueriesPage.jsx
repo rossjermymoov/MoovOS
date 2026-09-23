@@ -1645,16 +1645,17 @@ const STATUS_FILTERS = [
 // ── Dynamic group configuration ──────────────────────────────────────────────
 // Foundation for the settings-driven groups: add a string here (or, later, load
 // this array from /settings) and a colour-coded tab appears automatically.
-const userDefinedGroups = ['Claims', 'Queries', 'Billing', 'Technical', 'Sales', 'Returns', 'Collection Issues', 'Customer Service'];
+const userDefinedGroups = ['Claims', 'Queries', 'Billing', 'Technical', 'Sales', 'Returns', 'Collection Issues', 'Supplies Request', 'Customer Service'];
 
 const GROUP_COLORS = {
-  Claims:             'var(--mv-amber)',
-  Queries:            'var(--mv-teal)',
-  Billing:            'var(--mv-green)',
-  Technical:          'var(--mv-purple)',
-  Sales:              'var(--mv-magenta)',
-  Returns:            'var(--mv-teal)',
+  Claims:              'var(--mv-amber)',
+  Queries:             'var(--mv-teal)',
+  Billing:             'var(--mv-green)',
+  Technical:           'var(--mv-purple)',
+  Sales:               'var(--mv-magenta)',
+  Returns:             'var(--mv-teal)',
   'Collection Issues': 'var(--mv-amber)',
+  'Supplies Request':  'var(--mv-purple)',
   'Customer Service':  'var(--mv-ink)',
 };
 const DEFAULT_GROUP_COLOR = 'var(--mv-ink)';

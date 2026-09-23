@@ -28,6 +28,9 @@ function triageFallback(subject, body) {
     /return.*(belonging to (you|us)|label|qr code)|received a return/.test(text) ? 'returns' :
     // Outbound collection/pickup problem — distinct from delivery status.
     /collection (number|issue|not (done|happened))|courier (hasn'?t|has not|not) (collected|arrived|turned up)|missed (the )?collection|driver (hasn'?t|has not) (arrived|collected)/.test(text) ? 'collection' :
+    // Physical shipping supplies (labels, mailing bags, printer rolls) — distinct
+    // from a technical/portal issue even though "labels"/"printer" sound similar.
+    /(order|send|need).*(mailing bags|packing bags|label rolls|printer (labels|rolls)|thermal (labels|rolls|printer))|more (labels|rolls|bags)\b/.test(text) ? 'supplies' :
     /track|delivery|parcel|where is|courier|consignment|deliver/.test(text) ? 'query' :
     // Unmatched/ambiguous email is NOT assumed to be a WISMO delivery enquiry —
     // that would wrongly trigger courier-chase automation downstream. Land it as
@@ -62,7 +65,7 @@ export async function triageAndSummarize(subject, body) {
 
   const prompt =
     `You are triaging a parcel-courier support email. Return STRICT JSON only with keys:\n` +
-    `- ticket_type: exactly one of ["query","claim","billing","technical","sales","returns","collection","other"].\n` +
+    `- ticket_type: exactly one of ["query","claim","billing","technical","sales","returns","collection","supplies","other"].\n` +
     `  "query" = delivery/tracking status of an outbound parcel already in transit (where's my parcel, ETA, redirect/stop request).\n` +
     `  "claim" = compensation for a lost/damaged/missing parcel.\n` +
     `  "billing" = invoices, statements, payments, account charges.\n` +
@@ -75,6 +78,8 @@ export async function triageAndSummarize(subject, body) {
     `  "collection" = an OUTBOUND pickup/collection problem — the courier hasn't shown up, missed a ` +
     `scheduled collection, or a collection-scheduling question. Distinct from "query" (a parcel already ` +
     `in transit).\n` +
+    `  "supplies" = a request for physical shipping supplies (labels, mailing bags, packing tape, ` +
+    `thermal printer rolls) — NOT a "technical" printer/portal bug even though it mentions labels/printer.\n` +
     `  "other" = anything that doesn't clearly fit the above — do NOT default to "query" ` +
     `just because it's unclear; an ambiguous email is "other", not an assumed delivery enquiry.\n` +
     `- summary: max 2 sentences describing the core issue (no "The email"/"This email").\n` +
@@ -86,7 +91,7 @@ export async function triageAndSummarize(subject, body) {
   try {
     const raw = await geminiGenerate(prompt, { json: true, temperature: 0 });
     const parsed = JSON.parse(raw || '{}');
-    const allowed = ['query', 'claim', 'billing', 'technical', 'sales', 'returns', 'collection', 'other'];
+    const allowed = ['query', 'claim', 'billing', 'technical', 'sales', 'returns', 'collection', 'supplies', 'other'];
     return {
       // Unrecognized/malformed model output falls back to 'other', not 'query' —
       // same reasoning as triageFallback(): never assume an unclear email is a
@@ -120,6 +125,7 @@ const GROUP_BY_TICKET_TYPE = {
   sales:      'Sales',
   returns:    'Returns',
   collection: 'Collection Issues',
+  supplies:   'Supplies Request',
   other:      'Customer Service',
 };
 
@@ -131,7 +137,7 @@ import { triagePriority } from './triageEngine.js';
 import { isLikelyTracking, geminiGenerate, GEMINI_MODEL } from './geminiService.js';
 import { identifyCourierByTracking, getAllTrackingExamples } from './courierAutomation.js';
 import { interpretCourierReply } from './replyInterpreter.js';
-import { routeEmailToTask, checkClaimIntent, checkCourierClaimSignal, updateTaskSpaceForClaim } from './emailTaskRouter.js';
+import { routeEmailToTask, checkClaimIntent, checkCourierClaimSignal, updateTaskSpaceForClaim, isAutomatedNotification } from './emailTaskRouter.js';
 
 // Sender domains that are couriers / our wholesaler (AGL) — never the customer.
 const COURIER_DOMAINS = /@(?:[a-z0-9-]+\.)*(dpd|dhl|evri|hermes|myhermes|yodel|ups|parcelforce|royalmail|fedex|agl)\.[a-z.]{2,}/i;
@@ -322,6 +328,14 @@ async function upsertTicket(msg, gmail = null) {
   const receivedAt = internalDate ? new Date(parseInt(internalDate)) : new Date();
 
   if (!senderEmail) return { status: 'skipped', reason: 'no sender email' };
+
+  // Automated third-party portal notification (e.g. ClearView's "Ticket Comment"
+  // non-delivery pings) — not genuine correspondence, skip before any thread
+  // matching or ticket creation. Checked before isOurs/isCourierSender since it
+  // can arrive from either kind of sender address.
+  if (isAutomatedNotification({ subject, body })) {
+    return { status: 'skipped', reason: 'automated third-party notification' };
+  }
 
   // Our own SENT messages (or anything from a support domain) are outbound.
   const isOurs = labelIds.includes('SENT') || SUPPORT_DOMAINS.test(senderEmail);
