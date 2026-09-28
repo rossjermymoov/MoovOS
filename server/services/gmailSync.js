@@ -139,6 +139,7 @@ import { identifyCourierByTracking, getAllTrackingExamples } from './courierAuto
 import { interpretCourierReply } from './replyInterpreter.js';
 import { routeEmailToTask, checkClaimIntent, checkCourierClaimSignal, updateTaskSpaceForClaim, isAutomatedNotification } from './emailTaskRouter.js';
 import { scoreUrgency } from './urgencyScorer.js';
+import { intakeClaimForm } from './claimIntake.js';
 
 // Sender domains that are couriers / our wholesaler (AGL) — never the customer.
 const COURIER_DOMAINS = /@(?:[a-z0-9-]+\.)*(dpd|dhl|evri|hermes|myhermes|yodel|ups|parcelforce|royalmail|fedex|agl)\.[a-z.]{2,}/i;
@@ -229,6 +230,24 @@ export function extractBody(payload) {
   if (plain && (!htmlText || plain.length >= htmlText.length * 0.6)) return plain;
   if (htmlText) return htmlText;
   return plain || acc.other.join('\n').trim() || '';
+}
+
+// Walk the MIME tree collecting genuine attachments — parts with a non-empty
+// `filename` (Gmail's own signal for "this is an attachment", distinct from an
+// inline cid: image or the body text itself, neither of which carry a
+// filename). Metadata only; the file content is fetched on demand later.
+function collectAttachments(payload, acc = []) {
+  if (!payload) return acc;
+  if (payload.filename && payload.body?.attachmentId) {
+    acc.push({
+      filename: payload.filename,
+      mimeType: payload.mimeType || null,
+      attachmentId: payload.body.attachmentId,
+      sizeBytes: payload.body.size || null,
+    });
+  }
+  if (payload.parts) for (const p of payload.parts) collectAttachments(p, acc);
+  return acc;
 }
 
 // Gmail returns larger MIME parts by reference (body.attachmentId) instead of
@@ -463,10 +482,26 @@ async function upsertTicket(msg, gmail = null) {
     }
   }
 
-  await query(`
+  const emailRes = await query(`
     INSERT INTO query_emails (query_id, direction, from_address, subject, body_text, body_html, received_at, gmail_message_id, gmail_thread_id, in_reply_to, rfc_message_id, is_ai_draft, sent_at)
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, false, $12)
+    RETURNING id
   `, [queryId, direction, senderEmail, subject, body.slice(0, 50000), bodyHtml ? bodyHtml.slice(0, 2000000) : null, receivedAt, gmailMsgId, gmailThreadId || null, inReplyTo || null, rfcMessageId, isOurs ? receivedAt : null]);
+  const queryEmailId = emailRes.rows[0].id;
+
+  // Attachment metadata (Phase 2, email-triage-automation-plan.md) — a
+  // prerequisite for identifying a commercial invoice later, never captured
+  // before this. Metadata only, no file content fetched here.
+  const attachments = collectAttachments(payload);
+  for (const att of attachments) {
+    try {
+      await query(
+        `INSERT INTO query_email_attachments (query_email_id, filename, mime_type, gmail_message_id, gmail_attachment_id, size_bytes)
+         VALUES ($1,$2,$3,$4,$5,$6)`,
+        [queryEmailId, att.filename, att.mimeType, gmailMsgId, att.attachmentId, att.sizeBytes],
+      );
+    } catch (e) { console.warn('[Gmail sync] attachment capture failed:', e.message); }
+  }
 
   // Track the latest inbound timestamps + courier-track state for SLA/dual-track.
   if (isCourierSender) {
@@ -479,6 +514,12 @@ async function upsertTicket(msg, gmail = null) {
     if (checkCourierClaimSignal({ subject, body }).claim_detected) {
       try { await updateTaskSpaceForClaim(queryId); }
       catch (e) { console.warn('[Gmail sync] courier claim-signal task update failed:', e.message); }
+
+      // Claim intake (Phase 2) — populates the existing claim_number/
+      // claim_deadline_at/query_evidence schema automatically instead of an
+      // agent typing it all in by hand. Does not touch the claim-form portal.
+      try { await intakeClaimForm(queryId, { subject, body }); }
+      catch (e) { console.warn('[Gmail sync] claim intake failed:', e.message); }
     }
   } else if (!isOurs) {
     await query(`UPDATE queries SET last_customer_response_at = NOW(), updated_at = NOW() WHERE id = $1`, [queryId]);
