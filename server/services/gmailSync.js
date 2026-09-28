@@ -138,6 +138,7 @@ import { isLikelyTracking, geminiGenerate, GEMINI_MODEL } from './geminiService.
 import { identifyCourierByTracking, getAllTrackingExamples } from './courierAutomation.js';
 import { interpretCourierReply } from './replyInterpreter.js';
 import { routeEmailToTask, checkClaimIntent, checkCourierClaimSignal, updateTaskSpaceForClaim, isAutomatedNotification } from './emailTaskRouter.js';
+import { scoreUrgency } from './urgencyScorer.js';
 
 // Sender domains that are couriers / our wholesaler (AGL) — never the customer.
 const COURIER_DOMAINS = /@(?:[a-z0-9-]+\.)*(dpd|dhl|evri|hermes|myhermes|yodel|ups|parcelforce|royalmail|fedex|agl)\.[a-z.]{2,}/i;
@@ -482,6 +483,31 @@ async function upsertTicket(msg, gmail = null) {
   } else if (!isOurs) {
     await query(`UPDATE queries SET last_customer_response_at = NOW(), updated_at = NOW() WHERE id = $1`, [queryId]);
 
+    // Urgency scorer (Phase 0, email-triage-automation-plan.md Section 6.1 item
+    // 4) — independent of Freshdesk's own unreliable priority field, applies to
+    // every category. Surfaced two ways: the existing requires_attention/
+    // attention_reason columns on `queries` (already visible on QueriesPage
+    // regardless of viewer — NOT the per-user NotificationBell, which needs a
+    // specific assignee a brand-new unassigned ticket doesn't have yet), and the
+    // companion Task's priority bumped to 'urgent' (routeEmailToTask() below).
+    // Never downgrades an already-flagged ticket/task (e.g. one dissatisfaction
+    // already escalated, or a task already at urgent).
+    let urgency = { urgent: false, reason: null };
+    try {
+      urgency = await scoreUrgency({ subject, body, gmailThreadId });
+      if (urgency.urgent) {
+        await query(
+          `UPDATE queries
+              SET requires_attention = true,
+                  attention_reason = $2,
+                  escalation_source = 'urgency_signal',
+                  updated_at = NOW()
+            WHERE id = $1 AND requires_attention IS NOT TRUE`,
+          [queryId, `Urgency detected: ${urgency.reason}`],
+        );
+      }
+    } catch (e) { console.warn('[Gmail sync] urgency scoring failed:', e.message); }
+
     // Companion Task on the Tasks board (Phase 0, email-triage-automation-plan.md)
     // — every category gets a visible task alongside its `queries` row, which
     // keeps working exactly as before. routeEmailToTask() dedupes on `queryId`,
@@ -496,6 +522,9 @@ async function upsertTicket(msg, gmail = null) {
         queryId,
         gmailThreadId,
         priority: newTicketPriority,
+        gmailMessageId: gmailMsgId,
+        urgent: urgency.urgent,
+        urgencyReason: urgency.reason,
       });
     } catch (e) { console.warn('[Gmail sync] task routing failed:', e.message); }
 
