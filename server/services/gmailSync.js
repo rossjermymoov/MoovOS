@@ -19,7 +19,18 @@ function triageFallback(subject, body) {
     /claim|compensation|refund|damaged|lost/.test(text)        ? 'claim' :
     /invoice|billing|statement|payment|account|charge/.test(text) ? 'billing' :
     /login|error|bug|portal|dashboard|api|technical|access/.test(text) ? 'technical' :
-    /quote|pricing|new account|sign ?up|reseller|partnership/.test(text) ? 'sales' :
+    // "quote"/"pric" (not just "pricing") also catches "quotation"/"price" —
+    // quote requests come from existing customers too, not just new sign-ups.
+    /quot|pric|new account|sign ?up|reseller|partnership/.test(text) ? 'sales' :
+    // Narrowly scoped to the actual Freshdesk "Returns" pattern (a courier's own
+    // "you have a return" notice, or a returns-label request) — plain "please
+    // return this to sender" on an outbound delivery is a 'query', not this.
+    /return.*(belonging to (you|us)|label|qr code)|received a return/.test(text) ? 'returns' :
+    // Outbound collection/pickup problem — distinct from delivery status.
+    /collection (number|issue|not (done|happened))|courier (hasn'?t|has not|not) (collected|arrived|turned up)|missed (the )?collection|driver (hasn'?t|has not) (arrived|collected)/.test(text) ? 'collection' :
+    // Physical shipping supplies (labels, mailing bags, printer rolls) — distinct
+    // from a technical/portal issue even though "labels"/"printer" sound similar.
+    /(order|send|need).*(mailing bags|packing bags|label rolls|printer (labels|rolls)|thermal (labels|rolls|printer))|more (labels|rolls|bags)\b/.test(text) ? 'supplies' :
     /track|delivery|parcel|where is|courier|consignment|deliver/.test(text) ? 'query' :
     // Unmatched/ambiguous email is NOT assumed to be a WISMO delivery enquiry —
     // that would wrongly trigger courier-chase automation downstream. Land it as
@@ -54,12 +65,21 @@ export async function triageAndSummarize(subject, body) {
 
   const prompt =
     `You are triaging a parcel-courier support email. Return STRICT JSON only with keys:\n` +
-    `- ticket_type: exactly one of ["query","claim","billing","technical","sales","other"].\n` +
-    `  "query" = delivery/tracking status (where's my parcel, collection issue).\n` +
+    `- ticket_type: exactly one of ["query","claim","billing","technical","sales","returns","collection","supplies","other"].\n` +
+    `  "query" = delivery/tracking status of an outbound parcel already in transit (where's my parcel, ETA, redirect/stop request).\n` +
     `  "claim" = compensation for a lost/damaged/missing parcel.\n` +
     `  "billing" = invoices, statements, payments, account charges.\n` +
     `  "technical" = portal/dashboard/API login or bug reports.\n` +
-    `  "sales" = quotes, pricing, new account sign-up, reseller/partnership enquiries.\n` +
+    `  "sales" = quotes or pricing requests (INCLUDING from an existing customer asking the rate ` +
+    `for a specific shipment, not just new sign-ups), reseller/partnership enquiries.\n` +
+    `  "returns" = a parcel coming BACK to the sender/warehouse — a courier notifying that a return ` +
+    `has arrived, or a request for a returns label/QR code. Do NOT use this just because the word ` +
+    `"return" appears — a customer asking us to redirect/return an outbound parcel is "query".\n` +
+    `  "collection" = an OUTBOUND pickup/collection problem — the courier hasn't shown up, missed a ` +
+    `scheduled collection, or a collection-scheduling question. Distinct from "query" (a parcel already ` +
+    `in transit).\n` +
+    `  "supplies" = a request for physical shipping supplies (labels, mailing bags, packing tape, ` +
+    `thermal printer rolls) — NOT a "technical" printer/portal bug even though it mentions labels/printer.\n` +
     `  "other" = anything that doesn't clearly fit the above — do NOT default to "query" ` +
     `just because it's unclear; an ambiguous email is "other", not an assumed delivery enquiry.\n` +
     `- summary: max 2 sentences describing the core issue (no "The email"/"This email").\n` +
@@ -71,7 +91,7 @@ export async function triageAndSummarize(subject, body) {
   try {
     const raw = await geminiGenerate(prompt, { json: true, temperature: 0 });
     const parsed = JSON.parse(raw || '{}');
-    const allowed = ['query', 'claim', 'billing', 'technical', 'sales', 'other'];
+    const allowed = ['query', 'claim', 'billing', 'technical', 'sales', 'returns', 'collection', 'supplies', 'other'];
     return {
       // Unrecognized/malformed model output falls back to 'other', not 'query' —
       // same reasoning as triageFallback(): never assume an unclear email is a
@@ -98,12 +118,15 @@ export async function generateSummary(subject, body) {
 // (query_type is a separate, fixed enum of parcel issue types, so it isn't used
 // for this.)
 const GROUP_BY_TICKET_TYPE = {
-  query:     'Queries',
-  claim:     'Claims',
-  billing:   'Billing',
-  technical: 'Technical',
-  sales:     'Sales',
-  other:     'Customer Service',
+  query:      'Queries',
+  claim:      'Claims',
+  billing:    'Billing',
+  technical:  'Technical',
+  sales:      'Sales',
+  returns:    'Returns',
+  collection: 'Collection Issues',
+  supplies:   'Supplies Request',
+  other:      'Customer Service',
 };
 
 
@@ -114,7 +137,7 @@ import { triagePriority } from './triageEngine.js';
 import { isLikelyTracking, geminiGenerate, GEMINI_MODEL } from './geminiService.js';
 import { identifyCourierByTracking, getAllTrackingExamples } from './courierAutomation.js';
 import { interpretCourierReply } from './replyInterpreter.js';
-import { routeEmailToTask, checkClaimIntent, updateTaskSpaceForClaim } from './emailTaskRouter.js';
+import { routeEmailToTask, checkClaimIntent, checkCourierClaimSignal, updateTaskSpaceForClaim, isAutomatedNotification } from './emailTaskRouter.js';
 
 // Sender domains that are couriers / our wholesaler (AGL) — never the customer.
 const COURIER_DOMAINS = /@(?:[a-z0-9-]+\.)*(dpd|dhl|evri|hermes|myhermes|yodel|ups|parcelforce|royalmail|fedex|agl)\.[a-z.]{2,}/i;
@@ -306,6 +329,14 @@ async function upsertTicket(msg, gmail = null) {
 
   if (!senderEmail) return { status: 'skipped', reason: 'no sender email' };
 
+  // Automated third-party portal notification (e.g. ClearView's "Ticket Comment"
+  // non-delivery pings) — not genuine correspondence, skip before any thread
+  // matching or ticket creation. Checked before isOurs/isCourierSender since it
+  // can arrive from either kind of sender address.
+  if (isAutomatedNotification({ subject, body })) {
+    return { status: 'skipped', reason: 'automated third-party notification' };
+  }
+
   // Our own SENT messages (or anything from a support domain) are outbound.
   const isOurs = labelIds.includes('SENT') || SUPPORT_DOMAINS.test(senderEmail);
   // A courier/AGL sender is NEVER the customer — classify as inbound_courier.
@@ -439,6 +470,15 @@ async function upsertTicket(msg, gmail = null) {
   // Track the latest inbound timestamps + courier-track state for SLA/dual-track.
   if (isCourierSender) {
     await query(`UPDATE queries SET last_courier_response_at = NOW(), track_b_status = 'Replied', updated_at = NOW() WHERE id = $1`, [queryId]);
+
+    // Courier-side claim signal (e.g. a DPD "claim form"/"claim reference" email
+    // mid-thread) — a more reliable trigger than customer language for turning a
+    // ticket into a claim (Section 6.2 of the plan; confirmed against real
+    // Freshdesk conversations, where customers rarely ask for a claim directly).
+    if (checkCourierClaimSignal({ subject, body }).claim_detected) {
+      try { await updateTaskSpaceForClaim(queryId); }
+      catch (e) { console.warn('[Gmail sync] courier claim-signal task update failed:', e.message); }
+    }
   } else if (!isOurs) {
     await query(`UPDATE queries SET last_customer_response_at = NOW(), updated_at = NOW() WHERE id = $1`, [queryId]);
 
