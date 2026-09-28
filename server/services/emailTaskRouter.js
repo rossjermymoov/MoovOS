@@ -17,6 +17,7 @@
  * called from the same reply-handling branch in gmailSync.js, not from triage.
  */
 
+import crypto from 'crypto';
 import { query } from '../db/index.js';
 import { geminiGenerate } from './geminiService.js';
 
@@ -159,12 +160,34 @@ async function findTaskByThread(gmailThreadId) {
   return r.rows[0]?.id || null;
 }
 
+// Per-email audit record of what MoovOS decided this message was (Section 6.3
+// of the plan) — separate from the operational `queries`/`tasks` rows, this is
+// what a manual comparison against Freshdesk tickets reads from. Only written
+// when `category` is a real classification (i.e. this email actually went
+// through triage — a follow-up on an existing thread doesn't get a fresh one).
+// Only the hashed subject is stored, never raw subject/body content.
+async function recordClassification({ gmailMessageId, gmailThreadId, subject, category, space, urgent, urgencyReason, taskId, queryId }) {
+  if (!gmailMessageId || !category) return;
+  const subjectHash = crypto.createHash('sha256').update((subject || '').trim().toLowerCase()).digest('hex');
+  try {
+    await query(
+      `INSERT INTO inbox_classifications
+         (gmail_message_id, gmail_thread_id, raw_subject_hash, moovos_category, moovos_space,
+          moovos_urgency, moovos_urgency_reason, task_id, query_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+       ON CONFLICT (gmail_message_id) DO NOTHING`,
+      [gmailMessageId, gmailThreadId || null, subjectHash, category, space, !!urgent, urgencyReason || null, taskId || null, queryId || null],
+    );
+  } catch (e) { console.warn('[EmailTaskRouter] recordClassification failed:', e.message); }
+}
+
 /**
  * Create or find the task for this email and record it (full body on first
  * creation, a short follow-up note on subsequent replies to the same thread).
  */
 export async function routeEmailToTask({
   category, subject, body, summary, customerId = null, queryId = null, gmailThreadId = null, priority = 'medium',
+  gmailMessageId = null, urgent = false, urgencyReason = null,
 }) {
   const title = (subject && subject.trim()) || summary || 'Customer email';
   const space = CATEGORY_SPACE[category] || 'cs';
@@ -172,11 +195,13 @@ export async function routeEmailToTask({
   const existingTaskId = queryId ? await findTaskByQuery(queryId) : await findTaskByThread(gmailThreadId);
   if (existingTaskId) {
     await addComment(existingTaskId, `[Auto] New message:\n\n${body}`);
+    await recordClassification({ gmailMessageId, gmailThreadId, subject, category, space, urgent, urgencyReason, taskId: existingTaskId, queryId });
     return { taskId: existingTaskId, created: false };
   }
 
   const taskId = await insertTask({ title, description: summary, space, priority, customerId, queryId, gmailThreadId });
   await addComment(taskId, body);
+  await recordClassification({ gmailMessageId, gmailThreadId, subject, category, space, urgent, urgencyReason, taskId, queryId });
   return { taskId, created: true };
 }
 
