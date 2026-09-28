@@ -135,7 +135,7 @@ import { query } from '../db/index.js';
 import { evaluateAutomationRules } from './automationEngine.js';
 import { triagePriority } from './triageEngine.js';
 import { isLikelyTracking, geminiGenerate, GEMINI_MODEL } from './geminiService.js';
-import { identifyCourierByTracking, getAllTrackingExamples } from './courierAutomation.js';
+import { identifyCourierByTracking, getAllTrackingExamples, processCustomerEmail } from './courierAutomation.js';
 import { interpretCourierReply } from './replyInterpreter.js';
 import { routeEmailToTask, checkClaimIntent, checkCourierClaimSignal, updateTaskSpaceForClaim, isAutomatedNotification } from './emailTaskRouter.js';
 
@@ -466,6 +466,19 @@ async function upsertTicket(msg, gmail = null) {
     INSERT INTO query_emails (query_id, direction, from_address, subject, body_text, body_html, received_at, gmail_message_id, gmail_thread_id, in_reply_to, rfc_message_id, is_ai_draft, sent_at)
     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, false, $12)
   `, [queryId, direction, senderEmail, subject, body.slice(0, 50000), bodyHtml ? bodyHtml.slice(0, 2000000) : null, receivedAt, gmailMsgId, gmailThreadId || null, inReplyTo || null, rfcMessageId, isOurs ? receivedAt : null]);
+
+  // WISMO courier-inquiry drafting — the actual "WISMO workflow" (required-fields
+  // extraction, courier resolution, QA-Bay draft) previously only ran via the
+  // manual /api/queries/backfill-triage batch endpoint or the dev-only /simulate
+  // route, never automatically on a brand-new ticket. Runs only for a NEW
+  // 'query'-category ticket (newTicketCategory is set only in that branch above);
+  // safe by default since autopilot_mode defaults to 'draft' (QA Bay, human
+  // approval required, nothing auto-sent).
+  if (newTicketCategory === 'query') {
+    try {
+      await processCustomerEmail(queryId, { subject, body });
+    } catch (e) { console.warn('[Gmail sync] WISMO courier-inquiry drafting failed:', e.message); }
+  }
 
   // Track the latest inbound timestamps + courier-track state for SLA/dual-track.
   if (isCourierSender) {
