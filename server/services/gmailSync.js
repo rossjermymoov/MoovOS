@@ -421,7 +421,7 @@ async function upsertTicket(msg, gmail = null) {
          status, query_type, group_name, courier_name, courier_code, consignment_number,
          trigger, whole_case_sla_deadline, created_at, updated_at)
       VALUES ($1, $2, $3, $4, $5, $6, 'open', 'other', $7, $8, $9, $10, 'customer_email',
-              $11 + ($12 || ' hours')::INTERVAL, $11, $11)
+              $11::timestamptz + ($12 || ' hours')::INTERVAL, $11, $11)
       RETURNING id
     `, [
       customer?.id || null,
