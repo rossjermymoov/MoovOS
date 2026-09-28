@@ -195,11 +195,16 @@ export async function routeEmailToTask({
   const existingTaskId = queryId ? await findTaskByQuery(queryId) : await findTaskByThread(gmailThreadId);
   if (existingTaskId) {
     await addComment(existingTaskId, `[Auto] New message:\n\n${body}`);
+    // Bump an existing task to urgent priority — never downgrades a task already
+    // at urgent, and never overwrites priority on a non-urgent detection.
+    if (urgent) {
+      await query(`UPDATE tasks SET priority = 'urgent', updated_at = NOW() WHERE id = $1 AND priority != 'urgent'`, [existingTaskId]);
+    }
     await recordClassification({ gmailMessageId, gmailThreadId, subject, category, space, urgent, urgencyReason, taskId: existingTaskId, queryId });
     return { taskId: existingTaskId, created: false };
   }
 
-  const taskId = await insertTask({ title, description: summary, space, priority, customerId, queryId, gmailThreadId });
+  const taskId = await insertTask({ title, description: summary, space, priority: urgent ? 'urgent' : priority, customerId, queryId, gmailThreadId });
   await addComment(taskId, body);
   await recordClassification({ gmailMessageId, gmailThreadId, subject, category, space, urgent, urgencyReason, taskId, queryId });
   return { taskId, created: true };

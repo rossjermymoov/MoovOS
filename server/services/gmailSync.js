@@ -485,11 +485,13 @@ async function upsertTicket(msg, gmail = null) {
 
     // Urgency scorer (Phase 0, email-triage-automation-plan.md Section 6.1 item
     // 4) — independent of Freshdesk's own unreliable priority field, applies to
-    // every category. Surfaced via the existing requires_attention/
-    // attention_reason columns (already visible on QueriesPage regardless of
-    // viewer) — NOT the per-user NotificationBell, which needs a specific
-    // assignee a brand-new unassigned ticket doesn't have yet. Never downgrades
-    // an already-flagged ticket (e.g. one dissatisfaction already escalated).
+    // every category. Surfaced two ways: the existing requires_attention/
+    // attention_reason columns on `queries` (already visible on QueriesPage
+    // regardless of viewer — NOT the per-user NotificationBell, which needs a
+    // specific assignee a brand-new unassigned ticket doesn't have yet), and the
+    // companion Task's priority bumped to 'urgent' (routeEmailToTask() below).
+    // Never downgrades an already-flagged ticket/task (e.g. one dissatisfaction
+    // already escalated, or a task already at urgent).
     let urgency = { urgent: false, reason: null };
     try {
       urgency = await scoreUrgency({ subject, body, gmailThreadId });
