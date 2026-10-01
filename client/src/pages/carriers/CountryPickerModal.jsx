@@ -33,6 +33,7 @@ export default function CountryPickerModal({ zone, onClose, onRefresh }) {
         inset: 0,
         background: 'color-mix(in srgb, var(--mv-ink) 60%, transparent)',
         backdropFilter: 'blur(4px)',
+        WebkitBackdropFilter: 'blur(4px)',
         zIndex: 2000,
         display: 'flex',
         alignItems: 'center',

@@ -1584,7 +1584,7 @@ export default function ReconciliationPage() {
       {pollingRunId && (
         <div style={{
           position: 'fixed', inset: 0, zIndex: 9999,
-          background: 'rgba(13,17,23,0.85)', backdropFilter: 'blur(4px)',
+          background: 'rgba(13,17,23,0.85)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
           gap: 20,
         }}>

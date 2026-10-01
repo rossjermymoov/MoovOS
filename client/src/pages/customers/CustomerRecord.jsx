@@ -810,7 +810,7 @@ export default function CustomerRecord() {
       {kpis && (
         <div className="mv-kpis" style={{ marginTop: 4 }}>
           {kpis.map(f => (
-            <div className="mv-kpi" key={f.label}>
+            <div className={'mv-kpi' + (f.attention ? ' is-attention' : '')} key={f.label}>
               <div className="mv-kpi-label">{f.label}</div>
               <div className={'mv-kpi-value' + (f.attention ? ' is-attention' : '')} style={{ fontSize: 26 }}>{f.value}</div>
               {f.sub ? <div className="mv-kpi-sub">{f.sub}</div> : null}

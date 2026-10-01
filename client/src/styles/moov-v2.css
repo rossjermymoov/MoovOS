@@ -418,6 +418,8 @@
 }
 .mv-kpi + .mv-kpi { border-left: 0 !important; }
 .mv-kpi.is-clickable:hover { background: var(--mv-surface); box-shadow: var(--v2-lift-hover); }
+/* .is-attention on the tile itself covers browsers without :has() (Firefox < 121) */
+.mv-kpi.is-attention,
 .mv-kpi:has(.mv-kpi-value.is-attention) { border-top-color: var(--mv-magenta); }
 .mv-kpi-go { opacity: 1 !important; }
 

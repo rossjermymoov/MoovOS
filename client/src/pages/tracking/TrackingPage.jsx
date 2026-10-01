@@ -1045,7 +1045,7 @@ export default function TrackingPage() {
           </div>
 
           <div
-            className={`mv-kpi is-clickable ${statusFilter === 'exception' ? 'is-active' : ''}`}
+            className={`mv-kpi is-clickable is-attention ${statusFilter === 'exception' ? 'is-active' : ''}`}
             onClick={() => toggleStatus('exception')}
           >
             <div className="mv-kpi-label">Exceptions & Issues</div>
