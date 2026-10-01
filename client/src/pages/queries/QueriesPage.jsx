@@ -2279,8 +2279,12 @@ export default function QueriesPage() {
     : queries.filter(q => !RESOLVED_STATUSES.has(q.status));
 
   return (
-    <div className="mv-page">
-      <div className="mv-page-inner" style={{ maxWidth: '100%' }}>
+    // /queries is a FULL_HEIGHT_ROUTE in AppShell (no scroll wrapper, and <main> isn't
+    // a flex container), so the page pins itself to <main> and the list and QA Bay
+    // scroll internally. Without this the page grows to content height and <main>'s
+    // overflow:hidden clips it with nothing scrollable.
+    <div className="mv-page" style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column' }}>
+      <div className="mv-page-inner" style={{ maxWidth: '100%', flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
 
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 18px', borderBottom: `0.5px solid ${C.border}`, background: C.surface, flexShrink: 0 }}>
@@ -2446,7 +2450,7 @@ export default function QueriesPage() {
       </div>
 
       {/* ── Command Center: live queue (2 cols) + Autopilot QA Bay (1 col) ── */}
-      <div className="grid min-h-0 flex-1 grid-cols-1 items-stretch gap-6 overflow-hidden px-[18px] py-3 xl:grid-cols-3">
+      <div className="grid min-h-0 flex-1 auto-rows-fr grid-cols-1 items-stretch gap-6 overflow-hidden px-[18px] py-3 xl:grid-cols-3">
 
         {/* Columns 1 & 2 — Live Traffic Queue */}
         <div className="flex min-h-0 flex-col xl:col-span-2">
