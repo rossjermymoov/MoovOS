@@ -145,7 +145,7 @@ export default function OnboardingBoard() {
             <div className="mv-kpi-value" style={{ color: 'var(--mv-green-deep)' }}>{onTrackCount}</div>
             <div className="mv-kpi-sub">meeting courier SLA targets</div>
           </div>
-          <div className="mv-kpi">
+          <div className={`mv-kpi ${attentionCount > 0 ? 'is-attention' : ''}`}>
             <div className="mv-kpi-label">Needs Attention</div>
             <div className={`mv-kpi-value ${attentionCount > 0 ? 'is-attention' : ''}`}>{attentionCount}</div>
             <div className="mv-kpi-sub">{overdueCount} overdue · {dueSoonCount} due soon</div>

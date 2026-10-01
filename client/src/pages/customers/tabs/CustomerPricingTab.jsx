@@ -128,7 +128,7 @@ function CoverageStrip({ servicesOn, totalServices, liveCarriers, ratesPriced, r
   return (
     <div className="mv-kpis" style={{ marginBottom: 28 }}>
       {kpis.map(k => (
-        <div className="mv-kpi" key={k.label}>
+        <div className={'mv-kpi' + (k.attention ? ' is-attention' : '')} key={k.label}>
           <div className="mv-kpi-label">{k.label}</div>
           <div className={'mv-kpi-value' + (k.attention ? ' is-attention' : '')} style={{ fontSize: 27 }}>{k.value}</div>
           <div className="mv-kpi-sub">{k.sub}</div>
