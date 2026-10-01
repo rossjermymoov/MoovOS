@@ -137,7 +137,7 @@ import { triagePriority } from './triageEngine.js';
 import { isLikelyTracking, geminiGenerate, GEMINI_MODEL } from './geminiService.js';
 import { identifyCourierByTracking, getAllTrackingExamples } from './courierAutomation.js';
 import { interpretCourierReply } from './replyInterpreter.js';
-import { routeEmailToTask, checkClaimIntent, checkCourierClaimSignal, updateTaskSpaceForClaim, isAutomatedNotification } from './emailTaskRouter.js';
+import { recordClassification, checkClaimIntent, checkCourierClaimSignal, moveTicketToClaims, isAutomatedNotification } from './emailTriage.js';
 import { scoreUrgency } from './urgencyScorer.js';
 import { intakeClaimForm } from './claimIntake.js';
 
@@ -399,12 +399,10 @@ async function upsertTicket(msg, gmail = null) {
     console.log(`[Gmail sync] Courier reply from ${senderEmail} routed to original ticket ${queryId} via tracking`);
   }
 
-  // Set below when this message creates a brand-new ticket — used to route the
-  // Phase 0 companion Task (email-triage-automation-plan.md) without re-triaging
-  // an existing ticket's follow-up messages.
+  // Set below when this message creates a brand-new ticket — used for the
+  // classification record (email-triage-automation-plan.md) and to tell a
+  // follow-up on an existing ticket apart from a freshly triaged email.
   let newTicketCategory = null;
-  let newTicketSummary  = null;
-  let newTicketPriority = 'medium';
 
   if (!queryId) {
     // Only skip an outbound message when the thread has NO ticket at all (e.g. a
@@ -416,7 +414,6 @@ async function upsertTicket(msg, gmail = null) {
     // Gemini triage — drives group routing, summary, courier and tracking.
     const triage      = await triageAndSummarize(subject, body);
     newTicketCategory = triage.ticket_type;
-    newTicketSummary  = triage.summary;
     const groupName   = GROUP_BY_TICKET_TYPE[triage.ticket_type] || 'Queries';
     const tracking    = triage.tracking_number || null;
 
@@ -467,14 +464,11 @@ async function upsertTicket(msg, gmail = null) {
     } catch (e) {
       console.warn('[Gmail sync] Automation rule evaluation failed:', e.message);
     }
-    if (triggerPriority) newTicketPriority = triggerPriority;
-
     // Hybrid triage — only when no automation rule already forced a priority.
     // Phase 1 hard rules (P1 → urgent) then Phase 2 Gemini grader (high/medium/low).
     if (!triggerPriority) {
       try {
         const { priority } = await triagePriority({ subject, body });
-        newTicketPriority = priority;
         await query(`UPDATE queries SET priority = $1 WHERE id = $2`, [priority, queryId]);
       } catch (e) {
         console.warn('[Gmail sync] Hybrid triage failed:', e.message);
@@ -512,8 +506,8 @@ async function upsertTicket(msg, gmail = null) {
     // ticket into a claim (Section 6.2 of the plan; confirmed against real
     // Freshdesk conversations, where customers rarely ask for a claim directly).
     if (checkCourierClaimSignal({ subject, body }).claim_detected) {
-      try { await updateTaskSpaceForClaim(queryId); }
-      catch (e) { console.warn('[Gmail sync] courier claim-signal task update failed:', e.message); }
+      try { await moveTicketToClaims(queryId, 'Courier sent a claim form — moved to Claims.'); }
+      catch (e) { console.warn('[Gmail sync] courier claim-signal group move failed:', e.message); }
 
       // Claim intake (Phase 2) — populates the existing claim_number/
       // claim_deadline_at/query_evidence schema automatically instead of an
@@ -526,13 +520,12 @@ async function upsertTicket(msg, gmail = null) {
 
     // Urgency scorer (Phase 0, email-triage-automation-plan.md Section 6.1 item
     // 4) — independent of Freshdesk's own unreliable priority field, applies to
-    // every category. Surfaced two ways: the existing requires_attention/
+    // every category. Surfaced on the existing requires_attention/
     // attention_reason columns on `queries` (already visible on QueriesPage
     // regardless of viewer — NOT the per-user NotificationBell, which needs a
-    // specific assignee a brand-new unassigned ticket doesn't have yet), and the
-    // companion Task's priority bumped to 'urgent' (routeEmailToTask() below).
-    // Never downgrades an already-flagged ticket/task (e.g. one dissatisfaction
-    // already escalated, or a task already at urgent).
+    // specific assignee a brand-new unassigned ticket doesn't have yet). Never
+    // overwrites an already-flagged ticket (e.g. one dissatisfaction already
+    // escalated).
     let urgency = { urgent: false, reason: null };
     try {
       urgency = await scoreUrgency({ subject, body, gmailThreadId });
@@ -549,25 +542,18 @@ async function upsertTicket(msg, gmail = null) {
       }
     } catch (e) { console.warn('[Gmail sync] urgency scoring failed:', e.message); }
 
-    // Companion Task on the Tasks board (Phase 0, email-triage-automation-plan.md)
-    // — every category gets a visible task alongside its `queries` row, which
-    // keeps working exactly as before. routeEmailToTask() dedupes on `queryId`,
-    // so this both creates the task on the first message and comments on it for
-    // every reply after.
-    try {
-      await routeEmailToTask({
-        category: newTicketCategory,
-        subject, body,
-        summary: newTicketSummary,
-        customerId: customer?.id || null,
-        queryId,
-        gmailThreadId,
-        priority: newTicketPriority,
-        gmailMessageId: gmailMsgId,
-        urgent: urgency.urgent,
-        urgencyReason: urgency.reason,
-      });
-    } catch (e) { console.warn('[Gmail sync] task routing failed:', e.message); }
+    // Classification record for the Freshdesk comparison — new tickets only
+    // (recordClassification() skips a follow-up, whose category is null).
+    await recordClassification({
+      gmailMessageId: gmailMsgId,
+      gmailThreadId,
+      subject,
+      category: newTicketCategory,
+      groupName: GROUP_BY_TICKET_TYPE[newTicketCategory] || null,
+      urgent: urgency.urgent,
+      urgencyReason: urgency.reason,
+      queryId,
+    });
 
     // Claim-intent watch — a claim is frequently a state change mid-conversation
     // on an already-open ticket, not a fresh email (Section 6.2 of the plan).
@@ -577,7 +563,7 @@ async function upsertTicket(msg, gmail = null) {
       try {
         const claimCheck = await checkClaimIntent({ subject, body });
         if (claimCheck.claim_requested) {
-          await updateTaskSpaceForClaim(queryId, { customerId: customer?.id || null });
+          await moveTicketToClaims(queryId, 'Customer asked to make a claim — moved to Claims.');
         }
       } catch (e) { console.warn('[Gmail sync] claim-intent check failed:', e.message); }
     }

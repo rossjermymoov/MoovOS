@@ -38,8 +38,8 @@ const DEFAULT_SPACES = [
   { key: 'sales',     label: 'Sales',            colour: '#CD1D69' },
   { key: 'ops',       label: 'Operations',       colour: '#D97706' },
   { key: 'product',   label: 'Product & Data',   colour: '#0F7A46' },
-  // Added for email-triage automation (Phase 0) — emailTaskRouter.js's
-  // CATEGORY_SPACE routes claim/billing/technical/returns/collection/supplies email into these.
+  // Added for email-triage automation (Phase 0). Email no longer creates tasks
+  // (it's handled on QueriesPage), but these stay available for manual tasks.
   { key: 'claims',     label: 'Claims',            colour: '#8A6200' },
   { key: 'accounts',   label: 'Accounts',          colour: '#5B21B6' },
   { key: 'technical',  label: 'Technical',         colour: '#1D4ED8' },
