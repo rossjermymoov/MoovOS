@@ -308,7 +308,10 @@ router.get('/', async (req, res, next) => {
     const [dataRes, countRes] = await Promise.all([
       query(`
         SELECT *,
-          LEFT(latest_email_preview, 120) AS latest_email_preview
+          LEFT(latest_email_preview, 120) AS latest_email_preview,
+          (SELECT LEFT(qe.body_text, 8000) FROM query_emails qe
+            WHERE qe.query_id = queries_inbox_view.id AND qe.direction = 'inbound_customer'
+            ORDER BY COALESCE(qe.received_at, qe.created_at) DESC LIMIT 1) AS latest_customer_body
         FROM queries_inbox_view
         ${where}
         ORDER BY ${orderBy}
@@ -317,9 +320,15 @@ router.get('/', async (req, res, next) => {
       query(`SELECT COUNT(*)::int AS total FROM queries_inbox_view ${where}`, values),
     ]);
 
+    // Hover preview: the customer's latest message, quoted history stripped.
+    const rows = dataRes.rows.map(({ latest_customer_body, ...r }) => ({
+      ...r,
+      latest_customer_message: latest_customer_body ? cleanReplyBody(latest_customer_body).slice(0, 700) : null,
+    }));
+
     res.set('Cache-Control', 'no-store');
     res.json({
-      queries: dataRes.rows,
+      queries: rows,
       total:   countRes.rows[0].total,
       limit:   parseInt(limit),
       offset:  parseInt(offset),

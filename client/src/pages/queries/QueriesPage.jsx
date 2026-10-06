@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle, Mail, Clock, User,
@@ -530,8 +531,71 @@ function priorityStripColor(q) {
   return 'var(--mv-hairline-2)';
 }
 
+// Hover preview — what the customer actually wrote, so a ticket can be triaged
+// without opening it. Portalled to <body> so the scrolling queue can't clip it,
+// and pointer-events:none so it never steals the hover from the row.
+const PREVIEW_W = 440;
+function HoverPreview({ q, pos }) {
+  const msg = q.latest_customer_message;
+  return createPortal(
+    <div
+      role="tooltip"
+      style={{
+        position: 'fixed', left: pos.left, top: pos.top, width: PREVIEW_W, zIndex: 1000,
+        transform: pos.above ? 'translateY(-100%)' : 'none', pointerEvents: 'none',
+        background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)',
+        borderRadius: 'var(--v2-r-12, 12px)', padding: '14px 16px',
+        boxShadow: '0 8px 24px color-mix(in srgb, var(--mv-ink) 16%, transparent)',
+        textAlign: 'left',
+      }}
+    >
+      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.09em', textTransform: 'uppercase', color: 'var(--mv-ink-45)', marginBottom: 4 }}>
+        Latest from customer
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--mv-ink-52)', marginBottom: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {q.sender_email || q.customer_name}{q.subject ? ` · ${q.subject}` : ''}
+      </div>
+      <div style={{
+        fontSize: 13, lineHeight: 1.55, color: msg ? 'var(--mv-ink)' : 'var(--mv-ink-52)', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+        display: '-webkit-box', WebkitLineClamp: 12, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+      }}>
+        {msg || 'No message from the customer on this ticket yet.'}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
 function InboxRow({ q, onClick, staffList = [], onUpdate }) {
   const [hoverPos,   setHoverPos]   = useState(null);
+  const hoverTimer = useRef(null);
+
+  // Show the preview after a short rest, so sweeping the mouse down the list
+  // doesn't flash a card for every row.
+  function startHover(e) {
+    const el = e.currentTarget;
+    clearTimeout(hoverTimer.current);
+    hoverTimer.current = setTimeout(() => {
+      const r = el.getBoundingClientRect();
+      const above = window.innerHeight - r.bottom < 300 && r.top > 300;
+      setHoverPos({
+        left: Math.max(16, Math.min(r.left + 24, window.innerWidth - PREVIEW_W - 16)),
+        top: above ? r.top - 6 : r.bottom + 6,
+        above,
+      });
+    }, 450);
+  }
+  function endHover() { clearTimeout(hoverTimer.current); setHoverPos(null); }
+
+  // A scroll moves the row out from under a fixed-position card — drop it.
+  useEffect(() => {
+    if (!hoverPos) return;
+    const hide = () => setHoverPos(null);
+    window.addEventListener('scroll', hide, true);
+    return () => window.removeEventListener('scroll', hide, true);
+  }, [hoverPos]);
+  useEffect(() => () => clearTimeout(hoverTimer.current), []);
+
   const [assignOpen, setAssignOpen] = useState(false);
   const [assigning,  setAssigning]  = useState(false);
 
@@ -560,21 +624,12 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
   const preview      = q.latest_email_preview || q.description || '';
 
   // Priority → left-edge indicator (full spectrum, matches the ticket badge)
-  const priority     = (q.priority || '').toLowerCase();
-  const isScreamer   = priority === 'urgent' || q.is_screamer === true;
   const priorityBar  = priorityStripColor(q);
   const pchip        = priorityChip(q);
   const happiness    = q.customer_happiness_score != null && !isNaN(parseInt(q.customer_happiness_score)) ? parseInt(q.customer_happiness_score) : null;
   const sentiment    = q.sentiment || (happiness == null ? null : happiness < 41 ? 'Frustrated customer' : happiness < 71 ? 'Neutral tone' : 'Positive');
-  // Full AI summary for the hover card (getAiSummary truncates to 80 chars).
+  // Full AI summary for the always-visible summary box.
   const fullSummary  = q.description || q.attention_reason || preview || '';
-  // Dynamic colour scheme for the hover card — red urgent / amber medium / blue standard.
-  const cardUrgent   = isScreamer || q.sla_breached;
-  const cardTone     = cardUrgent
-    ? { header: { color: 'var(--mv-magenta)' },   topBorder: { borderTop: '4px solid var(--mv-magenta)' },   footer: '🚨 URGENT: Action Required.',                 footerCls: { fontWeight: 600, color: 'var(--mv-magenta)' } }
-    : priority === 'medium'
-      ? { header: { color: 'var(--mv-amber-deep)' }, topBorder: { borderTop: '4px solid var(--mv-amber)' }, footer: '⚠️ Medium priority, monitor closely.',         footerCls: { color: 'var(--mv-amber-deep)' } }
-      : { header: { color: 'var(--mv-teal)' },  topBorder: { borderTop: '4px solid var(--mv-teal)' },  footer: '✓ Standard priority, no escalation flagged.', footerCls: { color: 'var(--mv-ink-52)' } };
 
   // SLA label
   let slaLabel = null, slaColor = C.muted, slaType = '';
@@ -603,7 +658,8 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
   return (
     <div
       onClick={onClick}
-      onMouseLeave={() => { setHoverPos(null); setAssignOpen(false); }}
+      onMouseEnter={startHover}
+      onMouseLeave={() => { endHover(); setAssignOpen(false); }}
       className="relative flex cursor-pointer flex-col gap-4 overflow-visible rounded-xl border p-5 shadow-sm transition-all hover:shadow-md"
       style={{ borderLeft: `4px solid ${priorityBar || 'var(--mv-hairline-2)'}`, borderTop: '1px solid var(--mv-hairline-2)', borderRight: '1px solid var(--mv-hairline-2)', borderBottom: '1px solid var(--mv-hairline-2)', background: 'var(--mv-surface)' }}
     >
@@ -724,6 +780,7 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
           {fullSummary ? mdLite(fullSummary) : 'Analyzing ticket context…'}
         </p>
       </div>
+      {hoverPos && !assignOpen && <HoverPreview q={q} pos={hoverPos} />}
     </div>
   );
 }
