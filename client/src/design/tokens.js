@@ -13,11 +13,11 @@ export const colors = {
     green: '#00C853',
     purple: '#7B2FBE',
     magenta: '#E91E8C',
-    amber: '#F59E0B',
+    amber: '#C9784A',
     teal: '#00BCD4',
     greenDim: 'rgba(0,200,83,0.12)',
     magentaDim: 'rgba(233,30,140,0.12)',
-    amberDim: 'rgba(245,158,11,0.12)',
+    amberDim: 'rgba(201,120,74,0.12)',
   },
   text: {
     primary: '#0F172A',

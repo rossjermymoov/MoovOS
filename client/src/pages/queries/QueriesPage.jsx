@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import {
   AlertTriangle, Mail, Clock, User,
@@ -15,6 +16,8 @@ import {
 } from '../../api/queries';
 import { getCourierLogo } from '../../utils/courierLogos';
 import { useAuth } from '../../context/AuthContext';
+import { statusGroupOf } from './statusGroups';
+import { TICKET_GROUPS } from './groups';
 import axios from 'axios';
 
 const api = axios.create({ baseURL: '/api' });
@@ -47,6 +50,8 @@ const C = {
 // mv-state/mv-mark four-mark status language used by StatusBadge below.
 const STATUS_CFG = {
   open:                    { label: 'Open',              kind: 'flight' },
+  in_progress:             { label: 'In Progress',       kind: 'flight' },
+  pending:                 { label: 'Pending',           kind: 'waiting' },
   awaiting_customer_info:  { label: 'Awaiting Customer', kind: 'waiting' },
   info_received:           { label: 'Info Received',     kind: 'settled' },
   drafting:                { label: 'Drafting',          kind: 'flight' },
@@ -95,10 +100,13 @@ function Badge({ label, color, bg, small }) {
   );
 }
 
+// Shows the agent-facing group (Open / In Progress / Pending / Claim In Progress /
+// Resolved); the fine-grained status is in the tooltip.
 function StatusBadge({ status, small }) {
-  const cfg = STATUS_CFG[status] || { label: status || 'Unknown', kind: 'waiting' };
+  const detail = STATUS_CFG[status]?.label || status || 'Unknown';
+  const cfg = statusGroupOf(status) || { label: detail, kind: 'waiting' };
   return (
-    <span className={`mv-state mv-state--${cfg.kind}`} style={{ fontSize: small ? 10.5 : 12 }}>
+    <span className={`mv-state mv-state--${cfg.kind}`} style={{ fontSize: small ? 10.5 : 12 }} title={detail}>
       <span className={`mv-mark mv-mark--${cfg.kind}`} />
       <span className="mv-state-label">{cfg.label}</span>
     </span>
@@ -488,35 +496,28 @@ function cleanIncoming(raw) {
   return t;
 }
 
-// High-contrast ticket-number badge colour driven by the dynamic tracking
-// states (not just status), so rows differentiate at a glance.
-// Badge colour is driven strictly by the priority spectrum (matching the
-// left-hand indicator strip), with completed tickets overriding to green.
-// Nothing tied to group_name / assigned_to / operational state.
-//   Closed/Resolved → green · Urgent → red · High → amber · Medium → yellow · Low → blue
-// Colour styles (token-driven) keyed by status/priority — used as inline `style`
-// alongside the static structural Tailwind classes at each call site.
+// Ticket-number badge, priority chip and left strip share one spectrum. Only
+// Urgent carries colour (magenta — needs a person); High / Medium / Low are ink
+// on grey, so the queue isn't wall-to-wall yellow. Resolved overrides to green.
+const NEUTRAL_CHIP = { background: 'var(--mv-bg)', color: 'var(--mv-ink-62)', borderColor: 'var(--mv-hairline-2)' };
+const URGENT_CHIP  = { background: 'var(--mv-magenta-100)', color: 'var(--mv-magenta-deep)', borderColor: 'var(--mv-magenta-200)' };
+const RESOLVED_SET = ['resolved', 'resolved_claim_approved', 'resolved_claim_rejected', 'closed'];
+
 function rowBadgeClasses(q) {
   const s = (q.status || '').toLowerCase();
-  const p = (q.priority || '').toLowerCase();
-
-  if (['resolved', 'resolved_claim_approved', 'resolved_claim_rejected', 'closed'].includes(s))
+  if (RESOLVED_SET.includes(s))
     return { background: 'var(--mv-purple-100)', color: 'var(--mv-green-deep)', borderColor: 'var(--mv-purple-200)' };
-  if (p === 'urgent') return { background: 'var(--mv-magenta-100)', color: 'var(--mv-magenta-deep)', borderColor: 'var(--mv-magenta-200)' };
-  if (p === 'high')   return { background: 'var(--mv-amber-100)', color: 'var(--mv-amber-deep)', borderColor: 'var(--mv-amber-200)' };
-  if (p === 'medium') return { background: 'var(--mv-amber-100)', color: 'var(--mv-amber-deep)', borderColor: 'var(--mv-amber-200)' };
-  if (p === 'low')    return { background: 'var(--mv-teal-100)', color: 'var(--mv-teal)', borderColor: 'var(--mv-teal-200)' };
-  return { background: 'var(--mv-teal-100)', color: 'var(--mv-teal)', borderColor: 'var(--mv-teal-200)' };
+  return (q.priority || '').toLowerCase() === 'urgent' ? URGENT_CHIP : NEUTRAL_CHIP;
 }
 
 // Compact priority chip (label + colour style), same spectrum as the badge.
 function priorityChip(q) {
   const p = (q.priority || '').toLowerCase();
   const map = {
-    urgent: ['Urgent', { background: 'var(--mv-magenta-100)', color: 'var(--mv-magenta-deep)', borderColor: 'var(--mv-magenta-200)' }],
-    high:   ['High',   { background: 'var(--mv-amber-100)', color: 'var(--mv-amber-deep)', borderColor: 'var(--mv-amber-200)' }],
-    medium: ['Medium', { background: 'var(--mv-amber-100)', color: 'var(--mv-amber-deep)', borderColor: 'var(--mv-amber-200)' }],
-    low:    ['Low',    { background: 'var(--mv-teal-100)', color: 'var(--mv-teal)', borderColor: 'var(--mv-teal-200)' }],
+    urgent: ['Urgent', URGENT_CHIP],
+    high:   ['High',   NEUTRAL_CHIP],
+    medium: ['Medium', NEUTRAL_CHIP],
+    low:    ['Low',    NEUTRAL_CHIP],
   };
   return map[p] || null;
 }
@@ -525,15 +526,77 @@ function priorityChip(q) {
 function priorityStripColor(q) {
   const s = (q.status || '').toLowerCase();
   const p = (q.priority || '').toLowerCase();
-  if (['resolved', 'resolved_claim_approved', 'resolved_claim_rejected', 'closed'].includes(s)) return 'var(--mv-green)';
+  if (RESOLVED_SET.includes(s)) return 'var(--mv-green)';
   if (p === 'urgent') return 'var(--mv-magenta)';
-  if (p === 'high')   return 'var(--mv-amber)';
-  if (p === 'medium') return 'var(--mv-amber)';
-  return 'var(--mv-teal)'; // low / default
+  if (p === 'high')   return 'var(--mv-ink-45)';
+  return 'var(--mv-hairline-2)';
+}
+
+// Hover preview — what the customer actually wrote, so a ticket can be triaged
+// without opening it. Portalled to <body> so the scrolling queue can't clip it,
+// and pointer-events:none so it never steals the hover from the row.
+const PREVIEW_W = 440;
+function HoverPreview({ q, pos }) {
+  const msg = q.latest_customer_message;
+  return createPortal(
+    <div
+      role="tooltip"
+      style={{
+        position: 'fixed', left: pos.left, top: pos.top, width: PREVIEW_W, zIndex: 1000,
+        transform: pos.above ? 'translateY(-100%)' : 'none', pointerEvents: 'none',
+        background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)',
+        borderRadius: 'var(--v2-r-12, 12px)', padding: '14px 16px',
+        boxShadow: '0 8px 24px color-mix(in srgb, var(--mv-ink) 16%, transparent)',
+        textAlign: 'left',
+      }}
+    >
+      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.09em', textTransform: 'uppercase', color: 'var(--mv-ink-45)', marginBottom: 4 }}>
+        Latest from customer
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--mv-ink-52)', marginBottom: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {q.sender_email || q.customer_name}{q.subject ? ` · ${q.subject}` : ''}
+      </div>
+      <div style={{
+        fontSize: 13, lineHeight: 1.55, color: msg ? 'var(--mv-ink)' : 'var(--mv-ink-52)', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+        display: '-webkit-box', WebkitLineClamp: 12, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+      }}>
+        {msg || 'No message from the customer on this ticket yet.'}
+      </div>
+    </div>,
+    document.body,
+  );
 }
 
 function InboxRow({ q, onClick, staffList = [], onUpdate }) {
   const [hoverPos,   setHoverPos]   = useState(null);
+  const hoverTimer = useRef(null);
+
+  // Show the preview after a short rest, so sweeping the mouse down the list
+  // doesn't flash a card for every row.
+  function startHover(e) {
+    const el = e.currentTarget;
+    clearTimeout(hoverTimer.current);
+    hoverTimer.current = setTimeout(() => {
+      const r = el.getBoundingClientRect();
+      const above = window.innerHeight - r.bottom < 300 && r.top > 300;
+      setHoverPos({
+        left: Math.max(16, Math.min(r.left + 24, window.innerWidth - PREVIEW_W - 16)),
+        top: above ? r.top - 6 : r.bottom + 6,
+        above,
+      });
+    }, 450);
+  }
+  function endHover() { clearTimeout(hoverTimer.current); setHoverPos(null); }
+
+  // A scroll moves the row out from under a fixed-position card — drop it.
+  useEffect(() => {
+    if (!hoverPos) return;
+    const hide = () => setHoverPos(null);
+    window.addEventListener('scroll', hide, true);
+    return () => window.removeEventListener('scroll', hide, true);
+  }, [hoverPos]);
+  useEffect(() => () => clearTimeout(hoverTimer.current), []);
+
   const [assignOpen, setAssignOpen] = useState(false);
   const [assigning,  setAssigning]  = useState(false);
 
@@ -562,22 +625,12 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
   const preview      = q.latest_email_preview || q.description || '';
 
   // Priority → left-edge indicator (full spectrum, matches the ticket badge)
-  const priority     = (q.priority || '').toLowerCase();
-  const isScreamer   = priority === 'urgent' || q.is_screamer === true;
   const priorityBar  = priorityStripColor(q);
   const pchip        = priorityChip(q);
   const happiness    = q.customer_happiness_score != null && !isNaN(parseInt(q.customer_happiness_score)) ? parseInt(q.customer_happiness_score) : null;
   const sentiment    = q.sentiment || (happiness == null ? null : happiness < 41 ? 'Frustrated customer' : happiness < 71 ? 'Neutral tone' : 'Positive');
-  const ticketId     = q.ticket_number != null ? `Moov-${q.ticket_number}` : null;
-  // Full AI summary for the hover card (getAiSummary truncates to 80 chars).
+  // Full AI summary for the always-visible summary box.
   const fullSummary  = q.description || q.attention_reason || preview || '';
-  // Dynamic colour scheme for the hover card — red urgent / amber medium / blue standard.
-  const cardUrgent   = isScreamer || q.sla_breached;
-  const cardTone     = cardUrgent
-    ? { header: { color: 'var(--mv-magenta)' },   topBorder: { borderTop: '4px solid var(--mv-magenta)' },   footer: '🚨 URGENT: Action Required.',                 footerCls: { fontWeight: 600, color: 'var(--mv-magenta)' } }
-    : priority === 'medium'
-      ? { header: { color: 'var(--mv-amber-deep)' }, topBorder: { borderTop: '4px solid var(--mv-amber)' }, footer: '⚠️ Medium priority, monitor closely.',         footerCls: { color: 'var(--mv-amber-deep)' } }
-      : { header: { color: 'var(--mv-teal)' },  topBorder: { borderTop: '4px solid var(--mv-teal)' },  footer: '✓ Standard priority, no escalation flagged.', footerCls: { color: 'var(--mv-ink-52)' } };
 
   // SLA label
   let slaLabel = null, slaColor = C.muted, slaType = '';
@@ -606,20 +659,21 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
   return (
     <div
       onClick={onClick}
-      onMouseLeave={() => { setHoverPos(null); setAssignOpen(false); }}
+      onMouseEnter={startHover}
+      onMouseLeave={() => { endHover(); setAssignOpen(false); }}
       className="relative flex cursor-pointer flex-col gap-4 overflow-visible rounded-xl border p-5 shadow-sm transition-all hover:shadow-md"
       style={{ borderLeft: `4px solid ${priorityBar || 'var(--mv-hairline-2)'}`, borderTop: '1px solid var(--mv-hairline-2)', borderRight: '1px solid var(--mv-hairline-2)', borderBottom: '1px solid var(--mv-hairline-2)', background: 'var(--mv-surface)' }}
     >
       {/* ── Line 1: metadata shelf ────────────────────────────────────────── */}
       <div className="flex w-full items-center justify-between pb-3" style={{ borderBottom: '1px solid var(--mv-hairline)' }}>
-        {/* Left: priority badge (#M-ID + Urgent) · customer identity */}
+        {/* Left: ticket number (#2813) + priority · customer identity */}
         <div style={{ display: 'flex', minWidth: 0, alignItems: 'center', gap: 8 }}>
           {(hasNewReply || unread > 0) && (
             <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: 'var(--mv-teal)' }} />
           )}
           {q.ticket_number != null && (
             <span className="inline-flex shrink-0 items-center justify-center rounded-md border px-2.5 py-1 text-xs font-bold uppercase tracking-wide shadow-sm" style={rowBadgeClasses(q)}>
-              #M-{q.ticket_number}
+              #{q.ticket_number}
             </span>
           )}
           {pchip && (
@@ -727,6 +781,7 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
           {fullSummary ? mdLite(fullSummary) : 'Analyzing ticket context…'}
         </p>
       </div>
+      {hoverPos && !assignOpen && <HoverPreview q={q} pos={hoverPos} />}
     </div>
   );
 }
@@ -1645,16 +1700,16 @@ const STATUS_FILTERS = [
 // ── Dynamic group configuration ──────────────────────────────────────────────
 // Foundation for the settings-driven groups: add a string here (or, later, load
 // this array from /settings) and a colour-coded tab appears automatically.
-const userDefinedGroups = ['Claims', 'Queries', 'Billing', 'Technical', 'Sales', 'Returns', 'Collection Issues', 'Supplies Request', 'Customer Service'];
+const userDefinedGroups = TICKET_GROUPS;
 
 const GROUP_COLORS = {
-  Claims:              'var(--mv-amber)',
+  Claims:              'var(--mv-magenta)',
   Queries:             'var(--mv-teal)',
   Billing:             'var(--mv-green)',
   Technical:           'var(--mv-purple)',
   Sales:               'var(--mv-magenta)',
   Returns:             'var(--mv-teal)',
-  'Collection Issues': 'var(--mv-amber)',
+  'Collection Issues': 'var(--mv-ink)',
   'Supplies Request':  'var(--mv-purple)',
   'Customer Service':  'var(--mv-ink)',
 };
@@ -1818,9 +1873,8 @@ function FilterPanel({ filters, setFilters, staffList, onClose }) {
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
-// ─── Priority ordering (urgent → high → medium → low) for the live queue ──────
-const PRI_RANK = { urgent: 0, high: 1, medium: 2, low: 3 };
-function priRank(q) { return PRI_RANK[(q.priority || '').toLowerCase()] ?? 4; }
+// The Resolved filter covers claim outcomes too, not just plain 'resolved'.
+const RESOLVED_FILTER = 'resolved,resolved_claim_approved,resolved_claim_rejected';
 
 // Consecutive untouched approvals before a template path is deemed autopilot-ready.
 const AUTOPILOT_THRESHOLD = 20;
@@ -1887,7 +1941,7 @@ function QuickViewModal({ card, onClose, onDispatched }) {
         <div className="flex items-center justify-between gap-3 border-b px-6 py-4" style={{ borderColor: 'var(--mv-hairline)' }}>
           <div className="flex min-w-0 items-center gap-3">
             <span className="inline-flex shrink-0 items-center justify-center rounded-md border px-2.5 py-1 text-xs font-bold uppercase tracking-wide" style={rowBadgeClasses(card)}>
-              #M-{card.ticket_number}
+              #{card.ticket_number}
             </span>
             <span className="truncate text-base font-bold tracking-tight" style={{ color: 'var(--mv-ink)' }}>
               {card.customer_name || card.subject || 'Ticket'}
@@ -2090,7 +2144,7 @@ function AutopilotQABay({ refreshKey, onChanged }) {
               <div className="mb-2 flex items-center gap-2">
                 <button onClick={() => navigate(`/queries/${c.query_id}`)}
                   className="inline-flex items-center justify-center rounded border px-2 py-0.5 text-xs font-bold uppercase" style={rowBadgeClasses(c)}>
-                  M-{c.ticket_number}
+                  #{c.ticket_number}
                 </button>
                 <span className="truncate text-xs font-medium" style={{ color: 'var(--mv-amber-deep)' }}>{c.customer_name || c.subject}</span>
               </div>
@@ -2110,7 +2164,7 @@ function AutopilotQABay({ refreshKey, onChanged }) {
               <div className="mb-2 flex items-center gap-2">
                 <button onClick={() => navigate(`/queries/${c.query_id}`)}
                   className="inline-flex items-center justify-center rounded border px-2 py-0.5 text-xs font-bold uppercase" style={rowBadgeClasses(c)}>
-                  M-{c.ticket_number}
+                  #{c.ticket_number}
                 </button>
                 <span className="truncate text-xs font-medium" style={{ color: 'var(--mv-green-deep)' }}>{c.customer_name || c.subject}</span>
               </div>
@@ -2130,7 +2184,7 @@ function AutopilotQABay({ refreshKey, onChanged }) {
               <div className="mb-2 flex items-center gap-2">
                 <button onClick={() => navigate(`/queries/${c.query_id}`)}
                   className="inline-flex items-center justify-center rounded border px-2 py-0.5 text-xs font-bold uppercase" style={rowBadgeClasses(c)}>
-                  M-{c.ticket_number}
+                  #{c.ticket_number}
                 </button>
                 <span className="truncate text-xs font-medium" style={{ color: 'var(--mv-ink-52)' }}>{c.customer_name || c.subject}</span>
                 {/* Draft channel chips */}
@@ -2199,6 +2253,16 @@ export default function QueriesPage() {
   useEffect(() => {
     fetchStats(user?.id).then(setStats).catch(console.error);
   }, [refreshKey, user?.id]);
+
+  // A new filter or search is a new result set — start it from page 1.
+  useEffect(() => { setPage(1); }, [filters]);
+
+  // Search also scans email bodies, so wait for typing to pause before querying.
+  const [searchInput, setSearchInput] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setFilters(f => (f.search === searchInput ? f : { ...f, search: searchInput })), 300);
+    return () => clearTimeout(t);
+  }, [searchInput]);
 
   // Active workspace derives from the assigned_to filter.
   const workspace = filters.assigned_to === 'unassigned' ? 'unassigned'
@@ -2332,17 +2396,17 @@ export default function QueriesPage() {
         <div style={{ position: 'relative' }}>
           <Search size={12} style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', color: C.muted, pointerEvents: 'none' }} />
           <input
-            placeholder="Search consignment, customer…"
-            value={filters.search}
-            onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
+            placeholder="Search #ticket, consignment, customer, email…"
+            value={searchInput}
+            onChange={e => setSearchInput(e.target.value)}
             style={{ background: C.card, border: `0.5px solid ${C.border}`, borderRadius: 8, color: C.text,
-              fontSize: 12, padding: '7px 10px 7px 28px', width: 220, outline: 'none' }}
+              fontSize: 12, padding: '7px 10px 7px 28px', width: 280, outline: 'none' }}
           />
         </div>
         {/* Sort indicator */}
         <span style={{ fontSize: 12, color: C.muted, display: 'flex', alignItems: 'center', gap: 4 }}>
           <RefreshCw size={11} style={{ cursor: 'pointer' }} onClick={refresh} />
-          Last activity
+          Oldest first
         </span>
         {/* Automation simulator */}
         <button
@@ -2377,7 +2441,7 @@ export default function QueriesPage() {
         {[
           { key: 'urgent', label: '🚨 Critical Threats',     value: stats?.urgent_open,          accent: 'var(--mv-magenta)', tint: 'var(--mv-magenta-100)', text: 'var(--mv-magenta-deep)',
             onClick: () => setFilters(f => ({ ...f, priority: f.priority === 'urgent' ? '' : 'urgent', sla_breached: false, status: '', attention: false })), active: filters.priority === 'urgent' },
-          { key: 'high',   label: '⚠️ High Priority',         value: stats?.high_open,            accent: 'var(--mv-amber)', tint: 'var(--mv-amber-100)', text: 'var(--mv-amber-deep)',
+          { key: 'high',   label: '⚠️ High Priority',         value: stats?.high_open,            accent: 'var(--mv-ink)', tint: 'var(--mv-surface)', text: 'var(--mv-ink-62)',
             onClick: () => setFilters(f => ({ ...f, priority: f.priority === 'high' ? '' : 'high', sla_breached: false, status: '', attention: false })), active: filters.priority === 'high' },
           { key: 'sla',    label: '⏳ Courier SLA Breaches',  value: stats?.courier_sla_breached, accent: 'var(--mv-purple)', tint: 'var(--mv-purple-100)', text: 'var(--mv-purple-700)',
             onClick: () => setFilters(f => ({ ...f, sla_breached: !f.sla_breached, priority: '', status: '', attention: false })), active: filters.sla_breached },
@@ -2442,8 +2506,8 @@ export default function QueriesPage() {
             onClick={() => setFilters(p => ({ ...p, pending_draft: !p.pending_draft, attention: false }))}>
             ✦ To verify
           </FilterPill>
-          <FilterPill color={C.blue} active={filters.status === 'resolved'}
-            onClick={() => setFilters(p => ({ ...p, status: p.status === 'resolved' ? '' : 'resolved', attention: false }))}>
+          <FilterPill color={C.blue} active={filters.status === RESOLVED_FILTER}
+            onClick={() => setFilters(p => ({ ...p, status: p.status === RESOLVED_FILTER ? '' : RESOLVED_FILTER, attention: false }))}>
             Resolved
           </FilterPill>
         </div>
@@ -2465,12 +2529,8 @@ export default function QueriesPage() {
             )}
             {!loading && displayQueries.length > 0 && (
               <>
-                {/* Rows: Red (Urgent) & Amber (High) pinned to the top, then by activity */}
-                {[...displayQueries]
-                  .sort((a, b) =>
-                    priRank(a) - priRank(b) ||
-                    new Date(b.latest_email_at || b.created_at) - new Date(a.latest_email_at || a.created_at)
-                  )
+                {/* Rows arrive in queue order from the API: status group, then oldest first */}
+                {displayQueries
                   .map(q => (
                     <InboxRow key={q.id} q={q} onClick={() => navigate(`/queries/${q.id}`)} staffList={staffList} onUpdate={refresh} />
                   ))

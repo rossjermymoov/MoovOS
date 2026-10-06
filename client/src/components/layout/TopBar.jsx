@@ -35,11 +35,23 @@ export default function TopBar() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  function handleSearchKeyDown(e) {
-    if (e.key === 'Enter' && search.trim()) {
-      const q = search.trim();
-      navigate(`/shipments?search=${encodeURIComponent(q)}`);
+  async function handleSearchKeyDown(e) {
+    if (e.key !== 'Enter' || !search.trim()) return;
+    const q = search.trim();
+    // A ticket number (#2813, Moov-2813, or a short bare number — consignment
+    // numbers are far longer) opens that ticket; anything else, or a number
+    // with no ticket, searches consignments.
+    if (/^(#|moov-|m-)\s*\d+$/i.test(q) || /^\d{1,6}$/.test(q)) {
+      try {
+        const r = await fetch(`/api/queries/by-number/${encodeURIComponent(q)}`);
+        if (r.ok) {
+          const { id } = await r.json();
+          navigate(`/queries/${id}`);
+          return;
+        }
+      } catch { /* fall through to consignment search */ }
     }
+    navigate(`/shipments?search=${encodeURIComponent(q)}`);
   }
 
   const dateStr = now.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
@@ -59,7 +71,7 @@ export default function TopBar() {
           value={search}
           onChange={e => setSearch(e.target.value)}
           onKeyDown={handleSearchKeyDown}
-          placeholder="Search consignment, customer…"
+          placeholder="Search #ticket, consignment, customer…"
         />
       </div>
 

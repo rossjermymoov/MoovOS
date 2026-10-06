@@ -115,17 +115,17 @@ export function isAutomatedNotification({ subject = '', body = '' } = {}) {
 // is a real classification (i.e. this email actually went through triage — a
 // follow-up on an existing thread doesn't get a fresh one). Only the hashed
 // subject is stored, never raw subject/body content.
-export async function recordClassification({ gmailMessageId, gmailThreadId, subject, category, groupName, urgent, urgencyReason, queryId }) {
+export async function recordClassification({ gmailMessageId, gmailThreadId, subject, category, groupName, urgent, urgencyReason, queryId, triageSource }) {
   if (!gmailMessageId || !category) return;
   const subjectHash = crypto.createHash('sha256').update((subject || '').trim().toLowerCase()).digest('hex');
   try {
     await query(
       `INSERT INTO inbox_classifications
          (gmail_message_id, gmail_thread_id, raw_subject_hash, moovos_category, moovos_group,
-          moovos_urgency, moovos_urgency_reason, query_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+          moovos_urgency, moovos_urgency_reason, query_id, triage_source)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
        ON CONFLICT (gmail_message_id) DO NOTHING`,
-      [gmailMessageId, gmailThreadId || null, subjectHash, category, groupName || null, !!urgent, urgencyReason || null, queryId || null],
+      [gmailMessageId, gmailThreadId || null, subjectHash, category, groupName || null, !!urgent, urgencyReason || null, queryId || null, triageSource || null],
     );
   } catch (e) { console.warn('[EmailTriage] recordClassification failed:', e.message); }
 }

@@ -52,12 +52,15 @@
      screens have a real, load-bearing third state (pending/at-risk/flagged)
      distinct from settled-green and alarm-red; forcing it into one of those
      would change its meaning, not just its colour. --mv-amber is the bright
-     dot/fill/border variant; --mv-amber-deep is the legible-as-text variant
-     (the bright value fails contrast as running text on a light background). */
-  --mv-amber:         #FECA00;
-  --mv-amber-deep:    #8A6200;
-  --mv-amber-100:     #FFFAE6;
-  --mv-amber-200:     #FFF2BF;
+     dot/fill/border variant; --mv-amber-deep is the legible-as-text variant.
+     The name is historical: the hue is a muted clay, not yellow. Bright yellow
+     caused eye strain in testing, in both themes. Clay keeps the warm "caution"
+     reading while staying low-glare and distinct from magenta (needs a person)
+     and green (settled). Contrast: deep on white 5.8:1, ink on fill 5.1:1. */
+  --mv-amber:         #C9784A;
+  --mv-amber-deep:    #9A5228;
+  --mv-amber-100:     #FBF1EA;
+  --mv-amber-200:     #F2D8C6;
   --mv-on-amber:      #171B2D;   /* text/icons on a solid --mv-amber fill — amber is
                                      bright in BOTH themes (unlike --mv-purple/green,
                                      which flip), so unlike --mv-on-brand this is a
@@ -102,10 +105,11 @@
   --mv-teal-200:      rgba(39,110,147,.5);
   --mv-on-brand:      #171B2D;
 
-  --mv-amber:         #FECA00;
-  --mv-amber-deep:    #FECA00;
-  --mv-amber-100:     rgba(254,202,0,.14);
-  --mv-amber-200:     rgba(254,202,0,.4);
+  /* Soft clay, in step with the softened dark magenta/teal above (7.4:1 on surface). */
+  --mv-amber:         #D49A74;
+  --mv-amber-deep:    #D49A74;
+  --mv-amber-100:     rgba(212,154,116,.14);
+  --mv-amber-200:     rgba(212,154,116,.4);
   --mv-on-amber:      #171B2D;   /* constant — see :root definition */
 
   --mv-ink-45:  rgba(253,255,255,.45);

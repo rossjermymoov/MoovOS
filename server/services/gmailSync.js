@@ -15,10 +15,20 @@ import { google } from 'googleapis';
 
 function triageFallback(subject, body) {
   const text = `${subject || ''} ${body || ''}`.toLowerCase();
+  // Most specific phrases first: collection and supplies are checked before the
+  // broad billing/technical words, so e.g. a supplies request that mentions an
+  // account number isn't filed as Billing. Word boundaries stop short words
+  // matching inside others ("api" in "rapid", "lost" in "Lostwithiel").
   const ticket_type =
-    /claim|compensation|refund|damaged|lost/.test(text)        ? 'claim' :
-    /invoice|billing|statement|payment|account|charge/.test(text) ? 'billing' :
-    /login|error|bug|portal|dashboard|api|technical|access/.test(text) ? 'technical' :
+    /\b(claim|compensation|refund|damaged|lost)\b/.test(text)          ? 'claim' :
+    // Outbound collection/pickup problem — distinct from delivery status, even
+    // when the email also mentions a parcel or tracking number.
+    /collection (number|issue|failed|not (done|happened|made)|was(n'?t| not) (made|done)|didn'?t happen)|(failed|missed|no) collection|not (been )?collected|(courier|driver) (hasn'?t|has not|didn'?t|did not|never) (collect|arrive|turn up|show)/.test(text) ? 'collection' :
+    // Physical shipping supplies (labels, mailing bags, printer rolls) — distinct
+    // from a technical/portal issue even though "labels"/"printer" sound similar.
+    /\bsupplies\b|(order|send|need|request|run(ning)? out of|low on).*(mailing bags|packing bags|poly ?bags|packaging|labels|label rolls|printer (labels|rolls)|thermal (labels|rolls|printer)|tape)|more (labels|rolls|bags)\b/.test(text) ? 'supplies' :
+    /\b(invoices?|billing|statements?|payments?|charged?|charges)\b/.test(text) ? 'billing' :
+    /\b(login|log in|error|bug|portal|dashboard|api|technical)\b/.test(text) ? 'technical' :
     // "quote"/"pric" (not just "pricing") also catches "quotation"/"price" —
     // quote requests come from existing customers too, not just new sign-ups.
     /quot|pric|new account|sign ?up|reseller|partnership/.test(text) ? 'sales' :
@@ -26,11 +36,6 @@ function triageFallback(subject, body) {
     // "you have a return" notice, or a returns-label request) — plain "please
     // return this to sender" on an outbound delivery is a 'query', not this.
     /return.*(belonging to (you|us)|label|qr code)|received a return/.test(text) ? 'returns' :
-    // Outbound collection/pickup problem — distinct from delivery status.
-    /collection (number|issue|not (done|happened))|courier (hasn'?t|has not|not) (collected|arrived|turned up)|missed (the )?collection|driver (hasn'?t|has not) (arrived|collected)/.test(text) ? 'collection' :
-    // Physical shipping supplies (labels, mailing bags, printer rolls) — distinct
-    // from a technical/portal issue even though "labels"/"printer" sound similar.
-    /(order|send|need).*(mailing bags|packing bags|label rolls|printer (labels|rolls)|thermal (labels|rolls|printer))|more (labels|rolls|bags)\b/.test(text) ? 'supplies' :
     /track|delivery|parcel|where is|courier|consignment|deliver/.test(text) ? 'query' :
     // Unmatched/ambiguous email is NOT assumed to be a WISMO delivery enquiry —
     // that would wrongly trigger courier-chase automation downstream. Land it as
@@ -80,6 +85,10 @@ export async function triageAndSummarize(subject, body) {
     `in transit).\n` +
     `  "supplies" = a request for physical shipping supplies (labels, mailing bags, packing tape, ` +
     `thermal printer rolls) — NOT a "technical" printer/portal bug even though it mentions labels/printer.\n` +
+    `Deciding hints: a parcel that was never picked up ("failed collection", "not collected", ` +
+    `"driver didn't turn up") is "collection" even if it also mentions tracking or delivery. Any ` +
+    `request for supplies (labels, bags, packaging, rolls) is "supplies". A customer asking for ` +
+    `compensation or to claim for a lost/damaged item is "claim" even if they don't use the word claim.\n` +
     `  "other" = anything that doesn't clearly fit the above — do NOT default to "query" ` +
     `just because it's unclear; an ambiguous email is "other", not an assumed delivery enquiry.\n` +
     `- summary: max 2 sentences describing the core issue (no "The email"/"This email").\n` +
@@ -140,6 +149,7 @@ import { interpretCourierReply } from './replyInterpreter.js';
 import { recordClassification, checkClaimIntent, checkCourierClaimSignal, moveTicketToClaims, isAutomatedNotification } from './emailTriage.js';
 import { scoreUrgency } from './urgencyScorer.js';
 import { intakeClaimForm } from './claimIntake.js';
+import { STATUS_GROUPS } from './statusGroups.js';
 
 // Sender domains that are couriers / our wholesaler (AGL) — never the customer.
 const COURIER_DOMAINS = /@(?:[a-z0-9-]+\.)*(dpd|dhl|evri|hermes|myhermes|yodel|ups|parcelforce|royalmail|fedex|agl)\.[a-z.]{2,}/i;
@@ -316,6 +326,24 @@ function parseFrom(fromHeader) {
   return { name: '', email: fromHeader.trim().toLowerCase() };
 }
 
+// Every address in a To/Cc header value.
+function parseAddressList(header) {
+  return (String(header || '').match(/[^\s<>,;"'\[\]:]+@[^\s<>,;"'\[\]]+/g) || []).map(a => a.toLowerCase());
+}
+
+// A colleague forwarding a customer's email into the support inbox: a "Fwd:"
+// subject whose quoted header names an outside sender. Returns that original
+// sender, who is the real customer on the ticket. Handles Gmail ("From: Name
+// <a@b>") and Outlook ("From: Name [mailto:a@b]") forward headers.
+function forwardedOriginalSender(subject, body) {
+  if (!/^\s*(fwd?|fw)\s*:/i.test(subject || '')) return null;
+  const line = String(body || '').match(/^[\s>*]*From:\*?\s*(.+)$/im)?.[1] || '';
+  const email = line.match(/[^\s<>\[\]:"']+@[^\s<>\[\]"']+/)?.[0]?.toLowerCase();
+  if (!email || SUPPORT_DOMAINS.test(email) || COURIER_DOMAINS.test(email)) return null;
+  const name = line.replace(/<[^>]*>|\[mailto:[^\]]*\]|\S+@\S+/g, '').replace(/"/g, '').trim();
+  return { email, name };
+}
+
 async function resolveCustomer(senderEmail) {
   let res = await query(`SELECT id, business_name, tier FROM customers WHERE lower(primary_email) = $1 LIMIT 1`, [senderEmail.toLowerCase()]);
   if (res.rows[0]) return res.rows[0];
@@ -327,6 +355,40 @@ async function resolveCustomer(senderEmail) {
     if (res.rows[0]) return res.rows[0];
   }
   return null;
+}
+
+// A Pending ticket for a conversation Moov started. The counterpart (customer or
+// courier) goes in sender_email, which is where replies from MoovOS are sent.
+async function createMoovStartedTicket({ subject, body, receivedAt, counterpart, isCourier }) {
+  const customer = isCourier ? null : await resolveCustomer(counterpart);
+  const triage   = await triageAndSummarize(subject, body);
+  let courierName = triage.courier && !/^agl$/i.test(triage.courier.trim()) ? triage.courier : null;
+  let courierCode = courierName ? courierName.toLowerCase().replace(/\s+/g, '_') : null;
+  if (!courierCode && triage.tracking_number) {
+    const id = await identifyCourierByTracking(triage.tracking_number);
+    if (id) { courierCode = id.courier_code; courierName = id.courier_name; }
+  }
+  const r = await query(`
+    INSERT INTO queries
+      (customer_id, customer_name, sender_email, sender_matched, subject, description,
+       status, query_type, group_name, courier_name, courier_code, consignment_number,
+       trigger, created_at, updated_at)
+    VALUES ($1, $2, $3, $4, $5, $6, 'pending', 'other', $7, $8, $9, $10, 'staff', $11, $11)
+    RETURNING id
+  `, [
+    customer?.id || null,
+    customer?.business_name || (isCourier ? (courierName || counterpart) : counterpart),
+    counterpart,
+    customer != null,
+    subject,
+    triage.summary,
+    GROUP_BY_TICKET_TYPE[triage.ticket_type] || GROUP_BY_TICKET_TYPE.other,
+    courierName,
+    courierCode,
+    triage.tracking_number || null,
+    receivedAt,
+  ]);
+  return r.rows[0].id;
 }
 
 async function upsertTicket(msg, gmail = null) {
@@ -344,7 +406,7 @@ async function upsertTicket(msg, gmail = null) {
   const rfcMessageId = extractHeader(headers, 'message-id') || null;
   const body       = extractBody(payload) || '(no body)';
   const bodyHtml   = gmail ? await buildInlineHtml(gmail, gmailMsgId, payload).catch(() => '') : '';
-  const { name: senderName, email: senderEmail } = parseFrom(fromHeader);
+  let { name: senderName, email: senderEmail } = parseFrom(fromHeader);
   const receivedAt = internalDate ? new Date(parseInt(internalDate)) : new Date();
 
   if (!senderEmail) return { status: 'skipped', reason: 'no sender email' };
@@ -358,10 +420,31 @@ async function upsertTicket(msg, gmail = null) {
   }
 
   // Our own SENT messages (or anything from a support domain) are outbound.
-  const isOurs = labelIds.includes('SENT') || SUPPORT_DOMAINS.test(senderEmail);
+  let isOurs = labelIds.includes('SENT') || SUPPORT_DOMAINS.test(senderEmail);
+
+  // Who a Moov-sent email went to — decides how a conversation Moov starts is
+  // handled (see "Conversation started by Moov" below).
+  const recipients        = parseAddressList(`${extractHeader(headers, 'to')},${extractHeader(headers, 'cc')}`);
+  const courierRecipient  = recipients.find(a => COURIER_DOMAINS.test(a)) || null;
+  const externalRecipient = recipients.find(a => !SUPPORT_DOMAINS.test(a) && !COURIER_DOMAINS.test(a)) || null;
+
+  // A colleague forwarded a customer's email into a Moov inbox: treat it as
+  // that customer's inbound email, so it becomes a normal Open ticket.
+  if (isOurs && !courierRecipient && !externalRecipient) {
+    const original = forwardedOriginalSender(subject, body);
+    if (original) {
+      console.log(`[Gmail sync] ${senderEmail} forwarded an email from ${original.email} — treating as inbound`);
+      senderEmail = original.email;
+      senderName  = original.name;
+      isOurs      = false;
+    }
+  }
+
   // A courier/AGL sender is NEVER the customer — classify as inbound_courier.
   const isCourierSender = !isOurs && COURIER_DOMAINS.test(senderEmail);
-  const direction = isOurs ? 'outbound_customer' : isCourierSender ? 'inbound_courier' : 'inbound_customer';
+  const direction = isOurs
+    ? (courierRecipient ? 'outbound_courier' : 'outbound_customer')
+    : isCourierSender ? 'inbound_courier' : 'inbound_customer';
 
   const customer = isCourierSender ? null : await resolveCustomer(senderEmail);
 
@@ -403,17 +486,38 @@ async function upsertTicket(msg, gmail = null) {
   // classification record (email-triage-automation-plan.md) and to tell a
   // follow-up on an existing ticket apart from a freshly triaged email.
   let newTicketCategory = null;
+  let newTicketTriageSource = null;
+
+  // Conversation started by Moov (no ticket on this thread yet). Queries is the
+  // single record of every conversation, so these are kept too:
+  //  • to a courier → attach to the parcel's ticket (Ref tag / tracking number),
+  //    else start a Pending ticket with the courier;
+  //  • to a customer → start a Pending ticket (waiting on their reply, so it
+  //    doesn't jump the work queue);
+  //  • only between Moov addresses → skipped: internal, not a customer query.
+  if (!queryId && isOurs) {
+    if (courierRecipient) {
+      queryId = await findTicketByRef(`${subject}\n${body}`)
+             || await findTicketByTrackingInBody(`${subject}\n${body}`);
+      if (queryId) console.log(`[Gmail sync] Moov email to ${courierRecipient} attached to ticket ${queryId}`);
+    }
+    if (!queryId) {
+      const counterpart = courierRecipient || externalRecipient;
+      if (!counterpart) {
+        console.log(`[Gmail sync] Internal email between Moov addresses skipped (thread ${gmailThreadId}, from ${senderEmail})`);
+        return { status: 'skipped', reason: 'internal email between Moov addresses' };
+      }
+      queryId = await createMoovStartedTicket({ subject, body, receivedAt, counterpart, isCourier: !!courierRecipient });
+      console.log(`[Gmail sync] Moov started a conversation with ${counterpart} — Pending ticket ${queryId}`);
+    }
+  }
 
   if (!queryId) {
-    // Only skip an outbound message when the thread has NO ticket at all (e.g. a
-    // cold outbound we initiated) — never create a ticket from our own reply.
-    if (isOurs) {
-      console.warn(`[Gmail sync] Outbound reply NOT stored — no ticket for thread ${gmailThreadId} (from ${senderEmail})`);
-      return { status: 'skipped', reason: 'outbound with no existing thread' };
-    }
     // Gemini triage — drives group routing, summary, courier and tracking.
     const triage      = await triageAndSummarize(subject, body);
     newTicketCategory = triage.ticket_type;
+    newTicketTriageSource = triage.source;
+    console.log(`[Gmail sync] Triage (${triage.source}): "${subject}" → ${triage.ticket_type}`);
     const groupName   = GROUP_BY_TICKET_TYPE[triage.ticket_type] || 'Queries';
     const tracking    = triage.tracking_number || null;
 
@@ -518,6 +622,16 @@ async function upsertTicket(msg, gmail = null) {
   } else if (!isOurs) {
     await query(`UPDATE queries SET last_customer_response_at = NOW(), updated_at = NOW() WHERE id = $1`, [queryId]);
 
+    // The customer replied, so a ticket that was Pending (waiting on them or the
+    // courier) is waiting on us again — back into the work queue as In Progress.
+    if (!newTicketCategory) {
+      await query(
+        `UPDATE queries SET status = 'in_progress', updated_at = NOW()
+          WHERE id = $1 AND status::text = ANY($2)`,
+        [queryId, STATUS_GROUPS.pending],
+      );
+    }
+
     // Urgency scorer (Phase 0, email-triage-automation-plan.md Section 6.1 item
     // 4) — independent of Freshdesk's own unreliable priority field, applies to
     // every category. Surfaced on the existing requires_attention/
@@ -553,6 +667,7 @@ async function upsertTicket(msg, gmail = null) {
       urgent: urgency.urgent,
       urgencyReason: urgency.reason,
       queryId,
+      triageSource: newTicketTriageSource,
     });
 
     // Claim-intent watch — a claim is frequently a state change mid-conversation
@@ -560,6 +675,20 @@ async function upsertTicket(msg, gmail = null) {
     // Only checked on a FOLLOW-UP (newTicketCategory is null here) — a brand-new
     // claim email is already classified 'claim' by triage above, no need to ask twice.
     if (!newTicketCategory) {
+      // Re-route a ticket triage left in the catch-all group once a follow-up
+      // makes its topic clear. Never touches a group an agent chose by hand.
+      try {
+        const t = await query(`SELECT group_name, group_set_by FROM queries WHERE id = $1`, [queryId]);
+        if (t.rows[0]?.group_set_by === 'triage' && t.rows[0]?.group_name === GROUP_BY_TICKET_TYPE.other) {
+          const retriage = await triageAndSummarize(subject, body);
+          if (retriage.ticket_type !== 'other') {
+            await query(`UPDATE queries SET group_name = $2, updated_at = NOW() WHERE id = $1 AND group_set_by = 'triage'`,
+              [queryId, GROUP_BY_TICKET_TYPE[retriage.ticket_type]]);
+            console.log(`[Gmail sync] Follow-up re-routed ticket ${queryId} → ${GROUP_BY_TICKET_TYPE[retriage.ticket_type]} (${retriage.source})`);
+          }
+        }
+      } catch (e) { console.warn('[Gmail sync] follow-up re-route failed:', e.message); }
+
       try {
         const claimCheck = await checkClaimIntent({ subject, body });
         if (claimCheck.claim_requested) {

@@ -20,6 +20,9 @@ import { triagePriority } from '../services/triageEngine.js';
 import { aiAutonomouslyLearnPreference } from '../services/learningEngine.js';
 import { recordApproval } from '../services/workflowTrust.js';
 import { sendQueryEmail } from '../services/sendGateway.js';
+import { STATUS_BUCKET_SQL, STATUS_GROUPS, GROUP_DEFAULT_STATUS, statusGroupOf } from '../services/statusGroups.js';
+
+const sqlList = (arr) => `(${arr.map(v => `'${v}'`).join(', ')})`;
 
 const router = express.Router();
 
@@ -269,43 +272,82 @@ router.get('/', async (req, res, next) => {
       values.push(date_to);
     }
     if (search) {
+      const term = search.trim();
+      // A ticket number can be typed as 2813, #2813, Moov-2813 or M-2813.
+      const ticketNo = term.match(/^(?:#|moov-|m-)?\s*(\d+)$/i)?.[1] || null;
       conditions.push(`(
-        consignment_number ILIKE $${idx}  OR
-        customer_name      ILIKE $${idx}  OR
-        subject            ILIKE $${idx}  OR
-        claim_number       ILIKE $${idx}  OR
-        sender_email       ILIKE $${idx}
+        ticket_number::text           =     $${idx + 1}  OR
+        freshdesk_ticket_number       ILIKE $${idx}      OR
+        consignment_number            ILIKE $${idx}      OR
+        customer_name                 ILIKE $${idx}      OR
+        subject                       ILIKE $${idx}      OR
+        claim_number                  ILIKE $${idx}      OR
+        sender_email                  ILIKE $${idx}      OR
+        EXISTS (SELECT 1 FROM query_emails qe
+                 WHERE qe.query_id = queries_inbox_view.id AND qe.body_text ILIKE $${idx})
       )`);
-      values.push(`%${search}%`);
-      idx++;
+      values.push(`%${ticketNo || term}%`, ticketNo);
+      idx += 2;
     }
 
     const validSorts = ['created_at', 'updated_at', 'latest_email_at', 'claim_days_remaining', 'age_days'];
-    const sortCol = validSorts.includes(sort) ? sort : 'updated_at';
     const sortDir = order === 'asc' ? 'ASC' : 'DESC';
+
+    // Default = the work queue: tickets waiting on us come first (Open, then In
+    // Progress, then Claims, then Pending on someone else), oldest first within
+    // each, so the ticket closest to missing the response target is on top.
+    // Priority is deliberately NOT a sort key — customers flag "P1"/"urgent" on
+    // routine mail, and pinning those starved older tickets. An explicit `sort`
+    // param still orders by that column.
+    const orderBy = validSorts.includes(req.query.sort)
+      ? `${sort} ${sortDir} NULLS LAST`
+      : `${STATUS_BUCKET_SQL} ASC, created_at ASC`;
 
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
-    // Attention-required rows always float to the top
     const [dataRes, countRes] = await Promise.all([
       query(`
         SELECT *,
-          LEFT(latest_email_preview, 120) AS latest_email_preview
+          LEFT(latest_email_preview, 120) AS latest_email_preview,
+          (SELECT LEFT(qe.body_text, 8000) FROM query_emails qe
+            WHERE qe.query_id = queries_inbox_view.id AND qe.direction = 'inbound_customer'
+            ORDER BY COALESCE(qe.received_at, qe.created_at) DESC LIMIT 1) AS latest_customer_body
         FROM queries_inbox_view
         ${where}
-        ORDER BY requires_attention DESC, ${sortCol} ${sortDir} NULLS LAST
+        ORDER BY ${orderBy}
         LIMIT $${idx} OFFSET $${idx + 1}
       `, [...values, parseInt(limit), parseInt(offset)]),
       query(`SELECT COUNT(*)::int AS total FROM queries_inbox_view ${where}`, values),
     ]);
 
+    // Hover preview: the customer's latest message, quoted history stripped.
+    const rows = dataRes.rows.map(({ latest_customer_body, ...r }) => ({
+      ...r,
+      latest_customer_message: latest_customer_body ? cleanReplyBody(latest_customer_body).slice(0, 700) : null,
+    }));
+
     res.set('Cache-Control', 'no-store');
     res.json({
-      queries: dataRes.rows,
+      queries: rows,
       total:   countRes.rows[0].total,
       limit:   parseInt(limit),
       offset:  parseInt(offset),
     });
+  } catch (err) { next(err); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/queries/by-number/:number — resolve a ticket number (#2813) to its id,
+// so the global search can open the ticket directly.
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get('/by-number/:number', async (req, res, next) => {
+  try {
+    const n = String(req.params.number).match(/^(?:#|moov-|m-)?\s*(\d+)$/i)?.[1];
+    if (!n) return res.status(400).json({ error: 'Not a ticket number' });
+    const r = await query(`SELECT id FROM queries WHERE ticket_number = $1::bigint LIMIT 1`, [n]);
+    if (!r.rows.length) return res.status(404).json({ error: 'Ticket not found' });
+    res.json({ id: r.rows[0].id });
   } catch (err) { next(err); }
 });
 
@@ -625,8 +667,8 @@ router.get('/stats', async (req, res, next) => {
           -- Owned by the AI agent "Kay": no human, but an AI draft is staged for review.
           COUNT(*) FILTER (WHERE assigned_to IS NULL AND pending_drafts > 0
                              AND status NOT IN ${RESOLVED})                          AS assigned_to_kay,
-          COUNT(*) FILTER (WHERE status = 'open')                                   AS awaiting_us,
-          COUNT(*) FILTER (WHERE status = 'awaiting_customer')                      AS awaiting_customer,
+          COUNT(*) FILTER (WHERE status::text IN ${sqlList([...STATUS_GROUPS.open, ...STATUS_GROUPS.in_progress, ...STATUS_GROUPS.claim])}) AS awaiting_us,
+          COUNT(*) FILTER (WHERE status::text IN ${sqlList(STATUS_GROUPS.pending)})  AS awaiting_customer,
           COUNT(*) FILTER (WHERE assigned_to = $1::uuid
                              AND status NOT IN ${RESOLVED})                          AS assigned_to_me,
           COUNT(*)                                                                   AS total_queries
@@ -1382,6 +1424,18 @@ router.patch('/:id', async (req, res, next) => {
     const values  = [];
     let   idx     = 1;
 
+    // Agents set one of five status groups. Keep the ticket's fine-grained status
+    // when it's already in that group (so e.g. "awaiting_courier" survives a save
+    // of Pending); otherwise use the group's default status.
+    if (req.body.status_group !== undefined) {
+      if (!GROUP_DEFAULT_STATUS[req.body.status_group]) return res.status(400).json({ error: 'Unknown status_group' });
+      const cur = await query(`SELECT status FROM queries WHERE id = $1`, [req.params.id]);
+      if (!cur.rows.length) return res.status(404).json({ error: 'Query not found' });
+      req.body.status = statusGroupOf(cur.rows[0].status) === req.body.status_group
+        ? cur.rows[0].status
+        : GROUP_DEFAULT_STATUS[req.body.status_group];
+    }
+
     for (const key of allowed) {
       if (req.body[key] !== undefined) {
         updates.push(`${key} = $${idx++}`);
@@ -1398,7 +1452,13 @@ router.patch('/:id', async (req, res, next) => {
         updates.push(`resolved_by = $${idx++}`);
         values.push(req.body.resolved_by);
       }
+    } else if (req.body.status) {
+      // Reopened — it's no longer resolved.
+      updates.push(`resolved_at = NULL`);
     }
+
+    // A group chosen by hand is never re-routed by triage afterwards.
+    if (req.body.group_name !== undefined) updates.push(`group_set_by = 'agent'`);
 
     // Auto-clear attention flag if manually resolved
     if (req.body.requires_attention === false) {
