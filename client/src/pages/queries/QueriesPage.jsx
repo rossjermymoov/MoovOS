@@ -488,35 +488,28 @@ function cleanIncoming(raw) {
   return t;
 }
 
-// High-contrast ticket-number badge colour driven by the dynamic tracking
-// states (not just status), so rows differentiate at a glance.
-// Badge colour is driven strictly by the priority spectrum (matching the
-// left-hand indicator strip), with completed tickets overriding to green.
-// Nothing tied to group_name / assigned_to / operational state.
-//   Closed/Resolved → green · Urgent → red · High → amber · Medium → yellow · Low → blue
-// Colour styles (token-driven) keyed by status/priority — used as inline `style`
-// alongside the static structural Tailwind classes at each call site.
+// Ticket-number badge, priority chip and left strip share one spectrum. Only
+// Urgent carries colour (magenta — needs a person); High / Medium / Low are ink
+// on grey, so the queue isn't wall-to-wall yellow. Resolved overrides to green.
+const NEUTRAL_CHIP = { background: 'var(--mv-bg)', color: 'var(--mv-ink-62)', borderColor: 'var(--mv-hairline-2)' };
+const URGENT_CHIP  = { background: 'var(--mv-magenta-100)', color: 'var(--mv-magenta-deep)', borderColor: 'var(--mv-magenta-200)' };
+const RESOLVED_SET = ['resolved', 'resolved_claim_approved', 'resolved_claim_rejected', 'closed'];
+
 function rowBadgeClasses(q) {
   const s = (q.status || '').toLowerCase();
-  const p = (q.priority || '').toLowerCase();
-
-  if (['resolved', 'resolved_claim_approved', 'resolved_claim_rejected', 'closed'].includes(s))
+  if (RESOLVED_SET.includes(s))
     return { background: 'var(--mv-purple-100)', color: 'var(--mv-green-deep)', borderColor: 'var(--mv-purple-200)' };
-  if (p === 'urgent') return { background: 'var(--mv-magenta-100)', color: 'var(--mv-magenta-deep)', borderColor: 'var(--mv-magenta-200)' };
-  if (p === 'high')   return { background: 'var(--mv-amber-100)', color: 'var(--mv-amber-deep)', borderColor: 'var(--mv-amber-200)' };
-  if (p === 'medium') return { background: 'var(--mv-amber-100)', color: 'var(--mv-amber-deep)', borderColor: 'var(--mv-amber-200)' };
-  if (p === 'low')    return { background: 'var(--mv-teal-100)', color: 'var(--mv-teal)', borderColor: 'var(--mv-teal-200)' };
-  return { background: 'var(--mv-teal-100)', color: 'var(--mv-teal)', borderColor: 'var(--mv-teal-200)' };
+  return (q.priority || '').toLowerCase() === 'urgent' ? URGENT_CHIP : NEUTRAL_CHIP;
 }
 
 // Compact priority chip (label + colour style), same spectrum as the badge.
 function priorityChip(q) {
   const p = (q.priority || '').toLowerCase();
   const map = {
-    urgent: ['Urgent', { background: 'var(--mv-magenta-100)', color: 'var(--mv-magenta-deep)', borderColor: 'var(--mv-magenta-200)' }],
-    high:   ['High',   { background: 'var(--mv-amber-100)', color: 'var(--mv-amber-deep)', borderColor: 'var(--mv-amber-200)' }],
-    medium: ['Medium', { background: 'var(--mv-amber-100)', color: 'var(--mv-amber-deep)', borderColor: 'var(--mv-amber-200)' }],
-    low:    ['Low',    { background: 'var(--mv-teal-100)', color: 'var(--mv-teal)', borderColor: 'var(--mv-teal-200)' }],
+    urgent: ['Urgent', URGENT_CHIP],
+    high:   ['High',   NEUTRAL_CHIP],
+    medium: ['Medium', NEUTRAL_CHIP],
+    low:    ['Low',    NEUTRAL_CHIP],
   };
   return map[p] || null;
 }
@@ -525,11 +518,10 @@ function priorityChip(q) {
 function priorityStripColor(q) {
   const s = (q.status || '').toLowerCase();
   const p = (q.priority || '').toLowerCase();
-  if (['resolved', 'resolved_claim_approved', 'resolved_claim_rejected', 'closed'].includes(s)) return 'var(--mv-green)';
+  if (RESOLVED_SET.includes(s)) return 'var(--mv-green)';
   if (p === 'urgent') return 'var(--mv-magenta)';
-  if (p === 'high')   return 'var(--mv-amber)';
-  if (p === 'medium') return 'var(--mv-amber)';
-  return 'var(--mv-teal)'; // low / default
+  if (p === 'high')   return 'var(--mv-ink-45)';
+  return 'var(--mv-hairline-2)';
 }
 
 function InboxRow({ q, onClick, staffList = [], onUpdate }) {
@@ -1647,13 +1639,13 @@ const STATUS_FILTERS = [
 const userDefinedGroups = ['Claims', 'Queries', 'Billing', 'Technical', 'Sales', 'Returns', 'Collection Issues', 'Supplies Request', 'Customer Service'];
 
 const GROUP_COLORS = {
-  Claims:              'var(--mv-amber)',
+  Claims:              'var(--mv-magenta)',
   Queries:             'var(--mv-teal)',
   Billing:             'var(--mv-green)',
   Technical:           'var(--mv-purple)',
   Sales:               'var(--mv-magenta)',
   Returns:             'var(--mv-teal)',
-  'Collection Issues': 'var(--mv-amber)',
+  'Collection Issues': 'var(--mv-ink)',
   'Supplies Request':  'var(--mv-purple)',
   'Customer Service':  'var(--mv-ink)',
 };
@@ -1816,10 +1808,6 @@ function FilterPanel({ filters, setFilters, staffList, onClose }) {
 }
 
 // ─── Main page ────────────────────────────────────────────────────────────────
-
-// ─── Priority ordering (urgent → high → medium → low) for the live queue ──────
-const PRI_RANK = { urgent: 0, high: 1, medium: 2, low: 3 };
-function priRank(q) { return PRI_RANK[(q.priority || '').toLowerCase()] ?? 4; }
 
 // Consecutive untouched approvals before a template path is deemed autopilot-ready.
 const AUTOPILOT_THRESHOLD = 20;
@@ -2351,7 +2339,7 @@ export default function QueriesPage() {
         {/* Sort indicator */}
         <span style={{ fontSize: 12, color: C.muted, display: 'flex', alignItems: 'center', gap: 4 }}>
           <RefreshCw size={11} style={{ cursor: 'pointer' }} onClick={refresh} />
-          Last activity
+          Oldest first
         </span>
         {/* Automation simulator */}
         <button
@@ -2386,7 +2374,7 @@ export default function QueriesPage() {
         {[
           { key: 'urgent', label: '🚨 Critical Threats',     value: stats?.urgent_open,          accent: 'var(--mv-magenta)', tint: 'var(--mv-magenta-100)', text: 'var(--mv-magenta-deep)',
             onClick: () => setFilters(f => ({ ...f, priority: f.priority === 'urgent' ? '' : 'urgent', sla_breached: false, status: '', attention: false })), active: filters.priority === 'urgent' },
-          { key: 'high',   label: '⚠️ High Priority',         value: stats?.high_open,            accent: 'var(--mv-amber)', tint: 'var(--mv-amber-100)', text: 'var(--mv-amber-deep)',
+          { key: 'high',   label: '⚠️ High Priority',         value: stats?.high_open,            accent: 'var(--mv-ink)', tint: 'var(--mv-surface)', text: 'var(--mv-ink-62)',
             onClick: () => setFilters(f => ({ ...f, priority: f.priority === 'high' ? '' : 'high', sla_breached: false, status: '', attention: false })), active: filters.priority === 'high' },
           { key: 'sla',    label: '⏳ Courier SLA Breaches',  value: stats?.courier_sla_breached, accent: 'var(--mv-purple)', tint: 'var(--mv-purple-100)', text: 'var(--mv-purple-700)',
             onClick: () => setFilters(f => ({ ...f, sla_breached: !f.sla_breached, priority: '', status: '', attention: false })), active: filters.sla_breached },
@@ -2474,12 +2462,8 @@ export default function QueriesPage() {
             )}
             {!loading && displayQueries.length > 0 && (
               <>
-                {/* Rows: Red (Urgent) & Amber (High) pinned to the top, then by activity */}
-                {[...displayQueries]
-                  .sort((a, b) =>
-                    priRank(a) - priRank(b) ||
-                    new Date(b.latest_email_at || b.created_at) - new Date(a.latest_email_at || a.created_at)
-                  )
+                {/* Rows arrive in queue order from the API: status group, then oldest first */}
+                {displayQueries
                   .map(q => (
                     <InboxRow key={q.id} q={q} onClick={() => navigate(`/queries/${q.id}`)} staffList={staffList} onUpdate={refresh} />
                   ))

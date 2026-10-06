@@ -20,6 +20,7 @@ import { triagePriority } from '../services/triageEngine.js';
 import { aiAutonomouslyLearnPreference } from '../services/learningEngine.js';
 import { recordApproval } from '../services/workflowTrust.js';
 import { sendQueryEmail } from '../services/sendGateway.js';
+import { STATUS_BUCKET_SQL } from '../services/statusGroups.js';
 
 const router = express.Router();
 
@@ -288,19 +289,27 @@ router.get('/', async (req, res, next) => {
     }
 
     const validSorts = ['created_at', 'updated_at', 'latest_email_at', 'claim_days_remaining', 'age_days'];
-    const sortCol = validSorts.includes(sort) ? sort : 'updated_at';
     const sortDir = order === 'asc' ? 'ASC' : 'DESC';
+
+    // Default = the work queue: tickets waiting on us come first (Open, then In
+    // Progress, then Claims, then Pending on someone else), oldest first within
+    // each, so the ticket closest to missing the response target is on top.
+    // Priority is deliberately NOT a sort key — customers flag "P1"/"urgent" on
+    // routine mail, and pinning those starved older tickets. An explicit `sort`
+    // param still orders by that column.
+    const orderBy = validSorts.includes(req.query.sort)
+      ? `${sort} ${sortDir} NULLS LAST`
+      : `${STATUS_BUCKET_SQL} ASC, created_at ASC`;
 
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
-    // Attention-required rows always float to the top
     const [dataRes, countRes] = await Promise.all([
       query(`
         SELECT *,
           LEFT(latest_email_preview, 120) AS latest_email_preview
         FROM queries_inbox_view
         ${where}
-        ORDER BY requires_attention DESC, ${sortCol} ${sortDir} NULLS LAST
+        ORDER BY ${orderBy}
         LIMIT $${idx} OFFSET $${idx + 1}
       `, [...values, parseInt(limit), parseInt(offset)]),
       query(`SELECT COUNT(*)::int AS total FROM queries_inbox_view ${where}`, values),

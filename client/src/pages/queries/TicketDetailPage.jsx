@@ -63,26 +63,16 @@ const PRIORITY_CFG = {
 
 const GROUPS = ['Claims', 'Queries', 'Billing', 'Technical'];
 
-// Map a ticket's state to a premium, contextual badge style (Freshdesk-like).
-//  Green = resolved/closed · Red = urgent/escalated/SLA-breached · Amber =
-//  needs attention/awaiting · Blue = normal/open.
-// Badge colour driven strictly by the priority spectrum (matching the queue's
-// left-hand indicator strip), with completed tickets overriding to green.
-//   Closed/Resolved → green · Urgent → red · High → amber · Medium → yellow · Low → blue
-// Returns an inline style object (mv- tokens) instead of Tailwind color
-// classes, plus any non-color classes (e.g. font-bold) to keep on the element.
+// Ticket-number badge — same spectrum as the queue: resolved → green, urgent →
+// magenta (needs a person), everything else ink on grey. Returns an inline style
+// object (mv- tokens) plus any non-color classes to keep on the element.
 function ticketBadgeStyle(ticket) {
   const s = (ticket?.status || '').toLowerCase();
   const p = (ticket?.priority || '').toLowerCase();
   if (['resolved', 'resolved_claim_approved', 'resolved_claim_rejected', 'closed'].includes(s))
     return { style: { background: 'var(--mv-purple-100)', color: 'var(--mv-green-deep)', borderColor: 'var(--mv-purple-200)' }, cls: '' };
   if (p === 'urgent') return { style: { background: 'var(--mv-magenta-100)', color: 'var(--mv-magenta-deep)', borderColor: 'var(--mv-magenta-200)' }, cls: 'font-bold' };
-  if (p === 'high')   return { style: { background: 'var(--mv-amber-100)', color: 'var(--mv-amber-deep)', borderColor: 'var(--mv-amber-200)' }, cls: 'font-bold' };
-  // "medium" has no dedicated token in the mv- system (only urgent/high/low map
-  // cleanly onto magenta/amber/teal) — reusing the amber tint here, one shade
-  // lighter in weight than "high", is a judgement call (see report).
-  if (p === 'medium') return { style: { background: 'var(--mv-amber-100)', color: 'var(--mv-amber-deep)', borderColor: 'var(--mv-amber-200)' }, cls: 'font-bold' };
-  return { style: { background: 'var(--mv-teal-100)', color: 'var(--mv-teal)', borderColor: 'var(--mv-teal-200)' }, cls: '' }; // low / default
+  return { style: { background: 'var(--mv-bg)', color: 'var(--mv-ink-62)', borderColor: 'var(--mv-hairline-2)' }, cls: p === 'high' ? 'font-bold' : '' };
 }
 
 // Dynamic SLA countdown string from courier_sla_expires_at.
