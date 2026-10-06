@@ -17,7 +17,9 @@ export async function fetchInbox(params = {}) {
   if (params.claim_deadline_days) qs.set('claim_deadline_days',  params.claim_deadline_days);
   if (params.sla_breached)        qs.set('sla_breached',         'true');
   if (params.limit)               qs.set('limit',                params.limit);
-  if (params.offset)              qs.set('offset',               params.offset);
+  // Callers paginate by 1-based `page`; the API takes a row offset.
+  const offset = params.offset ?? (params.page && params.limit ? (params.page - 1) * params.limit : 0);
+  if (offset)                     qs.set('offset',               offset);
   const r = await fetch(`${BASE}?${qs}`);
   if (!r.ok) throw new Error(await r.text());
   return r.json();

@@ -906,7 +906,7 @@ export default function TicketDetailPage() {
               className={`mr-3 inline-flex shrink-0 items-center rounded-md border px-3 py-1 text-sm font-bold tracking-wide ${ticketBadgeStyle(ticket).cls}`}
               style={ticketBadgeStyle(ticket).style}
             >
-              Moov-{ticket.ticket_number}
+              #{ticket.ticket_number}
             </span>
             <span className="truncate text-xl font-black tracking-tight" style={{ color: 'var(--mv-ink)' }}>
               {ticket.customer_name || ticket.subject || 'Ticket'}

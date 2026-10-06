@@ -269,15 +269,22 @@ router.get('/', async (req, res, next) => {
       values.push(date_to);
     }
     if (search) {
+      const term = search.trim();
+      // A ticket number can be typed as 2813, #2813, Moov-2813 or M-2813.
+      const ticketNo = term.match(/^(?:#|moov-|m-)?\s*(\d+)$/i)?.[1] || null;
       conditions.push(`(
-        consignment_number ILIKE $${idx}  OR
-        customer_name      ILIKE $${idx}  OR
-        subject            ILIKE $${idx}  OR
-        claim_number       ILIKE $${idx}  OR
-        sender_email       ILIKE $${idx}
+        ticket_number::text           =     $${idx + 1}  OR
+        freshdesk_ticket_number       ILIKE $${idx}      OR
+        consignment_number            ILIKE $${idx}      OR
+        customer_name                 ILIKE $${idx}      OR
+        subject                       ILIKE $${idx}      OR
+        claim_number                  ILIKE $${idx}      OR
+        sender_email                  ILIKE $${idx}      OR
+        EXISTS (SELECT 1 FROM query_emails qe
+                 WHERE qe.query_id = queries_inbox_view.id AND qe.body_text ILIKE $${idx})
       )`);
-      values.push(`%${search}%`);
-      idx++;
+      values.push(`%${ticketNo || term}%`, ticketNo);
+      idx += 2;
     }
 
     const validSorts = ['created_at', 'updated_at', 'latest_email_at', 'claim_days_remaining', 'age_days'];
@@ -306,6 +313,21 @@ router.get('/', async (req, res, next) => {
       limit:   parseInt(limit),
       offset:  parseInt(offset),
     });
+  } catch (err) { next(err); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/queries/by-number/:number — resolve a ticket number (#2813) to its id,
+// so the global search can open the ticket directly.
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get('/by-number/:number', async (req, res, next) => {
+  try {
+    const n = String(req.params.number).match(/^(?:#|moov-|m-)?\s*(\d+)$/i)?.[1];
+    if (!n) return res.status(400).json({ error: 'Not a ticket number' });
+    const r = await query(`SELECT id FROM queries WHERE ticket_number = $1::bigint LIMIT 1`, [n]);
+    if (!r.rows.length) return res.status(404).json({ error: 'Ticket not found' });
+    res.json({ id: r.rows[0].id });
   } catch (err) { next(err); }
 });
 

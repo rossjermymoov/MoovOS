@@ -568,7 +568,6 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
   const pchip        = priorityChip(q);
   const happiness    = q.customer_happiness_score != null && !isNaN(parseInt(q.customer_happiness_score)) ? parseInt(q.customer_happiness_score) : null;
   const sentiment    = q.sentiment || (happiness == null ? null : happiness < 41 ? 'Frustrated customer' : happiness < 71 ? 'Neutral tone' : 'Positive');
-  const ticketId     = q.ticket_number != null ? `Moov-${q.ticket_number}` : null;
   // Full AI summary for the hover card (getAiSummary truncates to 80 chars).
   const fullSummary  = q.description || q.attention_reason || preview || '';
   // Dynamic colour scheme for the hover card — red urgent / amber medium / blue standard.
@@ -612,14 +611,14 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
     >
       {/* ── Line 1: metadata shelf ────────────────────────────────────────── */}
       <div className="flex w-full items-center justify-between pb-3" style={{ borderBottom: '1px solid var(--mv-hairline)' }}>
-        {/* Left: priority badge (#M-ID + Urgent) · customer identity */}
+        {/* Left: ticket number (#2813) + priority · customer identity */}
         <div style={{ display: 'flex', minWidth: 0, alignItems: 'center', gap: 8 }}>
           {(hasNewReply || unread > 0) && (
             <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: 'var(--mv-teal)' }} />
           )}
           {q.ticket_number != null && (
             <span className="inline-flex shrink-0 items-center justify-center rounded-md border px-2.5 py-1 text-xs font-bold uppercase tracking-wide shadow-sm" style={rowBadgeClasses(q)}>
-              #M-{q.ticket_number}
+              #{q.ticket_number}
             </span>
           )}
           {pchip && (
@@ -1887,7 +1886,7 @@ function QuickViewModal({ card, onClose, onDispatched }) {
         <div className="flex items-center justify-between gap-3 border-b px-6 py-4" style={{ borderColor: 'var(--mv-hairline)' }}>
           <div className="flex min-w-0 items-center gap-3">
             <span className="inline-flex shrink-0 items-center justify-center rounded-md border px-2.5 py-1 text-xs font-bold uppercase tracking-wide" style={rowBadgeClasses(card)}>
-              #M-{card.ticket_number}
+              #{card.ticket_number}
             </span>
             <span className="truncate text-base font-bold tracking-tight" style={{ color: 'var(--mv-ink)' }}>
               {card.customer_name || card.subject || 'Ticket'}
@@ -2090,7 +2089,7 @@ function AutopilotQABay({ refreshKey, onChanged }) {
               <div className="mb-2 flex items-center gap-2">
                 <button onClick={() => navigate(`/queries/${c.query_id}`)}
                   className="inline-flex items-center justify-center rounded border px-2 py-0.5 text-xs font-bold uppercase" style={rowBadgeClasses(c)}>
-                  M-{c.ticket_number}
+                  #{c.ticket_number}
                 </button>
                 <span className="truncate text-xs font-medium" style={{ color: 'var(--mv-amber-deep)' }}>{c.customer_name || c.subject}</span>
               </div>
@@ -2110,7 +2109,7 @@ function AutopilotQABay({ refreshKey, onChanged }) {
               <div className="mb-2 flex items-center gap-2">
                 <button onClick={() => navigate(`/queries/${c.query_id}`)}
                   className="inline-flex items-center justify-center rounded border px-2 py-0.5 text-xs font-bold uppercase" style={rowBadgeClasses(c)}>
-                  M-{c.ticket_number}
+                  #{c.ticket_number}
                 </button>
                 <span className="truncate text-xs font-medium" style={{ color: 'var(--mv-green-deep)' }}>{c.customer_name || c.subject}</span>
               </div>
@@ -2130,7 +2129,7 @@ function AutopilotQABay({ refreshKey, onChanged }) {
               <div className="mb-2 flex items-center gap-2">
                 <button onClick={() => navigate(`/queries/${c.query_id}`)}
                   className="inline-flex items-center justify-center rounded border px-2 py-0.5 text-xs font-bold uppercase" style={rowBadgeClasses(c)}>
-                  M-{c.ticket_number}
+                  #{c.ticket_number}
                 </button>
                 <span className="truncate text-xs font-medium" style={{ color: 'var(--mv-ink-52)' }}>{c.customer_name || c.subject}</span>
                 {/* Draft channel chips */}
@@ -2199,6 +2198,16 @@ export default function QueriesPage() {
   useEffect(() => {
     fetchStats(user?.id).then(setStats).catch(console.error);
   }, [refreshKey, user?.id]);
+
+  // A new filter or search is a new result set — start it from page 1.
+  useEffect(() => { setPage(1); }, [filters]);
+
+  // Search also scans email bodies, so wait for typing to pause before querying.
+  const [searchInput, setSearchInput] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setFilters(f => (f.search === searchInput ? f : { ...f, search: searchInput })), 300);
+    return () => clearTimeout(t);
+  }, [searchInput]);
 
   // Active workspace derives from the assigned_to filter.
   const workspace = filters.assigned_to === 'unassigned' ? 'unassigned'
@@ -2332,11 +2341,11 @@ export default function QueriesPage() {
         <div style={{ position: 'relative' }}>
           <Search size={12} style={{ position: 'absolute', left: 9, top: '50%', transform: 'translateY(-50%)', color: C.muted, pointerEvents: 'none' }} />
           <input
-            placeholder="Search consignment, customer…"
-            value={filters.search}
-            onChange={e => setFilters(f => ({ ...f, search: e.target.value }))}
+            placeholder="Search #ticket, consignment, customer, email…"
+            value={searchInput}
+            onChange={e => setSearchInput(e.target.value)}
             style={{ background: C.card, border: `0.5px solid ${C.border}`, borderRadius: 8, color: C.text,
-              fontSize: 12, padding: '7px 10px 7px 28px', width: 220, outline: 'none' }}
+              fontSize: 12, padding: '7px 10px 7px 28px', width: 280, outline: 'none' }}
           />
         </div>
         {/* Sort indicator */}
