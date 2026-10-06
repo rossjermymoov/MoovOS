@@ -17,6 +17,7 @@ import {
 import { getCourierLogo } from '../../utils/courierLogos';
 import { useAuth } from '../../context/AuthContext';
 import { statusGroupOf } from './statusGroups';
+import { TICKET_GROUPS } from './groups';
 import axios from 'axios';
 
 const api = axios.create({ baseURL: '/api' });
@@ -1699,7 +1700,7 @@ const STATUS_FILTERS = [
 // ── Dynamic group configuration ──────────────────────────────────────────────
 // Foundation for the settings-driven groups: add a string here (or, later, load
 // this array from /settings) and a colour-coded tab appears automatically.
-const userDefinedGroups = ['Claims', 'Queries', 'Billing', 'Technical', 'Sales', 'Returns', 'Collection Issues', 'Supplies Request', 'Customer Service'];
+const userDefinedGroups = TICKET_GROUPS;
 
 const GROUP_COLORS = {
   Claims:              'var(--mv-magenta)',

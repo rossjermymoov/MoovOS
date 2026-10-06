@@ -15,10 +15,20 @@ import { google } from 'googleapis';
 
 function triageFallback(subject, body) {
   const text = `${subject || ''} ${body || ''}`.toLowerCase();
+  // Most specific phrases first: collection and supplies are checked before the
+  // broad billing/technical words, so e.g. a supplies request that mentions an
+  // account number isn't filed as Billing. Word boundaries stop short words
+  // matching inside others ("api" in "rapid", "lost" in "Lostwithiel").
   const ticket_type =
-    /claim|compensation|refund|damaged|lost/.test(text)        ? 'claim' :
-    /invoice|billing|statement|payment|account|charge/.test(text) ? 'billing' :
-    /login|error|bug|portal|dashboard|api|technical|access/.test(text) ? 'technical' :
+    /\b(claim|compensation|refund|damaged|lost)\b/.test(text)          ? 'claim' :
+    // Outbound collection/pickup problem — distinct from delivery status, even
+    // when the email also mentions a parcel or tracking number.
+    /collection (number|issue|failed|not (done|happened|made)|was(n'?t| not) (made|done)|didn'?t happen)|(failed|missed|no) collection|not (been )?collected|(courier|driver) (hasn'?t|has not|didn'?t|did not|never) (collect|arrive|turn up|show)/.test(text) ? 'collection' :
+    // Physical shipping supplies (labels, mailing bags, printer rolls) — distinct
+    // from a technical/portal issue even though "labels"/"printer" sound similar.
+    /\bsupplies\b|(order|send|need|request|run(ning)? out of|low on).*(mailing bags|packing bags|poly ?bags|packaging|labels|label rolls|printer (labels|rolls)|thermal (labels|rolls|printer)|tape)|more (labels|rolls|bags)\b/.test(text) ? 'supplies' :
+    /\b(invoices?|billing|statements?|payments?|charged?|charges)\b/.test(text) ? 'billing' :
+    /\b(login|log in|error|bug|portal|dashboard|api|technical)\b/.test(text) ? 'technical' :
     // "quote"/"pric" (not just "pricing") also catches "quotation"/"price" —
     // quote requests come from existing customers too, not just new sign-ups.
     /quot|pric|new account|sign ?up|reseller|partnership/.test(text) ? 'sales' :
@@ -26,11 +36,6 @@ function triageFallback(subject, body) {
     // "you have a return" notice, or a returns-label request) — plain "please
     // return this to sender" on an outbound delivery is a 'query', not this.
     /return.*(belonging to (you|us)|label|qr code)|received a return/.test(text) ? 'returns' :
-    // Outbound collection/pickup problem — distinct from delivery status.
-    /collection (number|issue|not (done|happened))|courier (hasn'?t|has not|not) (collected|arrived|turned up)|missed (the )?collection|driver (hasn'?t|has not) (arrived|collected)/.test(text) ? 'collection' :
-    // Physical shipping supplies (labels, mailing bags, printer rolls) — distinct
-    // from a technical/portal issue even though "labels"/"printer" sound similar.
-    /(order|send|need).*(mailing bags|packing bags|label rolls|printer (labels|rolls)|thermal (labels|rolls|printer))|more (labels|rolls|bags)\b/.test(text) ? 'supplies' :
     /track|delivery|parcel|where is|courier|consignment|deliver/.test(text) ? 'query' :
     // Unmatched/ambiguous email is NOT assumed to be a WISMO delivery enquiry —
     // that would wrongly trigger courier-chase automation downstream. Land it as
@@ -80,6 +85,10 @@ export async function triageAndSummarize(subject, body) {
     `in transit).\n` +
     `  "supplies" = a request for physical shipping supplies (labels, mailing bags, packing tape, ` +
     `thermal printer rolls) — NOT a "technical" printer/portal bug even though it mentions labels/printer.\n` +
+    `Deciding hints: a parcel that was never picked up ("failed collection", "not collected", ` +
+    `"driver didn't turn up") is "collection" even if it also mentions tracking or delivery. Any ` +
+    `request for supplies (labels, bags, packaging, rolls) is "supplies". A customer asking for ` +
+    `compensation or to claim for a lost/damaged item is "claim" even if they don't use the word claim.\n` +
     `  "other" = anything that doesn't clearly fit the above — do NOT default to "query" ` +
     `just because it's unclear; an ambiguous email is "other", not an assumed delivery enquiry.\n` +
     `- summary: max 2 sentences describing the core issue (no "The email"/"This email").\n` +
@@ -403,6 +412,7 @@ async function upsertTicket(msg, gmail = null) {
   // classification record (email-triage-automation-plan.md) and to tell a
   // follow-up on an existing ticket apart from a freshly triaged email.
   let newTicketCategory = null;
+  let newTicketTriageSource = null;
 
   if (!queryId) {
     // Only skip an outbound message when the thread has NO ticket at all (e.g. a
@@ -414,6 +424,8 @@ async function upsertTicket(msg, gmail = null) {
     // Gemini triage — drives group routing, summary, courier and tracking.
     const triage      = await triageAndSummarize(subject, body);
     newTicketCategory = triage.ticket_type;
+    newTicketTriageSource = triage.source;
+    console.log(`[Gmail sync] Triage (${triage.source}): "${subject}" → ${triage.ticket_type}`);
     const groupName   = GROUP_BY_TICKET_TYPE[triage.ticket_type] || 'Queries';
     const tracking    = triage.tracking_number || null;
 
@@ -553,6 +565,7 @@ async function upsertTicket(msg, gmail = null) {
       urgent: urgency.urgent,
       urgencyReason: urgency.reason,
       queryId,
+      triageSource: newTicketTriageSource,
     });
 
     // Claim-intent watch — a claim is frequently a state change mid-conversation
@@ -560,6 +573,20 @@ async function upsertTicket(msg, gmail = null) {
     // Only checked on a FOLLOW-UP (newTicketCategory is null here) — a brand-new
     // claim email is already classified 'claim' by triage above, no need to ask twice.
     if (!newTicketCategory) {
+      // Re-route a ticket triage left in the catch-all group once a follow-up
+      // makes its topic clear. Never touches a group an agent chose by hand.
+      try {
+        const t = await query(`SELECT group_name, group_set_by FROM queries WHERE id = $1`, [queryId]);
+        if (t.rows[0]?.group_set_by === 'triage' && t.rows[0]?.group_name === GROUP_BY_TICKET_TYPE.other) {
+          const retriage = await triageAndSummarize(subject, body);
+          if (retriage.ticket_type !== 'other') {
+            await query(`UPDATE queries SET group_name = $2, updated_at = NOW() WHERE id = $1 AND group_set_by = 'triage'`,
+              [queryId, GROUP_BY_TICKET_TYPE[retriage.ticket_type]]);
+            console.log(`[Gmail sync] Follow-up re-routed ticket ${queryId} → ${GROUP_BY_TICKET_TYPE[retriage.ticket_type]} (${retriage.source})`);
+          }
+        }
+      } catch (e) { console.warn('[Gmail sync] follow-up re-route failed:', e.message); }
+
       try {
         const claimCheck = await checkClaimIntent({ subject, body });
         if (claimCheck.claim_requested) {

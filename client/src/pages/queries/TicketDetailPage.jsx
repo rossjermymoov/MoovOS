@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { getCourierLogo } from '../../utils/courierLogos';
 import { STATUS_GROUPS, statusGroupOf } from './statusGroups';
+import { TICKET_GROUPS } from './groups';
 
 const api = axios.create({ baseURL: '/api' });
 
@@ -64,7 +65,6 @@ const PRIORITY_CFG = {
   low:    { label: 'Low',    color: 'var(--mv-ink-52)' },
 };
 
-const GROUPS = ['Claims', 'Queries', 'Billing', 'Technical'];
 
 // Ticket-number badge — same spectrum as the queue: resolved → green, urgent →
 // magenta (needs a person), everything else ink on grey. Returns an inline style
@@ -989,7 +989,7 @@ export default function TicketDetailPage() {
             <InlineSelect
               value={ticket.group_name || ''}
               onChange={v => patch.mutate({ group_name: v || null })}
-              options={[{ value: '', label: '— None —' }, ...GROUPS.map(g => ({ value: g, label: g }))]}
+              options={[{ value: '', label: '— None —' }, ...TICKET_GROUPS.map(g => ({ value: g, label: g }))]}
             />
           </div>
 

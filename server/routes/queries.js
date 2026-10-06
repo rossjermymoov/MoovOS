@@ -1457,6 +1457,9 @@ router.patch('/:id', async (req, res, next) => {
       updates.push(`resolved_at = NULL`);
     }
 
+    // A group chosen by hand is never re-routed by triage afterwards.
+    if (req.body.group_name !== undefined) updates.push(`group_set_by = 'agent'`);
+
     // Auto-clear attention flag if manually resolved
     if (req.body.requires_attention === false) {
       updates.push(`attention_raised_at = NULL`);
