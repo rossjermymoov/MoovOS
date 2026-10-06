@@ -13,6 +13,7 @@ import {
   AlertTriangle, Clock,
 } from 'lucide-react';
 import { getCourierLogo } from '../../utils/courierLogos';
+import { STATUS_GROUPS, statusGroupOf } from './statusGroups';
 
 const api = axios.create({ baseURL: '/api' });
 
@@ -38,6 +39,8 @@ const C = {
 // ── Status / priority config ──────────────────────────────────────────────────
 const STATUS_CFG = {
   open:                    { label: 'Open',              kind: 'flight' },
+  in_progress:             { label: 'In Progress',       kind: 'flight' },
+  pending:                 { label: 'Pending',           kind: 'waiting' },
   awaiting_customer_info:  { label: 'Awaiting Customer', kind: 'waiting' },
   info_received:           { label: 'Info Received',     kind: 'settled' },
   drafting:                { label: 'Drafting',          kind: 'flight' },
@@ -175,6 +178,60 @@ function InlineSelect({ value, onChange, options, colorMap, fill = false }) {
         </option>
       ))}
     </select>
+  );
+}
+
+// ── Status picker ─────────────────────────────────────────────────────────────
+// Choosing a status only stages it; nothing changes until Save, so a stray click
+// can't resolve a ticket. The server keeps the fine-grained status when the
+// group is unchanged (see server/services/statusGroups.js).
+function StatusPicker({ status, onSave, saving }) {
+  const current = statusGroupOf(status)?.key || '';
+  const [draft, setDraft] = useState(current);
+  useEffect(() => { setDraft(current); }, [current]);
+  const dirty = draft !== current;
+  const detail = STATUS_CFG[status]?.label;
+  const showDetail = !dirty && detail && detail !== statusGroupOf(status)?.label;
+
+  return (
+    <div className="flex shrink-0 items-center gap-2">
+      <span className="text-xs font-bold uppercase tracking-wide" style={{ color: 'var(--mv-ink-45)' }}>Status</span>
+      <select
+        value={draft}
+        onChange={e => setDraft(e.target.value)}
+        disabled={saving}
+        aria-label="Ticket status"
+        style={{
+          background: 'var(--mv-surface)', border: `1px solid ${dirty ? 'var(--mv-purple)' : 'var(--mv-hairline)'}`,
+          borderRadius: 'var(--v2-r-8, 8px)', color: 'var(--mv-ink)', fontSize: 13, fontWeight: 600,
+          padding: '8px 12px', cursor: 'pointer', minWidth: 170,
+        }}
+      >
+        {!current && <option value="">{STATUS_CFG[status]?.label || status}</option>}
+        {STATUS_GROUPS.map(g => <option key={g.key} value={g.key}>{g.label}</option>)}
+      </select>
+      {showDetail && <span className="text-xs" style={{ color: 'var(--mv-ink-52)' }}>{detail}</span>}
+      {dirty && (
+        <>
+          <button
+            onClick={() => onSave(draft)}
+            disabled={saving}
+            className="rounded-lg px-4 py-2 text-sm font-bold"
+            style={{ background: 'var(--mv-purple)', color: 'var(--mv-on-brand)', opacity: saving ? 0.6 : 1 }}
+          >
+            {saving ? 'Saving…' : 'Save'}
+          </button>
+          <button
+            onClick={() => setDraft(current)}
+            disabled={saving}
+            className="rounded-lg px-3 py-2 text-sm font-medium"
+            style={{ background: 'transparent', color: 'var(--mv-ink-52)' }}
+          >
+            Cancel
+          </button>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -903,16 +960,12 @@ export default function TicketDetailPage() {
             </span>
           </div>
 
-          {/* Right — resolution control */}
-          <button
-            onClick={() => patch.mutate({ status: 'resolved' })}
-            className="flex shrink-0 items-center gap-1.5 rounded-xl px-4 py-2.5 text-sm font-bold transition-all"
-            style={{ background: 'var(--mv-green)', color: 'var(--mv-on-brand)', boxShadow: '0 1px 2px 0 color-mix(in srgb, var(--mv-green) 30%, transparent)' }}
-            onMouseEnter={e => { e.currentTarget.style.background = 'var(--mv-green-deep)'; }}
-            onMouseLeave={e => { e.currentTarget.style.background = 'var(--mv-green)'; }}
-          >
-            ✓ Mark as Resolved
-          </button>
+          {/* Right — status: pick, then Save */}
+          <StatusPicker
+            status={ticket.status}
+            saving={patch.isPending}
+            onSave={group => patch.mutate({ status_group: group })}
+          />
         </div>
 
         {/* ── Streamlined Meta Control Shelf ──────────────────────────────── */}

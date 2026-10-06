@@ -15,6 +15,7 @@ import {
 } from '../../api/queries';
 import { getCourierLogo } from '../../utils/courierLogos';
 import { useAuth } from '../../context/AuthContext';
+import { statusGroupOf } from './statusGroups';
 import axios from 'axios';
 
 const api = axios.create({ baseURL: '/api' });
@@ -47,6 +48,8 @@ const C = {
 // mv-state/mv-mark four-mark status language used by StatusBadge below.
 const STATUS_CFG = {
   open:                    { label: 'Open',              kind: 'flight' },
+  in_progress:             { label: 'In Progress',       kind: 'flight' },
+  pending:                 { label: 'Pending',           kind: 'waiting' },
   awaiting_customer_info:  { label: 'Awaiting Customer', kind: 'waiting' },
   info_received:           { label: 'Info Received',     kind: 'settled' },
   drafting:                { label: 'Drafting',          kind: 'flight' },
@@ -95,10 +98,13 @@ function Badge({ label, color, bg, small }) {
   );
 }
 
+// Shows the agent-facing group (Open / In Progress / Pending / Claim In Progress /
+// Resolved); the fine-grained status is in the tooltip.
 function StatusBadge({ status, small }) {
-  const cfg = STATUS_CFG[status] || { label: status || 'Unknown', kind: 'waiting' };
+  const detail = STATUS_CFG[status]?.label || status || 'Unknown';
+  const cfg = statusGroupOf(status) || { label: detail, kind: 'waiting' };
   return (
-    <span className={`mv-state mv-state--${cfg.kind}`} style={{ fontSize: small ? 10.5 : 12 }}>
+    <span className={`mv-state mv-state--${cfg.kind}`} style={{ fontSize: small ? 10.5 : 12 }} title={detail}>
       <span className={`mv-mark mv-mark--${cfg.kind}`} />
       <span className="mv-state-label">{cfg.label}</span>
     </span>
@@ -1809,6 +1815,9 @@ function FilterPanel({ filters, setFilters, staffList, onClose }) {
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 
+// The Resolved filter covers claim outcomes too, not just plain 'resolved'.
+const RESOLVED_FILTER = 'resolved,resolved_claim_approved,resolved_claim_rejected';
+
 // Consecutive untouched approvals before a template path is deemed autopilot-ready.
 const AUTOPILOT_THRESHOLD = 20;
 
@@ -2439,8 +2448,8 @@ export default function QueriesPage() {
             onClick={() => setFilters(p => ({ ...p, pending_draft: !p.pending_draft, attention: false }))}>
             ✦ To verify
           </FilterPill>
-          <FilterPill color={C.blue} active={filters.status === 'resolved'}
-            onClick={() => setFilters(p => ({ ...p, status: p.status === 'resolved' ? '' : 'resolved', attention: false }))}>
+          <FilterPill color={C.blue} active={filters.status === RESOLVED_FILTER}
+            onClick={() => setFilters(p => ({ ...p, status: p.status === RESOLVED_FILTER ? '' : RESOLVED_FILTER, attention: false }))}>
             Resolved
           </FilterPill>
         </div>

@@ -20,7 +20,9 @@ import { triagePriority } from '../services/triageEngine.js';
 import { aiAutonomouslyLearnPreference } from '../services/learningEngine.js';
 import { recordApproval } from '../services/workflowTrust.js';
 import { sendQueryEmail } from '../services/sendGateway.js';
-import { STATUS_BUCKET_SQL } from '../services/statusGroups.js';
+import { STATUS_BUCKET_SQL, STATUS_GROUPS, GROUP_DEFAULT_STATUS, statusGroupOf } from '../services/statusGroups.js';
+
+const sqlList = (arr) => `(${arr.map(v => `'${v}'`).join(', ')})`;
 
 const router = express.Router();
 
@@ -656,8 +658,8 @@ router.get('/stats', async (req, res, next) => {
           -- Owned by the AI agent "Kay": no human, but an AI draft is staged for review.
           COUNT(*) FILTER (WHERE assigned_to IS NULL AND pending_drafts > 0
                              AND status NOT IN ${RESOLVED})                          AS assigned_to_kay,
-          COUNT(*) FILTER (WHERE status = 'open')                                   AS awaiting_us,
-          COUNT(*) FILTER (WHERE status = 'awaiting_customer')                      AS awaiting_customer,
+          COUNT(*) FILTER (WHERE status::text IN ${sqlList([...STATUS_GROUPS.open, ...STATUS_GROUPS.in_progress, ...STATUS_GROUPS.claim])}) AS awaiting_us,
+          COUNT(*) FILTER (WHERE status::text IN ${sqlList(STATUS_GROUPS.pending)})  AS awaiting_customer,
           COUNT(*) FILTER (WHERE assigned_to = $1::uuid
                              AND status NOT IN ${RESOLVED})                          AS assigned_to_me,
           COUNT(*)                                                                   AS total_queries
@@ -1413,6 +1415,18 @@ router.patch('/:id', async (req, res, next) => {
     const values  = [];
     let   idx     = 1;
 
+    // Agents set one of five status groups. Keep the ticket's fine-grained status
+    // when it's already in that group (so e.g. "awaiting_courier" survives a save
+    // of Pending); otherwise use the group's default status.
+    if (req.body.status_group !== undefined) {
+      if (!GROUP_DEFAULT_STATUS[req.body.status_group]) return res.status(400).json({ error: 'Unknown status_group' });
+      const cur = await query(`SELECT status FROM queries WHERE id = $1`, [req.params.id]);
+      if (!cur.rows.length) return res.status(404).json({ error: 'Query not found' });
+      req.body.status = statusGroupOf(cur.rows[0].status) === req.body.status_group
+        ? cur.rows[0].status
+        : GROUP_DEFAULT_STATUS[req.body.status_group];
+    }
+
     for (const key of allowed) {
       if (req.body[key] !== undefined) {
         updates.push(`${key} = $${idx++}`);
@@ -1429,6 +1443,9 @@ router.patch('/:id', async (req, res, next) => {
         updates.push(`resolved_by = $${idx++}`);
         values.push(req.body.resolved_by);
       }
+    } else if (req.body.status) {
+      // Reopened — it's no longer resolved.
+      updates.push(`resolved_at = NULL`);
     }
 
     // Auto-clear attention flag if manually resolved
