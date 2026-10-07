@@ -12,6 +12,7 @@
 import express from 'express';
 import { query } from '../db/index.js';
 import { GEMINI_MODEL } from '../services/geminiService.js';
+import { assertAiAllowed, recordAiUsage, geminiTokens } from '../services/aiUsage.js';
 
 const router = express.Router();
 
@@ -202,6 +203,8 @@ async function runKatanaChat(messages, knowledgeSources) {
 
   // Agentic loop — keep going until Gemini stops calling the tool.
   for (let i = 0; i < 8; i++) {
+    await assertAiAllowed('katana');
+    const started = Date.now();
     const resp = await fetch(`${GEMINI_URL}?key=${encodeURIComponent(process.env.GEMINI_API_KEY)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -212,9 +215,14 @@ async function runKatanaChat(messages, knowledgeSources) {
         generationConfig: { temperature: 0.2, maxOutputTokens: 2048 },
       }),
     });
-    if (!resp.ok) throw new Error(`Gemini API error: ${await resp.text()}`);
+    if (!resp.ok) {
+      const text = await resp.text();
+      await recordAiUsage({ feature: 'katana', model: GEMINI_MODEL, ok: false, httpStatus: resp.status, error: text, durationMs: Date.now() - started });
+      throw new Error(`Gemini API error: ${text}`);
+    }
 
     const data  = await resp.json();
+    await recordAiUsage({ feature: 'katana', model: GEMINI_MODEL, ok: true, httpStatus: resp.status, durationMs: Date.now() - started, ...geminiTokens(data.usageMetadata) });
     const parts = data.candidates?.[0]?.content?.parts || [];
     const calls = parts.filter(p => p.functionCall);
 

@@ -17,6 +17,7 @@ import XeroSettings from './pages/settings/XeroSettings';
 import VolumetricSettings from './pages/settings/VolumetricSettings';
 import EmailSettings from './pages/settings/EmailSettings';
 import GmailSettings from './pages/settings/GmailSettings';
+import AiUsageSettings from './pages/settings/AiUsageSettings';
 import CarrierManagement from './pages/carriers/CarrierManagement';
 import TrackingPage from './pages/tracking/TrackingPage';
 import TasksPage from './pages/tasks/TasksPage';
@@ -134,6 +135,7 @@ function AppRoutes() {
           <Route path="xero"        element={<XeroSettings />} />
           <Route path="email"       element={<EmailSettings />} />
           <Route path="gmail"       element={<GmailSettings />} />
+          <Route path="ai-usage"    element={<AiUsageSettings />} />
         </Route>
         <Route path="*"         element={<Navigate to="/" replace />} />
       </Route>

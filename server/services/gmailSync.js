@@ -61,12 +61,8 @@ function triageFallback(subject, body) {
 }
 
 export async function triageAndSummarize(subject, body) {
-  if (!process.env.GEMINI_API_KEY) {
-    // Without this, a missing key degraded every ticket to keyword routing with
-    // nothing in the logs to say so.
-    console.warn('[Gemini triage] GEMINI_API_KEY not set — using keyword fallback');
-    return triageFallback(subject, body);
-  }
+  // No key check here: geminiGenerate() throws (and records the failure in
+  // Settings → AI usage) when the key is missing, and the catch below falls back.
 
   const trackingExamples = await getAllTrackingExamples();
   const trackingGuide = trackingExamples
@@ -105,7 +101,7 @@ export async function triageAndSummarize(subject, body) {
     `\nSubject: ${subject || '(none)'}\nBody: ${(body || '').slice(0, 2000)}`;
 
   try {
-    const raw = await geminiGenerate(prompt, { json: true, temperature: 0 });
+    const raw = await geminiGenerate(prompt, { json: true, temperature: 0, feature: 'email_triage' });
     const parsed = JSON.parse(raw || '{}');
     const allowed = ['query', 'claim', 'billing', 'technical', 'sales', 'returns', 'collection', 'supplies', 'other'];
     return {

@@ -46,7 +46,7 @@ export async function aiAutonomouslyLearnPreference(queryId, adminInputText) {
 
     let parsed;
     try {
-      parsed = JSON.parse(stripFences(await geminiGenerate(prompt, { system: ABSTRACT_SYSTEM, json: true, maxTokens: 300 })));
+      parsed = JSON.parse(stripFences(await geminiGenerate(prompt, { system: ABSTRACT_SYSTEM, json: true, maxTokens: 300, feature: 'learning' })));
     } catch (e) {
       console.warn('[Learning] abstraction failed:', e.message);
       return;

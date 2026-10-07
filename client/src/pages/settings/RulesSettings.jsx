@@ -28,6 +28,7 @@ export function SettingsNav() {
     { to: '/settings/xero',                 label: 'Xero' },
     { to: '/settings/email',                label: 'Email' },
     { to: '/settings/gmail',                label: 'Gmail' },
+    { to: '/settings/ai-usage',             label: 'AI usage' },
   ];
   return (
     <div style={{ display: 'flex', gap: 0, marginBottom: 28, borderBottom: '1px solid color-mix(in srgb, var(--mv-ink) 6%, transparent)' }}>

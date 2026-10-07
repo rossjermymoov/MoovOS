@@ -53,7 +53,7 @@ export async function checkClaimIntent({ subject = '', body = '' } = {}) {
   }
 
   try {
-    const raw = await geminiGenerate(buildClaimPrompt(text), { json: true, temperature: 0, maxTokens: 200 });
+    const raw = await geminiGenerate(buildClaimPrompt(text), { json: true, temperature: 0, maxTokens: 200, feature: 'claim_detection' });
     const parsed = JSON.parse(raw);
     return {
       claim_requested: parsed.claim_requested === true,
