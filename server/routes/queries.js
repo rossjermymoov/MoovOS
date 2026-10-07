@@ -197,6 +197,8 @@ router.get('/', async (req, res, next) => {
       pending_draft,                      // filter to tickets with AI drafts awaiting approval
       claim_deadline_days,                // filter to tickets with claim_deadline_at within N days
       sla_breached,                       // filter to tickets where SLA is breached
+      status_group,                       // one of the five agent statuses (statusGroups.js)
+      customer_q, subject_q,              // column filters on the compact list
       search,
       date_from, date_to,
       sort = 'updated_at', order = 'desc',
@@ -211,7 +213,7 @@ router.get('/', async (req, res, next) => {
       const statuses = status.split(',').map(s => s.trim());
       conditions.push(`status = ANY($${idx++}::query_status[])`);
       values.push(statuses);
-    } else {
+    } else if (!status_group) {
       // Default inbox view = open work only, so the list (and its `total`)
       // matches the "open" count shown in the header/stats.
       conditions.push(`status NOT IN ('resolved', 'resolved_claim_approved', 'resolved_claim_rejected')`);
@@ -260,6 +262,20 @@ router.get('/', async (req, res, next) => {
     if (sla_breached === 'true') {
       conditions.push(`sla_breached = true`);
     }
+    if (status_group) {
+      if (!STATUS_GROUPS[status_group]) return res.status(400).json({ error: 'Unknown status_group' });
+      conditions.push(`status::text = ANY($${idx++})`);
+      values.push(STATUS_GROUPS[status_group]);
+    }
+    if (customer_q) {
+      conditions.push(`(customer_name ILIKE $${idx} OR sender_email ILIKE $${idx})`);
+      values.push(`%${customer_q.trim()}%`);
+      idx++;
+    }
+    if (subject_q) {
+      conditions.push(`subject ILIKE $${idx++}`);
+      values.push(`%${subject_q.trim()}%`);
+    }
     if (sender_matched === 'false') {
       conditions.push(`sender_matched = false`);
     }
@@ -292,6 +308,17 @@ router.get('/', async (req, res, next) => {
 
     const validSorts = ['created_at', 'updated_at', 'latest_email_at', 'claim_days_remaining', 'age_days'];
     const sortDir = order === 'asc' ? 'ASC' : 'DESC';
+    // Column sorts from the compact list's headers. "age" ascending = youngest
+    // first, i.e. newest created_at, so its direction is inverted.
+    const COLUMN_SORTS = {
+      ticket:   `ticket_number ${sortDir}`,
+      customer: `LOWER(COALESCE(customer_name, sender_email)) ${sortDir}`,
+      subject:  `LOWER(subject) ${sortDir}`,
+      group:    `group_name ${sortDir} NULLS LAST`,
+      status:   `${STATUS_BUCKET_SQL} ${sortDir}`,
+      age:      `created_at ${sortDir === 'ASC' ? 'DESC' : 'ASC'}`,
+      owner:    `assignee_name ${sortDir} NULLS LAST`,
+    };
 
     // Default = the work queue: tickets waiting on us come first (Open, then In
     // Progress, then Claims, then Pending on someone else), oldest first within
@@ -299,9 +326,11 @@ router.get('/', async (req, res, next) => {
     // Priority is deliberately NOT a sort key — customers flag "P1"/"urgent" on
     // routine mail, and pinning those starved older tickets. An explicit `sort`
     // param still orders by that column.
-    const orderBy = validSorts.includes(req.query.sort)
-      ? `${sort} ${sortDir} NULLS LAST`
-      : `${STATUS_BUCKET_SQL} ASC, created_at ASC`;
+    const orderBy = COLUMN_SORTS[req.query.sort]
+      ? `${COLUMN_SORTS[req.query.sort]}, created_at ASC`
+      : validSorts.includes(req.query.sort)
+        ? `${sort} ${sortDir} NULLS LAST`
+        : `${STATUS_BUCKET_SQL} ASC, created_at ASC`;
 
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
