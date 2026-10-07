@@ -21,6 +21,7 @@ export async function fetchInbox(params = {}) {
   if (params.pending_draft)       qs.set('pending_draft',       'true');
   if (params.claim_deadline_days) qs.set('claim_deadline_days',  params.claim_deadline_days);
   if (params.sla_breached)        qs.set('sla_breached',         'true');
+  if (params.courier_sla_breached) qs.set('courier_sla_breached', 'true');
   if (params.limit)               qs.set('limit',                params.limit);
   // Callers paginate by 1-based `page`; the API takes a row offset.
   const offset = params.offset ?? (params.page && params.limit ? (params.page - 1) * params.limit : 0);

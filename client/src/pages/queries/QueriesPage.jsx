@@ -2403,7 +2403,7 @@ export default function QueriesPage() {
   const [staffList,     setStaffList]     = useState([]);
   const [filters,       setFilters]       = useState({
     status: '', attention: false, pending_draft: false, claim_deadline: false,
-    sla_breached: false, search: '',
+    sla_breached: false, courier_sla_breached: false, search: '',
     assigned_to: '', query_type: '', priority: '', group_name: '', courier: '',
     status_group: '', customer_q: '', subject_q: '',
   });
@@ -2512,6 +2512,35 @@ export default function QueriesPage() {
     const id = nudge.id; setNudge(null);
     api.post(`/queries/learning-nudges/${id}/dismiss`).catch(() => {});
   }
+
+  // Plain-language list of every filter narrowing the list, for the "Showing N
+  // tickets: …" line — a filter set from a counter, tab or column header is
+  // otherwise easy to miss.
+  const ownerName = filters.assigned_to === 'unassigned' ? 'unassigned'
+    : filters.assigned_to === user?.id ? 'assigned to me'
+    : filters.assigned_to ? `assigned to ${staffList.find(st => st.id === filters.assigned_to)?.full_name || 'a colleague'}` : null;
+  const activeFilters = [
+    filters.priority && `${filters.priority} priority`,
+    filters.courier_sla_breached && 'past courier SLA',
+    filters.sla_breached && 'past response SLA',
+    filters.group_name,
+    filters.status_group && STATUS_GROUPS.find(g => g.key === filters.status_group)?.label.toLowerCase(),
+    filters.status && 'resolved',
+    ownerName,
+    filters.attention && 'needs attention',
+    filters.pending_draft && 'drafts to verify',
+    filters.query_type && `type: ${filters.query_type.replace(/_/g, ' ')}`,
+    filters.courier && `courier: ${filters.courier}`,
+    filters.customer_q && `customer contains "${filters.customer_q}"`,
+    filters.subject_q && `subject contains "${filters.subject_q}"`,
+    filters.search && `matching "${filters.search}"`,
+  ].filter(Boolean);
+  const clearAllFilters = () => {
+    setSearchInput('');
+    setFilters(f => ({ ...f, status: '', attention: false, pending_draft: false, claim_deadline: false,
+      sla_breached: false, courier_sla_breached: false, search: '', assigned_to: '', query_type: '', priority: '',
+      group_name: '', courier: '', status_group: '', customer_q: '', subject_q: '' }));
+  };
 
   // When "All Open" (no explicit status filter), always hide resolved tickets.
   const RESOLVED_STATUSES = new Set(['resolved', 'resolved_claim_approved', 'resolved_claim_rejected']);
@@ -2633,36 +2662,58 @@ export default function QueriesPage() {
         </button>
       </div>
 
-      {/* ── Threat Matrix — high-impact operational counters ───────────────── */}
+      {/* ── Summary counters — whole inbox. The first three filter the list (click
+           again to clear); the last is a plain figure. Marks follow the status
+           language: magenta = needs a person, purple triangle = automated. ── */}
       <div className="grid shrink-0 grid-cols-2 gap-3 px-[18px] pb-3 pt-3.5 lg:grid-cols-4" style={{ background: 'var(--mv-bg)' }}>
         {[
-          { key: 'urgent', label: '🚨 Critical Threats',     value: stats?.urgent_open,          accent: 'var(--mv-magenta)', tint: 'var(--mv-magenta-100)', text: 'var(--mv-magenta-deep)',
-            onClick: () => setFilters(f => ({ ...f, priority: f.priority === 'urgent' ? '' : 'urgent', sla_breached: false, status: '', attention: false })), active: filters.priority === 'urgent' },
-          { key: 'high',   label: '⚠️ High Priority',         value: stats?.high_open,            accent: 'var(--mv-ink)', tint: 'var(--mv-surface)', text: 'var(--mv-ink-62)',
-            onClick: () => setFilters(f => ({ ...f, priority: f.priority === 'high' ? '' : 'high', sla_breached: false, status: '', attention: false })), active: filters.priority === 'high' },
-          { key: 'sla',    label: '⏳ Courier SLA Breaches',  value: stats?.courier_sla_breached, accent: 'var(--mv-purple)', tint: 'var(--mv-purple-100)', text: 'var(--mv-purple-700)',
-            onClick: () => setFilters(f => ({ ...f, sla_breached: !f.sla_breached, priority: '', status: '', attention: false })), active: filters.sla_breached },
-          { key: 'auto',   label: '🤖 Autopilot Runs',        value: stats?.autopilot_runs,       accent: 'var(--mv-green-deep)', tint: 'var(--mv-purple-100)', text: 'var(--mv-green-deep)',
-            onClick: null, active: false },
-        ].map(k => (
-          <button
-            key={k.key}
-            onClick={k.onClick || undefined}
-            className={`flex flex-col items-start rounded-2xl border p-4 text-left transition ${k.onClick ? 'cursor-pointer' : 'cursor-default'}`}
-            style={{
-              background: k.tint,
-              borderColor: k.active ? k.accent : 'transparent',
-              boxShadow: k.active ? `0 0 0 2px color-mix(in srgb, ${k.accent} 35%, transparent)` : 'none',
-            }}
-            onMouseEnter={e => { if (!k.active) e.currentTarget.style.boxShadow = '0 1px 3px color-mix(in srgb, var(--mv-ink) 10%, transparent)'; }}
-            onMouseLeave={e => { if (!k.active) e.currentTarget.style.boxShadow = 'none'; }}
-          >
-            <span className="text-4xl font-extrabold leading-none" style={{ color: k.accent }}>
-              {k.value ?? '—'}
-            </span>
-            <span className="mt-2 text-xs font-bold uppercase tracking-wide" style={{ color: k.text }}>{k.label}</span>
-          </button>
-        ))}
+          { key: 'urgent', label: 'Urgent',           mark: 'attention', value: stats?.urgent_open,
+            onClick: () => setFilters(f => ({ ...f, priority: f.priority === 'urgent' ? '' : 'urgent', courier_sla_breached: false, status: '', attention: false })), active: filters.priority === 'urgent' },
+          { key: 'high',   label: 'High priority',    mark: null,        value: stats?.high_open,
+            onClick: () => setFilters(f => ({ ...f, priority: f.priority === 'high' ? '' : 'high', courier_sla_breached: false, status: '', attention: false })), active: filters.priority === 'high' },
+          { key: 'sla',    label: 'Past courier SLA', mark: 'attention', value: stats?.courier_sla_breached,
+            onClick: () => setFilters(f => ({ ...f, courier_sla_breached: !f.courier_sla_breached, priority: '', status: '', attention: false })), active: !!filters.courier_sla_breached },
+          { key: 'auto',   label: 'Sent automatically', mark: 'flight',  value: stats?.autopilot_runs, onClick: null, active: false },
+        ].map(k => {
+          const needsPerson = k.mark === 'attention' && (k.value || 0) > 0;
+          const body = (
+            <>
+              <span className="text-4xl font-extrabold leading-none" style={{ color: needsPerson ? 'var(--mv-magenta-deep)' : 'var(--mv-ink)', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
+                {k.value ?? '—'}
+              </span>
+              <span className="mt-2 flex items-center gap-1.5" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.09em', textTransform: 'uppercase', color: 'var(--mv-ink-62)' }}>
+                {k.mark && <span className={`mv-mark mv-mark--${k.mark}`} />}
+                {k.label}
+                {k.active && <span style={{ marginLeft: 'auto', color: 'var(--mv-purple)' }}>Filtering</span>}
+              </span>
+            </>
+          );
+          if (!k.onClick) {
+            return (
+              <div key={k.key} className="flex flex-col items-start p-4" style={{ borderTop: '1px solid var(--mv-hairline)' }}>
+                {body}
+              </div>
+            );
+          }
+          return (
+            <button
+              key={k.key}
+              onClick={k.onClick}
+              aria-pressed={k.active}
+              title={k.active ? 'Click to stop filtering' : `Show only ${k.label.toLowerCase()} tickets`}
+              className="flex cursor-pointer flex-col items-stretch p-4 text-left transition"
+              style={{
+                background: 'var(--mv-surface)', borderRadius: 'var(--v2-r-12, 12px)',
+                border: k.active ? '2px solid var(--mv-purple)' : '1px solid var(--mv-hairline)',
+                padding: k.active ? 15 : 16,
+              }}
+              onMouseEnter={e => { if (!k.active) e.currentTarget.style.borderColor = 'var(--mv-ink-45)'; }}
+              onMouseLeave={e => { if (!k.active) e.currentTarget.style.borderColor = 'var(--mv-hairline)'; }}
+            >
+              {body}
+            </button>
+          );
+        })}
       </div>
 
       {/* ── Group tabs ──────────────────────────────────────────────────────── */}
@@ -2715,6 +2766,17 @@ export default function QueriesPage() {
 
         {/* Columns 1 & 2 — Live Traffic Queue */}
         <div className="flex min-h-0 flex-col xl:col-span-2">
+          {activeFilters.length > 0 && (
+            <div className="mb-2 flex items-center gap-2" style={{ fontSize: 13, color: 'var(--mv-ink-62)' }} aria-live="polite">
+              <span>
+                Showing <strong style={{ color: 'var(--mv-ink)', fontVariantNumeric: 'tabular-nums' }}>{total}</strong> {total === 1 ? 'ticket' : 'tickets'}: {activeFilters.join(' · ')}
+              </span>
+              <button onClick={clearAllFilters}
+                style={{ fontSize: 13, fontWeight: 600, color: 'var(--mv-purple)', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
+                Clear all
+              </button>
+            </div>
+          )}
           <div className="min-h-0 flex-1 overflow-auto rounded-2xl" style={{ border: '1px solid var(--mv-hairline)', background: 'var(--mv-surface)' }}>
             {loading && <div style={{ padding: 40, textAlign: 'center', color: C.muted, fontSize: 12 }}>Loading…</div>}
             {!loading && displayQueries.length === 0 && (

@@ -197,6 +197,7 @@ router.get('/', async (req, res, next) => {
       pending_draft,                      // filter to tickets with AI drafts awaiting approval
       claim_deadline_days,                // filter to tickets with claim_deadline_at within N days
       sla_breached,                       // filter to tickets where SLA is breached
+      courier_sla_breached,               // filter to tickets where the courier missed its SLA
       status_group,                       // one of the five agent statuses (statusGroups.js)
       customer_q, subject_q,              // column filters on the compact list
       search,
@@ -261,6 +262,9 @@ router.get('/', async (req, res, next) => {
     }
     if (sla_breached === 'true') {
       conditions.push(`sla_breached = true`);
+    }
+    if (courier_sla_breached === 'true') {
+      conditions.push(`courier_sla_breached = true`);
     }
     if (status_group) {
       if (!STATUS_GROUPS[status_group]) return res.status(400).json({ error: 'Unknown status_group' });
