@@ -13,9 +13,15 @@ export async function fetchInbox(params = {}) {
   if (params.priority)      qs.set('priority',     params.priority);
   if (params.group_name)    qs.set('group_name',   params.group_name);
   if (params.search)        qs.set('search',        params.search);
+  if (params.status_group)  qs.set('status_group',  params.status_group);
+  if (params.customer_q)    qs.set('customer_q',    params.customer_q);
+  if (params.subject_q)     qs.set('subject_q',     params.subject_q);
+  if (params.sort)          qs.set('sort',          params.sort);
+  if (params.order)         qs.set('order',         params.order);
   if (params.pending_draft)       qs.set('pending_draft',       'true');
   if (params.claim_deadline_days) qs.set('claim_deadline_days',  params.claim_deadline_days);
   if (params.sla_breached)        qs.set('sla_breached',         'true');
+  if (params.courier_sla_breached) qs.set('courier_sla_breached', 'true');
   if (params.limit)               qs.set('limit',                params.limit);
   // Callers paginate by 1-based `page`; the API takes a row offset.
   const offset = params.offset ?? (params.page && params.limit ? (params.page - 1) * params.limit : 0);

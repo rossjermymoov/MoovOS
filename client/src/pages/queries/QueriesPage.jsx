@@ -16,7 +16,7 @@ import {
 } from '../../api/queries';
 import { getCourierLogo } from '../../utils/courierLogos';
 import { useAuth } from '../../context/AuthContext';
-import { statusGroupOf } from './statusGroups';
+import { STATUS_GROUPS, statusGroupOf } from './statusGroups';
 import { TICKET_GROUPS } from './groups';
 import axios from 'axios';
 
@@ -603,17 +603,91 @@ function useHoverPreview() {
 // ─── Compact row — one line per ticket, for a management overview ───────────
 // Columns: # · customer · subject · group · status · age · owner. Unread tickets
 // are bold; the left edge carries the same priority strip as the detailed card.
-const COMPACT_COLS = '72px minmax(120px, 1.1fr) minmax(160px, 2.4fr) minmax(96px, .8fr) 150px 52px 30px';
+// Headings sort (server-side, so across every page) and a filter row narrows
+// each column; both share state with the tabs/switchers above the list.
+const COMPACT_COLS = '72px minmax(120px, 1.1fr) minmax(160px, 2.4fr) minmax(110px, .8fr) 150px 52px 110px';
 
-function CompactHeader() {
-  const cell = { fontSize: 11, fontWeight: 700, letterSpacing: '.09em', textTransform: 'uppercase', color: 'var(--mv-ink-45)' };
+const COMPACT_COLUMNS = [
+  { key: 'ticket',   label: 'Ticket' },
+  { key: 'customer', label: 'Customer' },
+  { key: 'subject',  label: 'Subject' },
+  { key: 'group',    label: 'Group' },
+  { key: 'status',   label: 'Status' },
+  { key: 'age',      label: 'Age', align: 'right' },
+  { key: 'owner',    label: 'Owner' },
+];
+
+const filterInput = {
+  width: '100%', minWidth: 0, fontSize: 12, padding: '5px 8px', color: 'var(--mv-ink)',
+  background: 'var(--mv-bg)', border: '1px solid var(--mv-hairline)', borderRadius: 'var(--v2-r-8, 8px)', outline: 'none',
+};
+
+// Text filter that waits for typing to pause before filtering.
+function ColumnTextFilter({ value, onChange, label }) {
+  const [v, setV] = useState(value);
+  useEffect(() => { setV(value); }, [value]);
+  useEffect(() => {
+    if (v === value) return undefined;
+    const t = setTimeout(() => onChange(v), 300);
+    return () => clearTimeout(t);
+  }, [v]);
+  return <input value={v} onChange={e => setV(e.target.value)} placeholder="Filter" aria-label={`Filter by ${label}`} style={filterInput} />;
+}
+
+function CompactHeader({ sort, onSort, filters, setFilters, staffList, meId }) {
+  const head = { fontSize: 11, fontWeight: 700, letterSpacing: '.09em', textTransform: 'uppercase' };
+  const set = (k, v) => setFilters(f => ({ ...f, [k]: v }));
+  const anyFilter = filters.customer_q || filters.subject_q || filters.group_name || filters.status_group || filters.assigned_to;
+
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: COMPACT_COLS, gap: 12, alignItems: 'center',
-      padding: '8px 14px 8px 17px', borderBottom: '2px solid var(--mv-ink)', position: 'sticky', top: 0,
-      background: 'var(--mv-surface)', zIndex: 1 }}>
-      <span style={cell}>Ticket</span><span style={cell}>Customer</span><span style={cell}>Subject</span>
-      <span style={cell}>Group</span><span style={cell}>Status</span>
-      <span style={{ ...cell, textAlign: 'right' }}>Age</span><span />
+    <div style={{ position: 'sticky', top: 0, zIndex: 1, background: 'var(--mv-surface)', borderBottom: '2px solid var(--mv-ink)' }}>
+      {/* Headings — click to sort; again to reverse; a third time returns to queue order */}
+      <div role="row" style={{ display: 'grid', gridTemplateColumns: COMPACT_COLS, gap: 12, alignItems: 'center', padding: '8px 14px 4px 17px' }}>
+        {COMPACT_COLUMNS.map(c => {
+          const active = sort.key === c.key;
+          const Icon = active && sort.dir === 'desc' ? ChevronDown : ChevronUp;
+          return (
+            <button key={c.key} role="columnheader" onClick={() => onSort(c.key)}
+              aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+              title={`Sort by ${c.label.toLowerCase()}`}
+              style={{ ...head, display: 'flex', alignItems: 'center', gap: 3, padding: 0, background: 'none', border: 'none', cursor: 'pointer',
+                justifyContent: c.align === 'right' ? 'flex-end' : 'flex-start',
+                color: active ? 'var(--mv-purple)' : 'var(--mv-ink-45)' }}>
+              {c.label}
+              <Icon size={12} style={{ opacity: active ? 1 : 0.35 }} />
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Filter row */}
+      <div role="row" style={{ display: 'grid', gridTemplateColumns: COMPACT_COLS, gap: 12, alignItems: 'center', padding: '4px 14px 8px 17px' }}>
+        <span>
+          {anyFilter && (
+            <button onClick={() => setFilters(f => ({ ...f, customer_q: '', subject_q: '', group_name: '', status_group: '', assigned_to: '' }))}
+              style={{ fontSize: 12, fontWeight: 600, color: 'var(--mv-purple)', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
+              Clear
+            </button>
+          )}
+        </span>
+        <ColumnTextFilter label="customer" value={filters.customer_q} onChange={v => set('customer_q', v)} />
+        <ColumnTextFilter label="subject" value={filters.subject_q} onChange={v => set('subject_q', v)} />
+        <select aria-label="Filter by group" value={filters.group_name} onChange={e => set('group_name', e.target.value)} style={filterInput}>
+          <option value="">All</option>
+          {TICKET_GROUPS.map(g => <option key={g} value={g}>{g}</option>)}
+        </select>
+        <select aria-label="Filter by status" value={filters.status_group} onChange={e => setFilters(f => ({ ...f, status_group: e.target.value, status: '' }))} style={filterInput}>
+          <option value="">All open</option>
+          {STATUS_GROUPS.map(g => <option key={g.key} value={g.key}>{g.label}</option>)}
+        </select>
+        <span />
+        <select aria-label="Filter by owner" value={filters.assigned_to} onChange={e => set('assigned_to', e.target.value)} style={filterInput}>
+          <option value="">Anyone</option>
+          <option value="unassigned">Unassigned</option>
+          {meId && <option value={meId}>Me</option>}
+          {staffList.filter(st => st.id !== meId).map(st => <option key={st.id} value={st.id}>{st.full_name}</option>)}
+        </select>
+      </div>
     </div>
   );
 }
@@ -621,7 +695,7 @@ function CompactHeader() {
 function CompactRow({ q, onClick, staffList = [] }) {
   const { hoverPos, startHover, endHover } = useHoverPreview();
   const unread    = (parseInt(q.unread_emails) || 0) > 0 || q.has_new_reply;
-  const humanName = staffList.find(s => s.id === q.assigned_to)?.full_name;
+  const humanName = staffList.find(s => s.id === q.assigned_to)?.full_name || q.assignee_name;
   const isKatana  = !humanName && (parseInt(q.pending_drafts) || 0) > 0;
   const initials  = humanName ? humanName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() : null;
   const resolved  = RESOLVED_SET.includes((q.status || '').toLowerCase());
@@ -661,12 +735,17 @@ function CompactRow({ q, onClick, staffList = [] }) {
         {age}
       </span>
       <span title={humanName ? `Assigned to ${humanName}` : isKatana ? 'Katana (AI) — draft awaiting review' : 'Unassigned'}
-        style={{ width: 24, height: 24, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        style={{ ...text, display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ width: 22, height: 22, flexShrink: 0, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: 10, fontWeight: 700,
           background: initials || isKatana ? 'var(--mv-purple-100)' : 'transparent',
           border: initials || isKatana ? 'none' : '1px dashed var(--mv-hairline-2)',
           color: 'var(--mv-purple-700)' }}>
-        {initials || (isKatana ? 'AI' : '')}
+          {initials || (isKatana ? 'AI' : '')}
+        </span>
+        <span style={{ ...text, fontSize: 12, color: humanName ? 'var(--mv-ink-62)' : 'var(--mv-ink-45)' }}>
+          {humanName ? humanName.split(' ')[0] : isKatana ? 'Katana' : 'Unassigned'}
+        </span>
       </span>
       {hoverPos && <HoverPreview q={q} pos={hoverPos} />}
     </div>
@@ -2324,9 +2403,14 @@ export default function QueriesPage() {
   const [staffList,     setStaffList]     = useState([]);
   const [filters,       setFilters]       = useState({
     status: '', attention: false, pending_draft: false, claim_deadline: false,
-    sla_breached: false, search: '',
+    sla_breached: false, courier_sla_breached: false, search: '',
     assigned_to: '', query_type: '', priority: '', group_name: '', courier: '',
+    status_group: '', customer_q: '', subject_q: '',
   });
+  // Column sort from the compact list headings; '' = the default queue order.
+  const [sort, setSort] = useState({ key: '', dir: 'asc' });
+  const cycleSort = (key) => setSort(s =>
+    s.key !== key ? { key, dir: 'asc' } : s.dir === 'asc' ? { key, dir: 'desc' } : { key: '', dir: 'asc' });
 
   useEffect(() => {
     fetchStats(user?.id).then(setStats).catch(console.error);
@@ -2344,7 +2428,7 @@ export default function QueriesPage() {
   };
 
   // A new filter or search is a new result set — start it from page 1.
-  useEffect(() => { setPage(1); }, [filters]);
+  useEffect(() => { setPage(1); }, [filters, sort]);
 
   // Search also scans email bodies, so wait for typing to pause before querying.
   const [searchInput, setSearchInput] = useState('');
@@ -2364,15 +2448,19 @@ export default function QueriesPage() {
 
   const refresh = useCallback(() => {
     setLoading(true);
-    fetchInbox({ ...filters, page, limit: 30 })
+    fetchInbox({ ...filters, page, limit: 30, sort: sort.key, order: sort.key ? sort.dir : undefined })
       .then(d => {
         setQueries(d.queries || []);
         setTotal(d.total || 0);
-        setStaffList(d.staff || []);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [filters, page]);
+  }, [filters, page, sort]);
+
+  // Staff for the owner column and filter (the inbox API doesn't return them).
+  useEffect(() => {
+    api.get('/staff').then(r => setStaffList(r.data || [])).catch(() => {});
+  }, []);
 
   useEffect(() => { refresh(); }, [refresh, refreshKey]);
 
@@ -2425,9 +2513,38 @@ export default function QueriesPage() {
     api.post(`/queries/learning-nudges/${id}/dismiss`).catch(() => {});
   }
 
+  // Plain-language list of every filter narrowing the list, for the "Showing N
+  // tickets: …" line — a filter set from a counter, tab or column header is
+  // otherwise easy to miss.
+  const ownerName = filters.assigned_to === 'unassigned' ? 'unassigned'
+    : filters.assigned_to === user?.id ? 'assigned to me'
+    : filters.assigned_to ? `assigned to ${staffList.find(st => st.id === filters.assigned_to)?.full_name || 'a colleague'}` : null;
+  const activeFilters = [
+    filters.priority && `${filters.priority} priority`,
+    filters.courier_sla_breached && 'past courier SLA',
+    filters.sla_breached && 'past response SLA',
+    filters.group_name,
+    filters.status_group && STATUS_GROUPS.find(g => g.key === filters.status_group)?.label.toLowerCase(),
+    filters.status && 'resolved',
+    ownerName,
+    filters.attention && 'needs attention',
+    filters.pending_draft && 'drafts to verify',
+    filters.query_type && `type: ${filters.query_type.replace(/_/g, ' ')}`,
+    filters.courier && `courier: ${filters.courier}`,
+    filters.customer_q && `customer contains "${filters.customer_q}"`,
+    filters.subject_q && `subject contains "${filters.subject_q}"`,
+    filters.search && `matching "${filters.search}"`,
+  ].filter(Boolean);
+  const clearAllFilters = () => {
+    setSearchInput('');
+    setFilters(f => ({ ...f, status: '', attention: false, pending_draft: false, claim_deadline: false,
+      sla_breached: false, courier_sla_breached: false, search: '', assigned_to: '', query_type: '', priority: '',
+      group_name: '', courier: '', status_group: '', customer_q: '', subject_q: '' }));
+  };
+
   // When "All Open" (no explicit status filter), always hide resolved tickets.
   const RESOLVED_STATUSES = new Set(['resolved', 'resolved_claim_approved', 'resolved_claim_rejected']);
-  const displayQueries = filters.status
+  const displayQueries = filters.status || filters.status_group
     ? queries
     : queries.filter(q => !RESOLVED_STATUSES.has(q.status));
 
@@ -2507,7 +2624,15 @@ export default function QueriesPage() {
         {/* Sort indicator */}
         <span style={{ fontSize: 12, color: C.muted, display: 'flex', alignItems: 'center', gap: 4 }}>
           <RefreshCw size={11} style={{ cursor: 'pointer' }} onClick={refresh} />
-          Oldest first
+          {sort.key ? (
+            <>
+              Sorted by {COMPACT_COLUMNS.find(c => c.key === sort.key)?.label.toLowerCase()} {sort.dir === 'asc' ? '↑' : '↓'}
+              <button onClick={() => setSort({ key: '', dir: 'asc' })}
+                style={{ marginLeft: 4, fontSize: 12, fontWeight: 600, color: 'var(--mv-purple)', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
+                Reset
+              </button>
+            </>
+          ) : 'Oldest first'}
         </span>
         {/* Automation simulator */}
         <button
@@ -2537,36 +2662,58 @@ export default function QueriesPage() {
         </button>
       </div>
 
-      {/* ── Threat Matrix — high-impact operational counters ───────────────── */}
+      {/* ── Summary counters — whole inbox. The first three filter the list (click
+           again to clear); the last is a plain figure. Marks follow the status
+           language: magenta = needs a person, purple triangle = automated. ── */}
       <div className="grid shrink-0 grid-cols-2 gap-3 px-[18px] pb-3 pt-3.5 lg:grid-cols-4" style={{ background: 'var(--mv-bg)' }}>
         {[
-          { key: 'urgent', label: '🚨 Critical Threats',     value: stats?.urgent_open,          accent: 'var(--mv-magenta)', tint: 'var(--mv-magenta-100)', text: 'var(--mv-magenta-deep)',
-            onClick: () => setFilters(f => ({ ...f, priority: f.priority === 'urgent' ? '' : 'urgent', sla_breached: false, status: '', attention: false })), active: filters.priority === 'urgent' },
-          { key: 'high',   label: '⚠️ High Priority',         value: stats?.high_open,            accent: 'var(--mv-ink)', tint: 'var(--mv-surface)', text: 'var(--mv-ink-62)',
-            onClick: () => setFilters(f => ({ ...f, priority: f.priority === 'high' ? '' : 'high', sla_breached: false, status: '', attention: false })), active: filters.priority === 'high' },
-          { key: 'sla',    label: '⏳ Courier SLA Breaches',  value: stats?.courier_sla_breached, accent: 'var(--mv-purple)', tint: 'var(--mv-purple-100)', text: 'var(--mv-purple-700)',
-            onClick: () => setFilters(f => ({ ...f, sla_breached: !f.sla_breached, priority: '', status: '', attention: false })), active: filters.sla_breached },
-          { key: 'auto',   label: '🤖 Autopilot Runs',        value: stats?.autopilot_runs,       accent: 'var(--mv-green-deep)', tint: 'var(--mv-purple-100)', text: 'var(--mv-green-deep)',
-            onClick: null, active: false },
-        ].map(k => (
-          <button
-            key={k.key}
-            onClick={k.onClick || undefined}
-            className={`flex flex-col items-start rounded-2xl border p-4 text-left transition ${k.onClick ? 'cursor-pointer' : 'cursor-default'}`}
-            style={{
-              background: k.tint,
-              borderColor: k.active ? k.accent : 'transparent',
-              boxShadow: k.active ? `0 0 0 2px color-mix(in srgb, ${k.accent} 35%, transparent)` : 'none',
-            }}
-            onMouseEnter={e => { if (!k.active) e.currentTarget.style.boxShadow = '0 1px 3px color-mix(in srgb, var(--mv-ink) 10%, transparent)'; }}
-            onMouseLeave={e => { if (!k.active) e.currentTarget.style.boxShadow = 'none'; }}
-          >
-            <span className="text-4xl font-extrabold leading-none" style={{ color: k.accent }}>
-              {k.value ?? '—'}
-            </span>
-            <span className="mt-2 text-xs font-bold uppercase tracking-wide" style={{ color: k.text }}>{k.label}</span>
-          </button>
-        ))}
+          { key: 'urgent', label: 'Urgent',           mark: 'attention', value: stats?.urgent_open,
+            onClick: () => setFilters(f => ({ ...f, priority: f.priority === 'urgent' ? '' : 'urgent', courier_sla_breached: false, status: '', attention: false })), active: filters.priority === 'urgent' },
+          { key: 'high',   label: 'High priority',    mark: null,        value: stats?.high_open,
+            onClick: () => setFilters(f => ({ ...f, priority: f.priority === 'high' ? '' : 'high', courier_sla_breached: false, status: '', attention: false })), active: filters.priority === 'high' },
+          { key: 'sla',    label: 'Past courier SLA', mark: 'attention', value: stats?.courier_sla_breached,
+            onClick: () => setFilters(f => ({ ...f, courier_sla_breached: !f.courier_sla_breached, priority: '', status: '', attention: false })), active: !!filters.courier_sla_breached },
+          { key: 'auto',   label: 'Sent automatically', mark: 'flight',  value: stats?.autopilot_runs, onClick: null, active: false },
+        ].map(k => {
+          const needsPerson = k.mark === 'attention' && (k.value || 0) > 0;
+          const body = (
+            <>
+              <span className="text-4xl font-extrabold leading-none" style={{ color: needsPerson ? 'var(--mv-magenta-deep)' : 'var(--mv-ink)', fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
+                {k.value ?? '—'}
+              </span>
+              <span className="mt-2 flex items-center gap-1.5" style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.09em', textTransform: 'uppercase', color: 'var(--mv-ink-62)' }}>
+                {k.mark && <span className={`mv-mark mv-mark--${k.mark}`} />}
+                {k.label}
+                {k.active && <span style={{ marginLeft: 'auto', color: 'var(--mv-purple)' }}>Filtering</span>}
+              </span>
+            </>
+          );
+          if (!k.onClick) {
+            return (
+              <div key={k.key} className="flex flex-col items-start p-4" style={{ borderTop: '1px solid var(--mv-hairline)' }}>
+                {body}
+              </div>
+            );
+          }
+          return (
+            <button
+              key={k.key}
+              onClick={k.onClick}
+              aria-pressed={k.active}
+              title={k.active ? 'Click to stop filtering' : `Show only ${k.label.toLowerCase()} tickets`}
+              className="flex cursor-pointer flex-col items-stretch p-4 text-left transition"
+              style={{
+                background: 'var(--mv-surface)', borderRadius: 'var(--v2-r-12, 12px)',
+                border: k.active ? '2px solid var(--mv-purple)' : '1px solid var(--mv-hairline)',
+                padding: k.active ? 15 : 16,
+              }}
+              onMouseEnter={e => { if (!k.active) e.currentTarget.style.borderColor = 'var(--mv-ink-45)'; }}
+              onMouseLeave={e => { if (!k.active) e.currentTarget.style.borderColor = 'var(--mv-hairline)'; }}
+            >
+              {body}
+            </button>
+          );
+        })}
       </div>
 
       {/* ── Group tabs ──────────────────────────────────────────────────────── */}
@@ -2608,7 +2755,7 @@ export default function QueriesPage() {
             ✦ To verify
           </FilterPill>
           <FilterPill color={C.blue} active={filters.status === RESOLVED_FILTER}
-            onClick={() => setFilters(p => ({ ...p, status: p.status === RESOLVED_FILTER ? '' : RESOLVED_FILTER, attention: false }))}>
+            onClick={() => setFilters(p => ({ ...p, status: p.status === RESOLVED_FILTER ? '' : RESOLVED_FILTER, status_group: '', attention: false }))}>
             Resolved
           </FilterPill>
         </div>
@@ -2619,6 +2766,17 @@ export default function QueriesPage() {
 
         {/* Columns 1 & 2 — Live Traffic Queue */}
         <div className="flex min-h-0 flex-col xl:col-span-2">
+          {activeFilters.length > 0 && (
+            <div className="mb-2 flex items-center gap-2" style={{ fontSize: 13, color: 'var(--mv-ink-62)' }} aria-live="polite">
+              <span>
+                Showing <strong style={{ color: 'var(--mv-ink)', fontVariantNumeric: 'tabular-nums' }}>{total}</strong> {total === 1 ? 'ticket' : 'tickets'}: {activeFilters.join(' · ')}
+              </span>
+              <button onClick={clearAllFilters}
+                style={{ fontSize: 13, fontWeight: 600, color: 'var(--mv-purple)', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
+                Clear all
+              </button>
+            </div>
+          )}
           <div className="min-h-0 flex-1 overflow-auto rounded-2xl" style={{ border: '1px solid var(--mv-hairline)', background: 'var(--mv-surface)' }}>
             {loading && <div style={{ padding: 40, textAlign: 'center', color: C.muted, fontSize: 12 }}>Loading…</div>}
             {!loading && displayQueries.length === 0 && (
@@ -2633,7 +2791,7 @@ export default function QueriesPage() {
                 {/* Rows arrive in queue order from the API: status group, then oldest first */}
                 {view === 'compact' ? (
                   <div role="table" aria-label="Tickets">
-                    <CompactHeader />
+                    <CompactHeader sort={sort} onSort={cycleSort} filters={filters} setFilters={setFilters} staffList={staffList} meId={user?.id} />
                     {displayQueries.map(q => (
                       <CompactRow key={q.id} q={q} onClick={() => navigate(`/queries/${q.id}`)} staffList={staffList} />
                     ))}
