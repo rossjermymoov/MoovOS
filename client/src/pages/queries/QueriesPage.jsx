@@ -567,12 +567,12 @@ function HoverPreview({ q, pos }) {
   );
 }
 
-function InboxRow({ q, onClick, staffList = [], onUpdate }) {
-  const [hoverPos,   setHoverPos]   = useState(null);
+// Hover-preview state for a queue row (both views). Shows after a short rest,
+// so sweeping the mouse down the list doesn't flash a card for every row.
+function useHoverPreview() {
+  const [hoverPos, setHoverPos] = useState(null);
   const hoverTimer = useRef(null);
 
-  // Show the preview after a short rest, so sweeping the mouse down the list
-  // doesn't flash a card for every row.
   function startHover(e) {
     const el = e.currentTarget;
     clearTimeout(hoverTimer.current);
@@ -597,6 +597,84 @@ function InboxRow({ q, onClick, staffList = [], onUpdate }) {
   }, [hoverPos]);
   useEffect(() => () => clearTimeout(hoverTimer.current), []);
 
+  return { hoverPos, startHover, endHover };
+}
+
+// ─── Compact row — one line per ticket, for a management overview ───────────
+// Columns: # · customer · subject · group · status · age · owner. Unread tickets
+// are bold; the left edge carries the same priority strip as the detailed card.
+const COMPACT_COLS = '72px minmax(120px, 1.1fr) minmax(160px, 2.4fr) minmax(96px, .8fr) 150px 52px 30px';
+
+function CompactHeader() {
+  const cell = { fontSize: 11, fontWeight: 700, letterSpacing: '.09em', textTransform: 'uppercase', color: 'var(--mv-ink-45)' };
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: COMPACT_COLS, gap: 12, alignItems: 'center',
+      padding: '8px 14px 8px 17px', borderBottom: '2px solid var(--mv-ink)', position: 'sticky', top: 0,
+      background: 'var(--mv-surface)', zIndex: 1 }}>
+      <span style={cell}>Ticket</span><span style={cell}>Customer</span><span style={cell}>Subject</span>
+      <span style={cell}>Group</span><span style={cell}>Status</span>
+      <span style={{ ...cell, textAlign: 'right' }}>Age</span><span />
+    </div>
+  );
+}
+
+function CompactRow({ q, onClick, staffList = [] }) {
+  const { hoverPos, startHover, endHover } = useHoverPreview();
+  const unread    = (parseInt(q.unread_emails) || 0) > 0 || q.has_new_reply;
+  const humanName = staffList.find(s => s.id === q.assigned_to)?.full_name;
+  const isKatana  = !humanName && (parseInt(q.pending_drafts) || 0) > 0;
+  const initials  = humanName ? humanName.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() : null;
+  const resolved  = RESOLVED_SET.includes((q.status || '').toLowerCase());
+  const age       = q.created_at ? timeAgo(q.created_at).replace(' ago', '').replace('just now', 'now') : '—';
+  const overdue   = q.sla_breached || q.courier_sla_breached;
+  const text      = { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 };
+
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={startHover}
+      onMouseLeave={endHover}
+      role="row"
+      style={{
+        display: 'grid', gridTemplateColumns: COMPACT_COLS, gap: 12, alignItems: 'center',
+        padding: '9px 14px', cursor: 'pointer', fontSize: 13,
+        borderLeft: `3px solid ${priorityStripColor(q)}`, borderBottom: '1px solid var(--mv-hairline)',
+        background: 'var(--mv-surface)',
+      }}
+      onMouseOver={e => { e.currentTarget.style.background = 'var(--mv-bg)'; }}
+      onMouseOut={e => { e.currentTarget.style.background = 'var(--mv-surface)'; }}
+    >
+      <span style={{ fontWeight: 700, color: (q.priority || '').toLowerCase() === 'urgent' ? 'var(--mv-magenta-deep)' : 'var(--mv-ink-62)', fontVariantNumeric: 'tabular-nums' }}>
+        {q.ticket_number != null ? `#${q.ticket_number}` : '—'}
+      </span>
+      <span style={{ ...text, fontWeight: unread ? 700 : 500, color: 'var(--mv-ink)' }}>
+        {q.customer_name || q.sender_email || '(unknown sender)'}
+      </span>
+      <span style={{ ...text, fontWeight: unread ? 700 : 400, color: resolved ? 'var(--mv-ink-45)' : 'var(--mv-ink-78)' }}>
+        {q.subject || '(no subject)'}
+      </span>
+      <span style={{ ...text, color: 'var(--mv-ink-52)' }}>{q.group_name || '—'}</span>
+      <span style={text}><StatusBadge status={q.status} small /></span>
+      <span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: overdue ? 700 : 400,
+        color: overdue ? 'var(--mv-magenta-deep)' : 'var(--mv-ink-52)' }}
+        title={overdue ? 'Past its SLA' : `Opened ${fmtDate(q.created_at)}`}>
+        {age}
+      </span>
+      <span title={humanName ? `Assigned to ${humanName}` : isKatana ? 'Katana (AI) — draft awaiting review' : 'Unassigned'}
+        style={{ width: 24, height: 24, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 10, fontWeight: 700,
+          background: initials || isKatana ? 'var(--mv-purple-100)' : 'transparent',
+          border: initials || isKatana ? 'none' : '1px dashed var(--mv-hairline-2)',
+          color: 'var(--mv-purple-700)' }}>
+        {initials || (isKatana ? 'AI' : '')}
+      </span>
+      {hoverPos && <HoverPreview q={q} pos={hoverPos} />}
+    </div>
+  );
+}
+
+function InboxRow({ q, onClick, staffList = [], onUpdate }) {
+  const { hoverPos, startHover, endHover } = useHoverPreview();
   const [assignOpen, setAssignOpen] = useState(false);
   const [assigning,  setAssigning]  = useState(false);
 
@@ -2254,6 +2332,17 @@ export default function QueriesPage() {
     fetchStats(user?.id).then(setStats).catch(console.error);
   }, [refreshKey, user?.id]);
 
+  // List view, remembered per browser. Compact is the default: managers want the
+  // whole page of tickets in view at once, like Freshdesk's list.
+  const [view, setView] = useState(() => {
+    try { return localStorage.getItem('moov.queries.view') === 'detailed' ? 'detailed' : 'compact'; }
+    catch { return 'compact'; }
+  });
+  const changeView = (v) => {
+    setView(v);
+    try { localStorage.setItem('moov.queries.view', v); } catch { /* storage unavailable — keep in memory */ }
+  };
+
   // A new filter or search is a new result set — start it from page 1.
   useEffect(() => { setPage(1); }, [filters]);
 
@@ -2403,6 +2492,18 @@ export default function QueriesPage() {
               fontSize: 12, padding: '7px 10px 7px 28px', width: 280, outline: 'none' }}
           />
         </div>
+        {/* View switch — compact list (one line per ticket) or detailed cards */}
+        <div role="group" aria-label="List view" className="inline-flex items-center gap-1 rounded-lg p-0.5" style={{ background: 'var(--mv-bg)' }}>
+          {[{ key: 'compact', label: 'Compact' }, { key: 'detailed', label: 'Detailed' }].map(v => (
+            <button key={v.key} onClick={() => changeView(v.key)} aria-pressed={view === v.key}
+              className="rounded-md px-2.5 py-1 text-xs font-semibold"
+              style={{ background: view === v.key ? 'var(--mv-surface)' : 'transparent',
+                color: view === v.key ? 'var(--mv-ink)' : 'var(--mv-ink-52)',
+                boxShadow: view === v.key ? '0 1px 2px color-mix(in srgb, var(--mv-ink) 10%, transparent)' : 'none' }}>
+              {v.label}
+            </button>
+          ))}
+        </div>
         {/* Sort indicator */}
         <span style={{ fontSize: 12, color: C.muted, display: 'flex', alignItems: 'center', gap: 4 }}>
           <RefreshCw size={11} style={{ cursor: 'pointer' }} onClick={refresh} />
@@ -2530,11 +2631,16 @@ export default function QueriesPage() {
             {!loading && displayQueries.length > 0 && (
               <>
                 {/* Rows arrive in queue order from the API: status group, then oldest first */}
-                {displayQueries
-                  .map(q => (
-                    <InboxRow key={q.id} q={q} onClick={() => navigate(`/queries/${q.id}`)} staffList={staffList} onUpdate={refresh} />
-                  ))
-                }
+                {view === 'compact' ? (
+                  <div role="table" aria-label="Tickets">
+                    <CompactHeader />
+                    {displayQueries.map(q => (
+                      <CompactRow key={q.id} q={q} onClick={() => navigate(`/queries/${q.id}`)} staffList={staffList} />
+                    ))}
+                  </div>
+                ) : displayQueries.map(q => (
+                  <InboxRow key={q.id} q={q} onClick={() => navigate(`/queries/${q.id}`)} staffList={staffList} onUpdate={refresh} />
+                ))}
               </>
             )}
           </div>
