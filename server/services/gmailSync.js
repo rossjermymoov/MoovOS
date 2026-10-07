@@ -26,7 +26,9 @@ function triageFallback(subject, body) {
     /collection (number|issue|failed|not (done|happened|made)|was(n'?t| not) (made|done)|didn'?t happen)|(failed|missed|no) collection|not (been )?collected|(courier|driver) (hasn'?t|has not|didn'?t|did not|never) (collect|arrive|turn up|show)/.test(text) ? 'collection' :
     // Physical shipping supplies (labels, mailing bags, printer rolls) — distinct
     // from a technical/portal issue even though "labels"/"printer" sound similar.
-    /\bsupplies\b|(order|send|need|request|run(ning)? out of|low on).*(mailing bags|packing bags|poly ?bags|packaging|labels|label rolls|printer (labels|rolls)|thermal (labels|rolls|printer)|tape)|more (labels|rolls|bags)\b/.test(text) ? 'supplies' :
+    // Verb and item must sit close together in one sentence — ".*" let "need"
+    // and "labels" match anywhere in the email, signature included.
+    /\bsupplies\b|(order|send|need|request|run(ning)? out of|low on)[^.\n]{0,40}(mailing bags|packing bags|poly ?bags|packaging|labels|label rolls|printer (labels|rolls)|thermal (labels|rolls|printer)|tape)|more (labels|rolls|bags)\b/.test(text) ? 'supplies' :
     /\b(invoices?|billing|statements?|payments?|charged?|charges)\b/.test(text) ? 'billing' :
     /\b(login|log in|error|bug|portal|dashboard|api|technical)\b/.test(text) ? 'technical' :
     // "quote"/"pric" (not just "pricing") also catches "quotation"/"price" —
@@ -59,7 +61,12 @@ function triageFallback(subject, body) {
 }
 
 export async function triageAndSummarize(subject, body) {
-  if (!process.env.GEMINI_API_KEY) return triageFallback(subject, body);
+  if (!process.env.GEMINI_API_KEY) {
+    // Without this, a missing key degraded every ticket to keyword routing with
+    // nothing in the logs to say so.
+    console.warn('[Gemini triage] GEMINI_API_KEY not set — using keyword fallback');
+    return triageFallback(subject, body);
+  }
 
   const trackingExamples = await getAllTrackingExamples();
   const trackingGuide = trackingExamples
