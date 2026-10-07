@@ -52,7 +52,7 @@ export async function checkDissatisfaction({ subject = '', body = '' } = {}) {
   }
 
   try {
-    const raw = await geminiGenerate(buildPrompt(text), { json: true, temperature: 0, maxTokens: 200 });
+    const raw = await geminiGenerate(buildPrompt(text), { json: true, temperature: 0, maxTokens: 200, feature: 'dissatisfaction' });
     const parsed = JSON.parse(raw);
     return {
       dissatisfied: parsed.dissatisfied === true,

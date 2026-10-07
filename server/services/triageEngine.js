@@ -43,7 +43,7 @@ async function gradeWithGemini(subject, body) {
     `Subject: ${subject || '(none)'}\n` +
     `Body: ${(body || '').slice(0, 3000)}`;
 
-  const raw = await geminiGenerate(prompt, { json: true, temperature: 0, maxTokens: 300 });
+  const raw = await geminiGenerate(prompt, { json: true, temperature: 0, maxTokens: 300, feature: 'priority' });
   const parsed = JSON.parse(raw);
   const grade = String(parsed.priority || '').toLowerCase();
   return ['high', 'medium', 'low'].includes(grade) ? grade : 'medium';

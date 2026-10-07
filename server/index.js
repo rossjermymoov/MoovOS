@@ -34,6 +34,7 @@ import reconciliationRouter from './routes/reconciliation.js';
 import emailRouter from './routes/email.js';
 import { sendAlert } from './services/emailService.js';
 import gmailRouter from './routes/gmail.js';
+import aiUsageRouter from './routes/aiUsage.js';
 import shipmentsRouter from './routes/shipments.js';
 import onboardingRouter from './routes/onboarding.js';
 import onboardingTemplatesRouter from './routes/onboardingTemplates.js';
@@ -99,6 +100,7 @@ app.use('/api/reconciliation',        reconciliationRouter);
 app.use('/api/shipments',             shipmentsRouter);
 app.use('/api/email',                 emailRouter);
 app.use('/api/gmail',                 gmailRouter);
+app.use('/api/ai-usage',              aiUsageRouter);
 
 // ─── Health check ────────────────────────────────────────────
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', service: 'moov-os' }));

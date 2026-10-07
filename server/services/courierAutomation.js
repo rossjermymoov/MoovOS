@@ -494,7 +494,7 @@ const TRANSLATION_SYSTEM =
 export async function draftCustomerUpdateFromCourier(queryId, body) {
   let translated = null;
   try {
-    translated = await geminiGenerate(body, { system: TRANSLATION_SYSTEM, maxTokens: 700, temperature: 0.4 });
+    translated = await geminiGenerate(body, { system: TRANSLATION_SYSTEM, maxTokens: 700, temperature: 0.4, feature: 'translation' });
   } catch (e) {
     console.warn('[CourierAutomation] translation failed:', e.message);
   }

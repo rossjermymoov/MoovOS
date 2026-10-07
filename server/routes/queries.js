@@ -1906,7 +1906,7 @@ Keep attention_reason under 10 words. Return null if requires_attention is false
 
         let rawText;
         try {
-          rawText = await geminiGenerate(prompt, { json: true, maxTokens: 150 });
+          rawText = await geminiGenerate(prompt, { json: true, maxTokens: 150, feature: 'bulk_triage' });
         } catch (e) {
           results.push({ id: ticket.id, source: 'ai', error: e.message });
           continue;
@@ -2029,7 +2029,7 @@ For ALL other cases — standard queries, delayed parcels, missing items, genera
 
         let draftText;
         try {
-          draftText = await geminiGenerate(userPrompt, { system: systemPrompt, maxTokens: 700 });
+          draftText = await geminiGenerate(userPrompt, { system: systemPrompt, maxTokens: 700, feature: 'drafts' });
         } catch (e) {
           results.push({ id: ticket.id, status: 'error', error: e.message });
           continue;
@@ -2167,7 +2167,7 @@ Instructions:
 
     let fullText;
     try {
-      fullText = await geminiGenerate(userPrompt, { system: systemPrompt, maxTokens: 900 });
+      fullText = await geminiGenerate(userPrompt, { system: systemPrompt, maxTokens: 900, feature: 'drafts' });
     } catch (e) {
       return res.status(502).json({ error: 'Gemini API error', detail: e.message });
     }
@@ -2306,7 +2306,7 @@ Please rewrite the draft email incorporating the feedback. Output ONLY the revis
 
   let newText;
   try {
-    newText = await geminiGenerate(userPrompt, { system: systemPrompt, maxTokens: 900 });
+    newText = await geminiGenerate(userPrompt, { system: systemPrompt, maxTokens: 900, feature: 'drafts' });
   } catch (err) {
     const e = new Error('Gemini API error');
     e.status = 502;
@@ -2405,7 +2405,7 @@ router.post('/:id/refine-draft', async (req, res, next) => {
     // ── Gemini call — wrapped in deep logging ─────────────────────────────────
     let revised;
     try {
-      revised = await geminiGenerate(userPrompt, { system: systemPrompt, maxTokens: 900 });
+      revised = await geminiGenerate(userPrompt, { system: systemPrompt, maxTokens: 900, feature: 'drafts' });
     } catch (error) {
       console.error('🚨 Detailed Gemini SDK Error:', error.response?.data || error.body || error.message);
 

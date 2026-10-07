@@ -8,6 +8,7 @@
  */
 
 import { ISSUE_TYPES } from './courierTemplates.js';
+import { assertAiAllowed, recordAiUsage, geminiTokens } from './aiUsage.js';
 
 // Single source of truth for which Gemini model the whole app calls — every other
 // file (gmailSync.js, routes/katana.js) imports this instead of hardcoding its own
@@ -20,33 +21,47 @@ export const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-3.6-flash';
 const GEMINI_URL =
   `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
-// Generic Gemini 1.5 Flash text generation (REST — Node-18 safe). Replaces the
-// legacy Anthropic /v1/messages calls. Throws if the key is missing or the call
-// fails so callers can surface a clean error.
-export async function geminiGenerate(prompt, { system = '', json = false, maxTokens = 900, temperature = 0.3 } = {}) {
+// Generic Gemini text generation (REST — Node-18 safe). Throws if the key is
+// missing, the call fails, or AI is paused for this `feature` (AiPausedError),
+// so callers fall back to their non-AI path. Every call — including failures —
+// is recorded for Settings → AI usage, tagged with `feature` (aiUsage.FEATURES).
+export async function geminiGenerate(prompt, { system = '', json = false, maxTokens = 900, temperature = 0.3, feature = 'other' } = {}) {
+  await assertAiAllowed(feature);
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error('GEMINI_API_KEY not configured');
+  if (!apiKey) {
+    await recordAiUsage({ feature, model: GEMINI_MODEL, ok: false, error: 'GEMINI_API_KEY not configured' });
+    throw new Error('GEMINI_API_KEY not configured');
+  }
   const fullPrompt = system ? `${system}\n\n${prompt}` : prompt;
-  const resp = await fetch(`${GEMINI_URL}?key=${encodeURIComponent(apiKey)}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: fullPrompt }] }],
-      generationConfig: {
-        temperature,
-        maxOutputTokens: maxTokens,
-        ...(json ? { responseMimeType: 'application/json' } : {}),
-      },
-    }),
-  });
+  const started = Date.now();
+  let resp;
+  try {
+    resp = await fetch(`${GEMINI_URL}?key=${encodeURIComponent(apiKey)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: fullPrompt }] }],
+        generationConfig: {
+          temperature,
+          maxOutputTokens: maxTokens,
+          ...(json ? { responseMimeType: 'application/json' } : {}),
+        },
+      }),
+    });
+  } catch (e) {
+    await recordAiUsage({ feature, model: GEMINI_MODEL, ok: false, error: e.message, durationMs: Date.now() - started });
+    throw e;
+  }
   if (!resp.ok) {
     const bodyText = await resp.text();
+    await recordAiUsage({ feature, model: GEMINI_MODEL, ok: false, httpStatus: resp.status, error: bodyText, durationMs: Date.now() - started });
     const e = new Error(`Gemini API error ${resp.status}: ${bodyText}`);
-    e.status = resp.status;           // e.g. 429 rate limit, 503 overloaded
+    e.status = resp.status;           // e.g. 429 rate limit, 402 credits depleted
     e.body = bodyText;
     throw e;
   }
   const j = await resp.json();
+  await recordAiUsage({ feature, model: GEMINI_MODEL, ok: true, httpStatus: resp.status, durationMs: Date.now() - started, ...geminiTokens(j.usageMetadata) });
   return (j.candidates?.[0]?.content?.parts?.[0]?.text || '').trim();
 }
 
@@ -187,6 +202,8 @@ function normalizeTriage(parsed, source) {
 
 // Tier 1 — Gemini (throws on any non-200 so the cascade can fall through).
 async function callGemini(prompt) {
+  await assertAiAllowed('courier_automation');
+  const started = Date.now();
   const resp = await fetch(`${GEMINI_URL}?key=${encodeURIComponent(process.env.GEMINI_API_KEY)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -195,13 +212,20 @@ async function callGemini(prompt) {
       generationConfig: { temperature: 0, responseMimeType: 'application/json' },
     }),
   });
-  if (!resp.ok) { const e = new Error(`Gemini ${resp.status}: ${await resp.text()}`); e.status = resp.status; throw e; }
+  if (!resp.ok) {
+    const text = await resp.text();
+    await recordAiUsage({ feature: 'courier_automation', model: GEMINI_MODEL, ok: false, httpStatus: resp.status, error: text, durationMs: Date.now() - started });
+    const e = new Error(`Gemini ${resp.status}: ${text}`); e.status = resp.status; throw e;
+  }
   const j = await resp.json();
+  await recordAiUsage({ feature: 'courier_automation', model: GEMINI_MODEL, ok: true, httpStatus: resp.status, durationMs: Date.now() - started, ...geminiTokens(j.usageMetadata) });
   return parseJsonLoose(j.candidates?.[0]?.content?.parts?.[0]?.text || '');
 }
 
 // Tier 2 — Anthropic Claude 3.5 Sonnet (REST; Node-18 safe, no SDK).
 async function callAnthropic(prompt) {
+  await assertAiAllowed('courier_automation');
+  const started = Date.now();
   const resp = await fetch(ANTHROPIC_URL, {
     method: 'POST',
     headers: {
@@ -217,8 +241,14 @@ async function callAnthropic(prompt) {
       messages: [{ role: 'user', content: prompt }],
     }),
   });
-  if (!resp.ok) { const e = new Error(`Anthropic ${resp.status}: ${await resp.text()}`); e.status = resp.status; throw e; }
+  if (!resp.ok) {
+    const text = await resp.text();
+    await recordAiUsage({ feature: 'courier_automation', provider: 'anthropic', model: 'claude-3-5-sonnet', ok: false, httpStatus: resp.status, error: text, durationMs: Date.now() - started });
+    const e = new Error(`Anthropic ${resp.status}: ${text}`); e.status = resp.status; throw e;
+  }
   const j = await resp.json();
+  await recordAiUsage({ feature: 'courier_automation', provider: 'anthropic', model: 'claude-3-5-sonnet', ok: true, httpStatus: resp.status,
+    durationMs: Date.now() - started, inputTokens: j.usage?.input_tokens || 0, outputTokens: j.usage?.output_tokens || 0 });
   return parseJsonLoose(j.content?.[0]?.text || '');
 }
 

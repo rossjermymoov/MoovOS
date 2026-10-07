@@ -219,7 +219,7 @@ export async function classifyCourierReply(ticket, body, history) {
 
   try {
     const raw = await geminiGenerate(buildPrompt(history, body), {
-      system: INTERPRET_SYSTEM, json: true, maxTokens: 500, temperature: 0.2,
+      system: INTERPRET_SYSTEM, json: true, maxTokens: 500, temperature: 0.2, feature: 'courier_reply',
     });
     const parsed = JSON.parse(raw);
     return { kind: 'gemini', classification: parsed.classification, is_consistent: parsed.is_consistent, reasoning: parsed.reasoning };

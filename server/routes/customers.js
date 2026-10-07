@@ -756,7 +756,7 @@ router.post('/parse-pdf', upload.single('file'), async (req, res, next) => {
 
 async function callAI(systemPrompt, userContent) {
   // Gemini 1.5 Flash (REST) — returns structured JSON for onboarding extraction.
-  const text = await geminiGenerate(userContent, { system: systemPrompt, json: true, maxTokens: 4096 });
+  const text = await geminiGenerate(userContent, { system: systemPrompt, json: true, maxTokens: 4096, feature: 'customer_setup' });
   // Tolerate clean JSON or a markdown-fenced block.
   const match = text.match(/```json\s*([\s\S]*?)```/i) || text.match(/(\{[\s\S]*\})/);
   return JSON.parse(match ? match[1] : text);

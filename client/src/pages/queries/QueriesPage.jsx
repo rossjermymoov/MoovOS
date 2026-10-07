@@ -2427,6 +2427,16 @@ export default function QueriesPage() {
     try { localStorage.setItem('moov.queries.view', v); } catch { /* storage unavailable — keep in memory */ }
   };
 
+  // Is AI working? Sorting, priority and summaries silently fall back to keyword
+  // rules when Gemini fails (it ran out of credits for weeks unnoticed), so say so.
+  const [aiHealth, setAiHealth] = useState(null);
+  useEffect(() => {
+    const load = () => api.get('/ai-usage/health').then(r => setAiHealth(r.data)).catch(() => {});
+    load();
+    const t = setInterval(load, 120_000);
+    return () => clearInterval(t);
+  }, []);
+
   // A new filter or search is a new result set — start it from page 1.
   useEffect(() => { setPage(1); }, [filters, sort]);
 
@@ -2661,6 +2671,18 @@ export default function QueriesPage() {
           <span style={{ fontSize: 15, lineHeight: 1, fontWeight: 400 }}>+</span> New query
         </button>
       </div>
+
+      {(aiHealth?.status === 'failing' || aiHealth?.status === 'paused') && (
+        <div role="alert" className="flex shrink-0 items-start gap-2.5 px-[18px] py-2.5"
+          style={{ background: 'var(--mv-magenta-100)', borderBottom: '1px solid var(--mv-magenta-200)', fontSize: 13 }}>
+          <span className="mv-mark mv-mark--attention" style={{ marginTop: 5 }} />
+          <span style={{ color: 'var(--mv-ink)' }}>{aiHealth.message}</span>
+          <button onClick={() => navigate('/settings/ai-usage')}
+            style={{ marginLeft: 'auto', flexShrink: 0, fontSize: 13, fontWeight: 600, color: 'var(--mv-purple)', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
+            AI usage settings
+          </button>
+        </div>
+      )}
 
       {/* ── Summary counters — whole inbox. The first three filter the list (click
            again to clear); the last is a plain figure. Marks follow the status
