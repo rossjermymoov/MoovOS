@@ -147,78 +147,105 @@ export async function getAiHealth() {
 }
 
 // ── Summary for Settings → AI usage ──────────────────────────────────────────
-export async function getAiUsageSummary() {
+// `range` sets the period for the activity figures, chart, breakdowns and feed.
+// The budget block (limit, credit) is always this calendar month / since the
+// recorded balance, because that's what the limit and the balance mean.
+export const RANGES = {
+  '7d':    { label: 'Last 7 days',  from: `date_trunc('day', NOW()) - INTERVAL '6 days'` },
+  '30d':   { label: 'Last 30 days', from: `date_trunc('day', NOW()) - INTERVAL '29 days'` },
+  '90d':   { label: 'Last 90 days', from: `date_trunc('day', NOW()) - INTERVAL '89 days'` },
+  'month': { label: 'This month',   from: `date_trunc('month', NOW())` },
+};
+
+const AGG = `
+  COUNT(*) FILTER (WHERE NOT blocked)::int                         AS calls,
+  COUNT(*) FILTER (WHERE NOT ok AND NOT blocked)::int              AS failures,
+  COUNT(*) FILTER (WHERE blocked)::int                             AS blocked,
+  COALESCE(SUM(input_tokens), 0)::bigint                           AS tokens_in,
+  COALESCE(SUM(output_tokens), 0)::bigint                          AS tokens_out,
+  ROUND(AVG(duration_ms) FILTER (WHERE ok AND NOT blocked))::int   AS avg_ms`;
+
+export async function getAiUsageSummary({ range = '30d' } = {}) {
+  const r = RANGES[range] ? range : '30d';
+  const from = RANGES[r].from;
   const s = await getAiSettings({ fresh: true });
   const pin = s.price_input_per_m != null ? Number(s.price_input_per_m) : null;
   const pout = s.price_output_per_m != null ? Number(s.price_output_per_m) : null;
   const priced = pin != null && pout != null;
   const cost = (i, o) => priced ? (Number(i) / 1e6) * pin + (Number(o) / 1e6) * pout : null;
+  const norm = (row) => {
+    const tin = Number(row.tokens_in || 0), tout = Number(row.tokens_out || 0);
+    return { ...row, tokens_in: tin, tokens_out: tout, tokens: tin + tout, cost: cost(tin, tout) };
+  };
 
-  const [byFeature, daily, errors, credit] = await Promise.all([
-    query(`
-      SELECT feature,
-             COUNT(*) FILTER (WHERE NOT blocked)::int                AS calls,
-             COUNT(*) FILTER (WHERE NOT ok AND NOT blocked)::int     AS failures,
-             COUNT(*) FILTER (WHERE blocked)::int                    AS blocked,
-             COALESCE(SUM(input_tokens), 0)::bigint                  AS tokens_in,
-             COALESCE(SUM(output_tokens), 0)::bigint                 AS tokens_out
-        FROM ai_usage_events
-       WHERE created_at >= date_trunc('month', NOW())
-       GROUP BY feature`),
+  const [totals, byFeature, byModel, daily, recent, monthRes, credit] = await Promise.all([
+    query(`SELECT ${AGG} FROM ai_usage_events WHERE created_at >= ${from}`),
+    query(`SELECT feature, ${AGG} FROM ai_usage_events WHERE created_at >= ${from} GROUP BY feature`),
+    query(`SELECT provider, COALESCE(model, 'unknown') AS model, ${AGG}
+             FROM ai_usage_events WHERE created_at >= ${from} AND NOT blocked
+            GROUP BY provider, COALESCE(model, 'unknown')`),
     query(`
       SELECT to_char(d, 'YYYY-MM-DD') AS day,
-             COALESCE(SUM(e.input_tokens + e.output_tokens), 0)::bigint AS tokens,
+             COALESCE(SUM(e.input_tokens), 0)::bigint                   AS tokens_in,
+             COALESCE(SUM(e.output_tokens), 0)::bigint                  AS tokens_out,
              COUNT(e.id) FILTER (WHERE NOT e.blocked)::int              AS calls,
              COUNT(e.id) FILTER (WHERE NOT e.ok AND NOT e.blocked)::int AS failures
-        FROM generate_series(date_trunc('day', NOW()) - INTERVAL '29 days', date_trunc('day', NOW()), INTERVAL '1 day') d
+        FROM generate_series(${from}, date_trunc('day', NOW()), INTERVAL '1 day') d
         LEFT JOIN ai_usage_events e ON e.created_at >= d AND e.created_at < d + INTERVAL '1 day'
        GROUP BY d ORDER BY d`),
     query(`
-      SELECT created_at, feature, http_status, error FROM ai_usage_events
-       WHERE NOT ok AND NOT blocked ORDER BY created_at DESC LIMIT 5`),
+      SELECT id, created_at, feature, provider, model, input_tokens AS tokens_in, output_tokens AS tokens_out,
+             ok, blocked, http_status, error, duration_ms
+        FROM ai_usage_events ORDER BY created_at DESC LIMIT 25`),
+    query(`SELECT COALESCE(SUM(input_tokens), 0)::bigint AS tokens_in, COALESCE(SUM(output_tokens), 0)::bigint AS tokens_out
+             FROM ai_usage_events WHERE created_at >= date_trunc('month', NOW())`),
     s.credit_balance != null && s.credit_balance_set_at
       ? query(`SELECT COALESCE(SUM(input_tokens),0)::bigint AS i, COALESCE(SUM(output_tokens),0)::bigint AS o
                  FROM ai_usage_events WHERE created_at >= $1`, [s.credit_balance_set_at])
       : Promise.resolve(null),
   ]);
 
-  const rows = byFeature.rows.map(r => ({
-    ...r,
-    tokens_in: Number(r.tokens_in), tokens_out: Number(r.tokens_out),
-    tokens: Number(r.tokens_in) + Number(r.tokens_out),
-    cost: cost(r.tokens_in, r.tokens_out),
-  }));
-  const tot = rows.reduce((a, r) => ({
-    calls: a.calls + r.calls, failures: a.failures + r.failures, blocked: a.blocked + r.blocked,
-    tokens_in: a.tokens_in + r.tokens_in, tokens_out: a.tokens_out + r.tokens_out,
-  }), { calls: 0, failures: 0, blocked: 0, tokens_in: 0, tokens_out: 0 });
-  const tokens = tot.tokens_in + tot.tokens_out;
+  const tot = norm(totals.rows[0]);
+  tot.failure_rate = tot.calls ? tot.failures / tot.calls : 0;
 
   // Every known feature appears, used or not, so each can be switched off.
   const disabled = new Set(s.disabled_features || []);
+  const used = byFeature.rows.map(norm);
   const features = Object.entries(FEATURES).map(([key, f]) => {
-    const r = rows.find(x => x.feature === key) || { calls: 0, failures: 0, blocked: 0, tokens_in: 0, tokens_out: 0, tokens: 0, cost: priced ? 0 : null };
-    return { key, ...f, enabled: !disabled.has(key), ...r, share: tokens ? r.tokens / tokens : 0 };
-  }).sort((a, b) => b.tokens - a.tokens || a.label.localeCompare(b.label));
+    const row = used.find(x => x.feature === key) || norm({ calls: 0, failures: 0, blocked: 0, avg_ms: null });
+    return { key, ...f, enabled: !disabled.has(key), ...row, share: tot.tokens ? row.tokens / tot.tokens : 0 };
+  }).sort((a, b) => b.tokens - a.tokens || b.calls - a.calls || a.label.localeCompare(b.label));
 
+  const models = byModel.rows.map(norm)
+    .map(m => ({ ...m, share: tot.tokens ? m.tokens / tot.tokens : 0 }))
+    .sort((a, b) => b.tokens - a.tokens || b.calls - a.calls);
+
+  const month = norm(monthRes.rows[0]);
   const limit = s.monthly_token_limit ? Number(s.monthly_token_limit) : null;
-  const pct = limit ? tokens / limit : null;
+  const pct = limit ? month.tokens / limit : null;
 
   return {
     settings: s,
     priced,
-    month: { ...tot, tokens, cost: cost(tot.tokens_in, tot.tokens_out) },
+    range: { key: r, label: RANGES[r].label },
+    totals: tot,
+    daily: daily.rows.map(norm),
+    features,
+    models,
+    recent: recent.rows.map(e => ({
+      ...norm(e),
+      explanation: !e.ok && !e.blocked ? explainAiError(e.http_status, e.error) : e.blocked ? e.error : null,
+      error: undefined,
+    })),
+    month,
     limit: limit && {
-      tokens: limit, used: tokens, left: Math.max(0, limit - tokens), percent: pct,
+      tokens: limit, used: month.tokens, left: Math.max(0, limit - month.tokens), percent: pct,
       state: pct >= 1 ? 'reached' : pct * 100 >= (s.warn_percent || 80) ? 'warning' : 'ok',
     },
     credit: credit && priced ? (() => {
       const spent = cost(credit.rows[0].i, credit.rows[0].o);
       return { balance: Number(s.credit_balance), set_at: s.credit_balance_set_at, spent, left: Number(s.credit_balance) - spent };
     })() : null,
-    features,
-    daily: daily.rows.map(d => ({ ...d, tokens: Number(d.tokens) })),
-    recent_errors: errors.rows.map(e => ({ ...e, explanation: explainAiError(e.http_status, e.error) })),
     health: await getAiHealth(),
   };
 }

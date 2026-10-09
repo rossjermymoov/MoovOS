@@ -1,7 +1,9 @@
 /**
  * AiUsageSettings — /settings/ai-usage
  *
- * What uses AI tokens, how much is left, and whether AI is actually working.
+ * What uses AI tokens, how much is left, and whether AI is actually working —
+ * for a chosen period (7 / 30 / 90 days or this month): totals, a daily chart,
+ * breakdowns by feature and by model, and the last 25 calls.
  * Built after Gemini ran out of prepaid credits for weeks unnoticed: every AI
  * feature fell back to keyword rules silently. Admins can set a monthly token
  * limit (pause or warn), record the prepaid balance to see an estimate of what's
@@ -21,6 +23,8 @@ const money = (v, cur) => v == null ? '—' : new Intl.NumberFormat('en-GB', {
   style: 'currency', currency: cur || 'GBP', minimumFractionDigits: 2, maximumFractionDigits: v > 0 && v < 0.01 ? 4 : 2,
 }).format(v);
 const fmtDay = (d) => new Date(`${d}T00:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+const fmtMs = (ms) => ms == null ? '—' : ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`;
+const fmtClock = (t) => new Date(t).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', second: '2-digit' });
 const fmtTime = (t) => t ? new Date(t).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
 
 const S = {
@@ -86,26 +90,68 @@ function LimitMeter({ limit, warnPercent }) {
   );
 }
 
-// ── 30-day chart: one series (tokens/day), hover tooltip, table view ──────────
-function DailyChart({ daily }) {
+// ── Segmented control (range, chart metric, breakdown view) ─────────────────
+function Segmented({ value, onChange, options, label }) {
+  return (
+    <div role="group" aria-label={label} style={{ display: 'inline-flex', gap: 2, padding: 2, background: 'var(--mv-bg)',
+      border: '1px solid var(--mv-hairline)', borderRadius: 'var(--v2-r-8, 8px)' }}>
+      {options.map(o => (
+        <button key={o.key} onClick={() => onChange(o.key)} aria-pressed={value === o.key}
+          style={{ fontSize: 12, fontWeight: 600, padding: '5px 10px', border: 'none', cursor: 'pointer',
+            borderRadius: 'calc(var(--v2-r-8, 8px) - 2px)',
+            background: value === o.key ? 'var(--mv-surface)' : 'transparent',
+            color: value === o.key ? 'var(--mv-ink)' : 'var(--mv-ink-52)',
+            boxShadow: value === o.key ? '0 1px 2px color-mix(in srgb, var(--mv-ink) 10%, transparent)' : 'none' }}>
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ── Daily chart: one measure at a time (never two scales on one axis), hover
+//    tooltip with all three, failure marks, table view ───────────────────────
+const METRICS = {
+  tokens: { label: 'Tokens', value: d => d.tokens, fmt: v => nf.format(v) },
+  calls:  { label: 'Calls',  value: d => d.calls,  fmt: v => nf.format(v) },
+  cost:   { label: 'Cost',   value: d => d.cost || 0 },
+};
+
+function DailyChart({ daily, priced, currency }) {
   const [hover, setHover] = useState(null);
   const [asTable, setAsTable] = useState(false);
-  const max = Math.max(1, ...daily.map(d => d.tokens));
-  const H = 140;
+  const [metric, setMetric] = useState('tokens');
+  const m = metric === 'cost' && !priced ? METRICS.tokens : METRICS[metric];
+  const fmtV = metric === 'cost' && priced ? (v => money(v, currency)) : m.fmt;
+  const max = Math.max(...daily.map(m.value), 0);
+  const H = 150;
+  const many = daily.length > 45;
+  const metricOptions = [{ key: 'tokens', label: 'Tokens' }, { key: 'calls', label: 'Calls' }, ...(priced ? [{ key: 'cost', label: 'Cost' }] : [])];
+
+  const toolbar = (
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+      <Segmented label="Chart measure" value={metric} onChange={setMetric} options={metricOptions} />
+      <span style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: 12, color: 'var(--mv-ink-52)' }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><span style={{ width: 6, height: 6, background: 'var(--mv-magenta)' }} /> Some calls failed</span>
+        <button onClick={() => setAsTable(t => !t)} style={linkBtn}>{asTable ? 'Show as chart' : 'Show as table'}</button>
+      </span>
+    </div>
+  );
 
   if (asTable) {
     return (
       <div>
-        <button onClick={() => setAsTable(false)} style={linkBtn}>Show as chart</button>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, marginTop: 8 }}>
-          <thead><tr>{['Day', 'Tokens', 'Calls', 'Failed'].map((h, i) => (
+        {toolbar}
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, marginTop: 10 }}>
+          <thead><tr>{['Day', 'Calls', 'Failed', 'Tokens', ...(priced ? ['Est. cost'] : [])].map((h, i) => (
             <th key={h} style={{ ...S.label, textAlign: i ? 'right' : 'left', padding: '6px 0', borderBottom: '1px solid var(--mv-hairline)' }}>{h}</th>))}</tr></thead>
           <tbody>{daily.slice().reverse().map(d => (
             <tr key={d.day} style={{ borderBottom: '1px solid var(--mv-hairline)' }}>
               <td style={{ padding: '6px 0' }}>{fmtDay(d.day)}</td>
-              <td style={{ textAlign: 'right', ...S.num }}>{nf.format(d.tokens)}</td>
               <td style={{ textAlign: 'right', ...S.num }}>{nf.format(d.calls)}</td>
               <td style={{ textAlign: 'right', ...S.num, color: d.failures ? 'var(--mv-magenta-deep)' : 'var(--mv-ink-52)' }}>{nf.format(d.failures)}</td>
+              <td style={{ textAlign: 'right', ...S.num }}>{nf.format(d.tokens)}</td>
+              {priced && <td style={{ textAlign: 'right', ...S.num }}>{money(d.cost, currency)}</td>}
             </tr>))}</tbody>
         </table>
       </div>
@@ -114,38 +160,41 @@ function DailyChart({ daily }) {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-        <span style={{ fontSize: 12, color: 'var(--mv-ink-52)' }}>Tokens per day, last 30 days. A magenta mark means some calls failed that day.</span>
-        <button onClick={() => setAsTable(true)} style={linkBtn}>Show as table</button>
-      </div>
-      <div style={{ position: 'relative', marginTop: 28 }} onMouseLeave={() => setHover(null)}>
-        {/* Recessive gridline at the max, labelled */}
+      {toolbar}
+      <div style={{ position: 'relative', marginTop: 30 }} onMouseLeave={() => setHover(null)}>
         <div style={{ position: 'absolute', left: 0, right: 0, top: 0, borderTop: '1px dashed var(--mv-hairline)' }} />
-        <span style={{ position: 'absolute', left: 0, top: -16, fontSize: 11, color: 'var(--mv-ink-45)', ...S.num }}>{compact.format(max)} peak</span>
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 6, height: H, borderBottom: '1px solid var(--mv-ink-45)' }}
-          role="img" aria-label={`Tokens per day over the last 30 days; peak ${nf.format(max)}`}>
-          {daily.map((d, i) => (
-            <div key={d.day} onMouseEnter={() => setHover(i)}
-              style={{ flex: 1, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'stretch', cursor: 'default' }}>
-              {d.failures > 0 && <span style={{ alignSelf: 'center', width: 6, height: 6, background: 'var(--mv-magenta)', marginBottom: 3 }} />}
-              <div style={{ height: d.tokens ? Math.max(2, (d.tokens / max) * (H - 12)) : 0,
-                // Softened fill: full-strength brand colour over 30 bars glares, in dark mode especially.
-                background: hover === i ? 'var(--mv-purple)' : 'color-mix(in srgb, var(--mv-purple) 72%, var(--mv-surface))',
-                borderRadius: '4px 4px 0 0' }} />
-            </div>
-          ))}
+        <span style={{ position: 'absolute', left: 0, top: -16, fontSize: 11, color: 'var(--mv-ink-45)', ...S.num }}>
+          {max > 0 ? `${fmtV(max)} peak` : `No ${m.label.toLowerCase()} in this period`}
+        </span>
+        <div style={{ display: 'flex', alignItems: 'flex-end', gap: many ? 2 : 6, height: H, borderBottom: '1px solid var(--mv-ink-45)' }}
+          role="img" aria-label={`${m.label} per day; peak ${fmtV(max)}`}>
+          {daily.map((d, i) => {
+            const v = m.value(d);
+            return (
+              <div key={d.day} onMouseEnter={() => setHover(i)}
+                style={{ flex: 1, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', alignItems: 'stretch' }}>
+                {d.failures > 0 && <span style={{ alignSelf: 'center', width: many ? 4 : 6, height: many ? 4 : 6, background: 'var(--mv-magenta)', marginBottom: 3 }} />}
+                <div style={{ height: v && max ? Math.max(2, (v / max) * (H - 12)) : 0, borderRadius: many ? '2px 2px 0 0' : '4px 4px 0 0',
+                  // Softened fill: full-strength brand colour over many bars glares, in dark mode especially.
+                  background: hover === i ? 'var(--mv-purple)' : 'color-mix(in srgb, var(--mv-purple) 72%, var(--mv-surface))' }} />
+              </div>
+            );
+          })}
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--mv-ink-45)', marginTop: 6 }}>
-          <span>{fmtDay(daily[0]?.day)}</span><span>Today</span>
+          <span>{fmtDay(daily[0]?.day)}</span>
+          {daily.length > 14 && <span>{fmtDay(daily[Math.floor(daily.length / 2)]?.day)}</span>}
+          <span>Today</span>
         </div>
-        {hover != null && (
+        {hover != null && daily[hover] && (
           <div style={{ position: 'absolute', bottom: H + 8, left: `${((hover + 0.5) / daily.length) * 100}%`,
             transform: `translateX(${hover > daily.length * 0.7 ? '-100%' : hover < daily.length * 0.3 ? '0' : '-50%'})`,
             background: 'var(--mv-surface)', border: '1px solid var(--mv-hairline-2)', borderRadius: 'var(--v2-r-8, 8px)',
-            padding: '8px 10px', fontSize: 12, whiteSpace: 'nowrap', pointerEvents: 'none',
+            padding: '8px 10px', fontSize: 12, whiteSpace: 'nowrap', pointerEvents: 'none', zIndex: 2,
             boxShadow: '0 4px 12px color-mix(in srgb, var(--mv-ink) 12%, transparent)' }}>
             <div style={{ fontWeight: 700, color: 'var(--mv-ink)' }}>{fmtDay(daily[hover].day)}</div>
-            <div style={{ color: 'var(--mv-ink-62)', ...S.num }}>{nf.format(daily[hover].tokens)} tokens · {nf.format(daily[hover].calls)} calls</div>
+            <div style={{ color: 'var(--mv-ink-62)', ...S.num }}>{nf.format(daily[hover].calls)} calls · {nf.format(daily[hover].tokens)} tokens</div>
+            {priced && <div style={{ color: 'var(--mv-ink-62)', ...S.num }}>{money(daily[hover].cost, currency)} estimated</div>}
             {daily[hover].failures > 0 && <div style={{ color: 'var(--mv-magenta-deep)', ...S.num }}>{nf.format(daily[hover].failures)} failed</div>}
           </div>
         )}
@@ -168,21 +217,43 @@ function Switch({ on, onChange, label, disabled }) {
   );
 }
 
-// ── By-feature table ─────────────────────────────────────────────────────────
-const FEATURE_COLS = 'minmax(220px, 2.4fr) 70px 70px 100px 100px minmax(90px, 1fr) 52px';
+// ── Breakdown tables ─────────────────────────────────────────────────────────
+const th = { ...S.label, padding: '8px 0', whiteSpace: 'nowrap' };
+const cell = { fontSize: 13, ...S.num, textAlign: 'right' };
+
+function ShareBar({ share }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }} title={`${(share * 100).toFixed(1)}% of tokens in this period`}>
+      <div style={{ flex: 1, height: 6, background: 'var(--mv-hairline)', borderRadius: 999 }}>
+        <div style={{ width: `${share * 100}%`, height: '100%', background: 'var(--mv-purple)', borderRadius: 999 }} />
+      </div>
+      <span style={{ fontSize: 12, color: 'var(--mv-ink-52)', width: 34, textAlign: 'right', ...S.num }}>{Math.round(share * 100)}%</span>
+    </div>
+  );
+}
+
+function Failed({ n }) {
+  return <span style={{ ...cell, color: n ? 'var(--mv-magenta-deep)' : 'var(--mv-ink-45)', fontWeight: n ? 700 : 400 }}>{nf.format(n)}</span>;
+}
+
+function Tokens({ r }) {
+  return <span style={cell} title={`${nf.format(r.tokens_in)} in · ${nf.format(r.tokens_out)} out`}>{compact.format(r.tokens_in)} / {compact.format(r.tokens_out)}</span>;
+}
+
+const FEATURE_COLS = 'minmax(200px, 2.2fr) 56px 56px 120px 76px 76px minmax(90px, 1fr) 40px';
 
 function FeatureTable({ features, priced, currency, onToggle, saving }) {
-  const head = { ...S.label, padding: '8px 0' };
   return (
-    <div role="table" aria-label="AI use by feature this month">
+    <div role="table" aria-label="AI use by feature">
       <div role="row" style={{ display: 'grid', gridTemplateColumns: FEATURE_COLS, gap: 14, borderBottom: '1px solid var(--mv-ink-45)' }}>
-        <span style={head}>Feature</span>
-        <span style={{ ...head, textAlign: 'right' }}>Calls</span>
-        <span style={{ ...head, textAlign: 'right' }}>Failed</span>
-        <span style={{ ...head, textAlign: 'right' }}>Tokens</span>
-        <span style={{ ...head, textAlign: 'right' }}>{priced ? 'Est. cost' : 'Cost'}</span>
-        <span style={head}>Share</span>
-        <span style={{ ...head, textAlign: 'right' }}>On</span>
+        <span style={th}>Feature</span>
+        <span style={{ ...th, textAlign: 'right' }}>Calls</span>
+        <span style={{ ...th, textAlign: 'right' }}>Failed</span>
+        <span style={{ ...th, textAlign: 'right' }}>Tokens in/out</span>
+        <span style={{ ...th, textAlign: 'right' }}>Avg time</span>
+        <span style={{ ...th, textAlign: 'right' }}>Est. cost</span>
+        <span style={th}>Share</span>
+        <span style={{ ...th, textAlign: 'right' }}>On</span>
       </div>
       {features.map(f => (
         <div role="row" key={f.key} style={{ display: 'grid', gridTemplateColumns: FEATURE_COLS, gap: 14, alignItems: 'center',
@@ -191,21 +262,94 @@ function FeatureTable({ features, priced, currency, onToggle, saving }) {
             <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--mv-ink)' }}>{f.label}{!f.enabled && <span style={{ ...S.label, marginLeft: 8 }}>Off</span>}</div>
             <div style={{ fontSize: 12, color: 'var(--mv-ink-52)', marginTop: 2, lineHeight: 1.4 }}>{f.description}</div>
           </div>
-          <span style={{ textAlign: 'right', fontSize: 13, ...S.num }}>{nf.format(f.calls)}</span>
-          <span style={{ textAlign: 'right', fontSize: 13, ...S.num, color: f.failures ? 'var(--mv-magenta-deep)' : 'var(--mv-ink-45)', fontWeight: f.failures ? 700 : 400 }}>{nf.format(f.failures)}</span>
-          <span style={{ textAlign: 'right', fontSize: 13, ...S.num }} title={`${nf.format(f.tokens_in)} in · ${nf.format(f.tokens_out)} out`}>{nf.format(f.tokens)}</span>
-          <span style={{ textAlign: 'right', fontSize: 13, ...S.num, color: priced ? 'var(--mv-ink)' : 'var(--mv-ink-45)' }}>{priced ? money(f.cost, currency) : '—'}</span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }} title={`${(f.share * 100).toFixed(1)}% of this month's tokens`}>
-            <div style={{ flex: 1, height: 6, background: 'var(--mv-hairline)', borderRadius: 999 }}>
-              <div style={{ width: `${f.share * 100}%`, height: '100%', background: 'var(--mv-purple)', borderRadius: 999 }} />
-            </div>
-            <span style={{ fontSize: 12, color: 'var(--mv-ink-52)', width: 34, textAlign: 'right', ...S.num }}>{Math.round(f.share * 100)}%</span>
-          </div>
+          <span style={cell}>{nf.format(f.calls)}</span>
+          <Failed n={f.failures} />
+          <Tokens r={f} />
+          <span style={{ ...cell, color: 'var(--mv-ink-62)' }}>{fmtMs(f.avg_ms)}</span>
+          <span style={{ ...cell, color: priced ? 'var(--mv-ink)' : 'var(--mv-ink-45)' }}>{priced ? money(f.cost, currency) : '—'}</span>
+          <ShareBar share={f.share} />
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
             <Switch on={f.enabled} label={`AI for ${f.label}`} disabled={saving} onChange={on => onToggle(f, on)} />
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+const MODEL_COLS = 'minmax(200px, 2.2fr) 56px 56px 120px 76px 76px minmax(90px, 1fr)';
+
+function ModelTable({ models, priced, currency }) {
+  if (!models.length) return <p style={{ ...S.sub, padding: '12px 0' }}>No AI calls in this period.</p>;
+  return (
+    <div role="table" aria-label="AI use by model">
+      <div role="row" style={{ display: 'grid', gridTemplateColumns: MODEL_COLS, gap: 14, borderBottom: '1px solid var(--mv-ink-45)' }}>
+        <span style={th}>Model</span>
+        <span style={{ ...th, textAlign: 'right' }}>Calls</span>
+        <span style={{ ...th, textAlign: 'right' }}>Failed</span>
+        <span style={{ ...th, textAlign: 'right' }}>Tokens in/out</span>
+        <span style={{ ...th, textAlign: 'right' }}>Avg time</span>
+        <span style={{ ...th, textAlign: 'right' }}>Est. cost</span>
+        <span style={th}>Share</span>
+      </div>
+      {models.map(m => (
+        <div role="row" key={`${m.provider}/${m.model}`} style={{ display: 'grid', gridTemplateColumns: MODEL_COLS, gap: 14, alignItems: 'center',
+          padding: '10px 0', borderBottom: '1px solid var(--mv-hairline)' }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--mv-ink)' }}>{m.model}</div>
+            <div style={{ fontSize: 12, color: 'var(--mv-ink-52)', marginTop: 2, textTransform: 'capitalize' }}>{m.provider}{m.provider !== 'gemini' ? ' (fallback)' : ''}</div>
+          </div>
+          <span style={cell}>{nf.format(m.calls)}</span>
+          <Failed n={m.failures} />
+          <Tokens r={m} />
+          <span style={{ ...cell, color: 'var(--mv-ink-62)' }}>{fmtMs(m.avg_ms)}</span>
+          <span style={{ ...cell, color: priced ? 'var(--mv-ink)' : 'var(--mv-ink-45)' }}>{priced ? money(m.cost, currency) : '—'}</span>
+          <ShareBar share={m.share} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Recent calls feed ───────────────────────────────────────────────────────
+const FEED_COLS = '140px minmax(150px, 1.6fr) minmax(120px, 1fr) 120px 66px 76px minmax(120px, 1.3fr)';
+
+function RecentFeed({ recent, features, priced, currency }) {
+  const [all, setAll] = useState(false);
+  const label = k => features.find(f => f.key === k)?.label || k;
+  const shown = all ? recent : recent.slice(0, 10);
+  if (!recent.length) return <p style={{ ...S.sub, padding: '12px 0' }}>No AI calls recorded yet.</p>;
+  return (
+    <div role="table" aria-label="Last 25 AI calls">
+      <div role="row" style={{ display: 'grid', gridTemplateColumns: FEED_COLS, gap: 14, borderBottom: '1px solid var(--mv-ink-45)' }}>
+        <span style={th}>When</span><span style={th}>Feature</span><span style={th}>Model</span>
+        <span style={{ ...th, textAlign: 'right' }}>Tokens in/out</span><span style={{ ...th, textAlign: 'right' }}>Time</span>
+        <span style={{ ...th, textAlign: 'right' }}>Est. cost</span><span style={th}>Result</span>
+      </div>
+      {shown.map(e => {
+        const kind = e.blocked ? 'waiting' : e.ok ? 'settled' : 'attention';
+        const result = e.blocked ? 'Not sent' : e.ok ? 'OK' : `Failed${e.http_status ? ` (${e.http_status})` : ''}`;
+        return (
+          <div role="row" key={e.id} style={{ display: 'grid', gridTemplateColumns: FEED_COLS, gap: 14, alignItems: 'center',
+            padding: '8px 0', borderBottom: '1px solid var(--mv-hairline)', fontSize: 13 }}>
+            <span style={{ color: 'var(--mv-ink-62)', ...S.num }}>{fmtClock(e.created_at)}</span>
+            <span style={{ color: 'var(--mv-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{label(e.feature)}</span>
+            <span style={{ color: 'var(--mv-ink-62)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.model || '—'}</span>
+            <Tokens r={e} />
+            <span style={{ ...cell, color: 'var(--mv-ink-62)' }}>{fmtMs(e.duration_ms)}</span>
+            <span style={{ ...cell, color: priced ? 'var(--mv-ink)' : 'var(--mv-ink-45)' }}>{priced && e.ok ? money(e.cost, currency) : '—'}</span>
+            <span className={`mv-state mv-state--${kind}`} title={e.explanation || ''} style={{ minWidth: 0 }}>
+              <span className={`mv-mark mv-mark--${kind}`} />
+              <span className="mv-state-label" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{result}</span>
+            </span>
+          </div>
+        );
+      })}
+      {recent.length > 10 && (
+        <button onClick={() => setAll(a => !a)} style={{ ...linkBtn, marginTop: 10 }}>
+          {all ? 'Show fewer' : `Show all ${recent.length}`}
+        </button>
+      )}
     </div>
   );
 }
@@ -300,18 +444,30 @@ function LimitsForm({ settings, credit, onSave, saving, error }) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
+const RANGE_OPTIONS = [
+  { key: '7d', label: 'Last 7 days' }, { key: '30d', label: 'Last 30 days' },
+  { key: '90d', label: 'Last 90 days' }, { key: 'month', label: 'This month' },
+];
+
 export default function AiUsageSettings() {
   const qc = useQueryClient();
   const [error, setError] = useState('');
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ['ai-usage'],
-    queryFn: () => api.get('/ai-usage').then(r => r.data),
+  const [range, setRange] = useState(() => {
+    try { return localStorage.getItem('moov.aiUsage.range') || '30d'; } catch { return '30d'; }
+  });
+  const changeRange = (r) => { setRange(r); try { localStorage.setItem('moov.aiUsage.range', r); } catch { /* keep in memory */ } };
+  const [view, setView] = useState('feature');
+
+  const { data, isLoading, isError, isFetching } = useQuery({
+    queryKey: ['ai-usage', range],
+    queryFn: () => api.get('/ai-usage', { params: { range } }).then(r => r.data),
     refetchInterval: 60_000,
+    placeholderData: prev => prev,
   });
 
   const save = useMutation({
-    mutationFn: body => api.put('/ai-usage/settings', body).then(r => r.data),
-    onSuccess: d => { setError(''); qc.setQueryData(['ai-usage'], d); },
+    mutationFn: body => api.put('/ai-usage/settings', body, { params: { range } }).then(r => r.data),
+    onSuccess: d => { setError(''); qc.setQueryData(['ai-usage', range], d); qc.invalidateQueries({ queryKey: ['ai-usage'] }); },
     onError: e => setError(e.response?.data?.error || 'Could not save. Try again.'),
   });
 
@@ -323,29 +479,80 @@ export default function AiUsageSettings() {
   }
 
   const cur = data?.settings?.currency || 'GBP';
+  const t = data?.totals;
   const monthName = new Date().toLocaleDateString('en-GB', { month: 'long' });
 
   return (
     <div style={{ maxWidth: 1080, margin: '0 auto' }}>
       <SettingsNav />
-      <h1 style={S.h1}>AI usage</h1>
-      <p style={S.sub}>What uses AI tokens, how much is left, and whether AI is working. Figures are counted by MoovOS from each call; your Google AI Studio bill is the final word.</p>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+        <div style={{ minWidth: 0 }}>
+          <h1 style={S.h1}>AI usage</h1>
+          <p style={S.sub}>What uses AI, what it costs and whether it's working. Counted by MoovOS from each call; your Google AI Studio bill is the final word.</p>
+        </div>
+        <Segmented label="Period" value={range} onChange={changeRange} options={RANGE_OPTIONS} />
+      </div>
 
       {isLoading && <p style={{ ...S.sub, marginTop: 24 }}>Loading…</p>}
-      {isError && <p role="alert" style={{ ...S.sub, marginTop: 24, color: 'var(--mv-magenta-deep)' }}>Usage could not be loaded.</p>}
+      {isError && !data && <p role="alert" style={{ ...S.sub, marginTop: 24, color: 'var(--mv-magenta-deep)' }}>Usage could not be loaded.</p>}
 
       {data && (
-        <>
-          <div style={{ marginTop: 20 }}><HealthLine health={data.health} /></div>
+        <div style={{ opacity: isFetching && data.range?.key !== range ? 0.6 : 1, transition: 'opacity .15s' }}>
+          <div style={{ marginTop: 16 }}><HealthLine health={data.health} /></div>
 
-          {/* ── This month ── */}
-          <div style={{ ...S.section, marginTop: 24 }}>
-            <h2 style={S.h2}>{monthName} so far</h2>
+          {/* ── Period totals ── */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 24, marginTop: 22 }}>
+            <Figure label="AI calls" value={nf.format(t.calls)}
+              alarm={t.failures > 0 && t.failure_rate >= 0.5}
+              note={t.failures ? `${nf.format(t.failures)} failed (${Math.round(t.failure_rate * 100)}%)` : 'None failed'} />
+            <Figure label="Tokens" value={compact.format(t.tokens)}
+              note={`${compact.format(t.tokens_in)} in · ${compact.format(t.tokens_out)} out`} />
+            <Figure label="Estimated cost" value={data.priced ? money(t.cost, cur) : '—'}
+              note={data.priced ? (t.calls ? `About ${money(t.cost / t.calls * 1000, cur)} per 1,000 calls` : 'At the prices set below.') : 'Add your prices below to see costs.'} />
+            <Figure label="Average response time" value={fmtMs(t.avg_ms)}
+              note="Successful calls only." />
+          </div>
+
+          {/* ── Daily ── */}
+          <div style={{ ...S.section, marginTop: 28 }}>
+            <h2 style={S.h2}>By day</h2>
+            <div style={{ marginTop: 14 }}><DailyChart daily={data.daily} priced={data.priced} currency={cur} /></div>
+          </div>
+
+          {/* ── Breakdown ── */}
+          <div style={S.section}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
+              <div>
+                <h2 style={S.h2}>Where it goes</h2>
+                <p style={S.sub}>{view === 'feature'
+                  ? 'Switching a feature off makes MoovOS use its non-AI fallback for it, such as keyword sorting.'
+                  : 'Costs use the Gemini prices set below for every model.'}</p>
+              </div>
+              <Segmented label="Breakdown" value={view} onChange={setView}
+                options={[{ key: 'feature', label: `By feature (${data.features.filter(f => f.calls).length})` }, { key: 'model', label: `By model (${data.models.length})` }]} />
+            </div>
+            <div style={{ marginTop: 12 }}>
+              {view === 'feature'
+                ? <FeatureTable features={data.features} priced={data.priced} currency={cur} onToggle={toggleFeature} saving={save.isPending} />
+                : <ModelTable models={data.models} priced={data.priced} currency={cur} />}
+            </div>
+          </div>
+
+          {/* ── Recent calls ── */}
+          <div style={S.section}>
+            <h2 style={S.h2}>Recent calls</h2>
+            <p style={S.sub}>The latest AI calls, newest first. Hover over a failed call to see why.</p>
+            <div style={{ marginTop: 12 }}>
+              <RecentFeed recent={data.recent} features={data.features} priced={data.priced} currency={cur} />
+            </div>
+          </div>
+
+          {/* ── Budget (always this calendar month) ── */}
+          <div style={S.section}>
+            <h2 style={S.h2}>Budget for {monthName}</h2>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 24, marginTop: 16 }}>
-              <Figure label="Tokens used" value={compact.format(data.month.tokens)}
-                note={`${nf.format(data.month.calls)} calls · ${nf.format(data.month.tokens_in)} in, ${nf.format(data.month.tokens_out)} out`} />
-              <Figure label="Estimated cost" value={data.priced ? money(data.month.cost, cur) : '—'}
-                note={data.priced ? 'At the prices set below.' : 'Add your prices below to see costs.'} />
+              <Figure label="Used this month" value={compact.format(data.month.tokens)}
+                note={data.priced ? `${money(data.month.cost, cur)} estimated` : 'tokens'} />
               <Figure label="Left this month"
                 value={data.limit ? compact.format(data.limit.left) : 'No limit'}
                 alarm={data.limit?.state === 'reached'}
@@ -358,26 +565,6 @@ export default function AiUsageSettings() {
                   : data.priced ? 'Record your AI Studio balance below.' : 'Needs prices and a recorded balance.'} />
             </div>
             {data.limit && <LimitMeter limit={data.limit} warnPercent={data.settings.warn_percent} />}
-            {data.month.failures > 0 && (
-              <p style={{ fontSize: 13, color: 'var(--mv-magenta-deep)', marginTop: 14 }}>
-                {nf.format(data.month.failures)} {data.month.failures === 1 ? 'call has' : 'calls have'} failed this month.
-              </p>
-            )}
-          </div>
-
-          {/* ── Daily ── */}
-          <div style={S.section}>
-            <h2 style={S.h2}>Last 30 days</h2>
-            <div style={{ marginTop: 16 }}><DailyChart daily={data.daily} /></div>
-          </div>
-
-          {/* ── By feature ── */}
-          <div style={S.section}>
-            <h2 style={S.h2}>What uses tokens</h2>
-            <p style={S.sub}>This month, by feature. Switching a feature off makes MoovOS use its non-AI fallback for it, such as keyword sorting.</p>
-            <div style={{ marginTop: 12 }}>
-              <FeatureTable features={data.features} priced={data.priced} currency={cur} onToggle={toggleFeature} saving={save.isPending} />
-            </div>
           </div>
 
           {/* ── Limits ── */}
@@ -387,23 +574,7 @@ export default function AiUsageSettings() {
               <LimitsForm settings={data.settings} credit={data.credit} onSave={body => save.mutate(body)} saving={save.isPending} error={error} />
             </div>
           </div>
-
-          {/* ── Recent failures ── */}
-          {data.recent_errors.length > 0 && (
-            <div style={S.section}>
-              <h2 style={S.h2}>Recent failures</h2>
-              {data.recent_errors.map((e, i) => (
-                <div key={i} style={{ display: 'grid', gridTemplateColumns: '140px 1fr', gap: 14, padding: '10px 0', borderBottom: '1px solid var(--mv-hairline)', fontSize: 13 }}>
-                  <span style={{ color: 'var(--mv-ink-52)', ...S.num }}>{fmtTime(e.created_at)}</span>
-                  <span>
-                    <strong style={{ color: 'var(--mv-ink)' }}>{data.features.find(f => f.key === e.feature)?.label || e.feature}</strong>
-                    <span style={{ color: 'var(--mv-ink-62)' }}> · {e.explanation}{e.http_status ? ` (error ${e.http_status})` : ''}</span>
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </>
+        </div>
       )}
     </div>
   );
