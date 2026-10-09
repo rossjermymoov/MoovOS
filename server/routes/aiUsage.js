@@ -1,7 +1,8 @@
 /**
  * Moov OS — AI usage (Settings → AI usage)
  *
- *   GET  /api/ai-usage           — this month's usage, by feature and by day, limits, credit, health
+ *   GET  /api/ai-usage?range=    — usage for 7d | 30d | 90d | month: totals, by day, by feature,
+ *                                  by model, last 25 calls; plus this month's limit, credit, health
  *   GET  /api/ai-usage/health    — is AI working? (drives the Queries page warning)
  *   PUT  /api/ai-usage/settings  — limits, prices, credit balance, per-feature on/off
  */
@@ -15,7 +16,7 @@ const router = express.Router();
 router.get('/', async (req, res, next) => {
   try {
     res.set('Cache-Control', 'no-store');
-    res.json(await getAiUsageSummary());
+    res.json(await getAiUsageSummary({ range: req.query.range }));
   } catch (err) { next(err); }
 });
 
@@ -78,7 +79,7 @@ router.put('/settings', async (req, res, next) => {
     updates.push('updated_at = NOW()');
     await query(`UPDATE ai_usage_settings SET ${updates.join(', ')} WHERE id = 1`, values);
     invalidateAiSettings();
-    res.json(await getAiUsageSummary());
+    res.json(await getAiUsageSummary({ range: req.query.range }));
   } catch (err) {
     if (err.status === 400) return res.status(400).json({ error: err.message });
     next(err);
