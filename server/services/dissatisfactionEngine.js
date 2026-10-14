@@ -27,6 +27,11 @@ const HARD_RULES = [
   /\blegal action\b/i,
 ];
 
+/** Explicit complaint language — free, no AI. Shared with the combined follow-up check. */
+export function isComplaintLanguage(text) {
+  return HARD_RULES.some(re => re.test(text || ''));
+}
+
 function buildPrompt(text) {
   return (
     `Read this customer reply on an open parcel-delivery support ticket. Decide if the ` +

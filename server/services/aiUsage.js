@@ -14,10 +14,11 @@ import { query } from '../db/index.js';
 
 // Every feature that calls an AI model. Keys are stored on ai_usage_events.
 export const FEATURES = {
-  email_triage:       { label: 'Email sorting and summaries', description: 'Picks the group, writes the summary and finds the tracking number for each new email.' },
-  priority:           { label: 'Priority grading',            description: 'Grades new emails High, Medium or Low when no urgent keyword is found.' },
-  claim_detection:    { label: 'Claim detection',             description: 'Spots a customer asking to make a claim in a follow-up email.' },
-  dissatisfaction:    { label: 'Unhappy-customer check',      description: 'Flags follow-ups from frustrated customers for attention.' },
+  email_triage:       { label: 'Email sorting and summaries', description: 'One call per new email: group, summary, tracking number, priority and an unhappy-customer read.' },
+  follow_up:          { label: 'Follow-up check',             description: 'One call per customer follow-up, only when keywords can\'t decide: unhappy customer, claim request, and the group for tickets still in Customer Service.' },
+  priority:           { label: 'Priority grading',            description: 'Bulk re-grading only. New emails are graded inside email sorting.' },
+  claim_detection:    { label: 'Claim detection',             description: 'Earlier separate check, now part of the follow-up check.' },
+  dissatisfaction:    { label: 'Unhappy-customer check',      description: 'Earlier separate check, now part of email sorting and the follow-up check.' },
   courier_reply:      { label: 'Reading courier replies',     description: 'Works out what a courier reply means and what to do next.' },
   courier_automation: { label: 'Courier automation',          description: 'Reads a ticket to decide which courier template applies.' },
   translation:        { label: 'Courier email translation',   description: 'Translates courier emails into the courier\'s language.' },
@@ -28,6 +29,11 @@ export const FEATURES = {
   katana:             { label: 'Katana assistant',            description: 'Answers questions in the Katana chat.' },
   other:              { label: 'Other',                       description: 'Anything not listed above.' },
 };
+
+// AI only ever looks at recent tickets. Background backfills and the bulk
+// re-triage / auto-draft routes skip anything older, so the 3,000+ historical
+// tickets imported from before MoovOS can't quietly burn credits.
+export const AI_WINDOW_DAYS = Math.max(1, parseInt(process.env.AI_WINDOW_DAYS, 10) || 14);
 
 export class AiPausedError extends Error {
   constructor(message) { super(message); this.name = 'AiPausedError'; this.paused = true; }

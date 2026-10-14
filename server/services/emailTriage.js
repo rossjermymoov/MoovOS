@@ -19,6 +19,7 @@
 import crypto from 'crypto';
 import { query } from '../db/index.js';
 import { geminiGenerate } from './geminiService.js';
+import { isComplaintLanguage } from './dissatisfactionEngine.js';
 
 const CLAIM_HARD_RULES = [
   /\bfile a claim\b/i,
@@ -66,6 +67,79 @@ export async function checkClaimIntent({ subject = '', body = '' } = {}) {
   }
 }
 
+/**
+ * One check per customer follow-up, replacing what used to be up to three
+ * separate Gemini calls on the same email (unhappy-customer check, claim
+ * intent, and a re-sort for tickets still in Customer Service). The free
+ * keyword rules decide first; AI is asked only the questions they couldn't
+ * settle, in a single call — or not at all.
+ *
+ * Fails safe exactly like the checks it replaces: on any AI failure the
+ * customer is NOT flagged unhappy (see dissatisfactionEngine.js on why) and no
+ * claim is assumed.
+ *
+ * @param needCategory  also ask which group the email belongs to
+ * @returns {{ dissatisfied, dissatisfaction_source, dissatisfaction_reasoning,
+ *             claim_requested, claim_source, ticket_type, ai_called }}
+ */
+const FOLLOW_UP_CATEGORIES = ['query', 'claim', 'billing', 'technical', 'sales', 'returns', 'collection', 'supplies', 'other'];
+
+export async function checkFollowUp({ subject = '', body = '', needCategory = false } = {}) {
+  const text = `${subject}\n${body}`;
+  const out = {
+    dissatisfied: false, dissatisfaction_source: null, dissatisfaction_reasoning: null,
+    claim_requested: false, claim_source: null,
+    ticket_type: null, ai_called: false,
+  };
+
+  if (isComplaintLanguage(text)) {
+    Object.assign(out, { dissatisfied: true, dissatisfaction_source: 'hard_rule', dissatisfaction_reasoning: 'Complaint language pattern matched.' });
+  }
+  if (CLAIM_HARD_RULES.some(re => re.test(text))) {
+    Object.assign(out, { claim_requested: true, claim_source: 'hard_rule' });
+  }
+
+  const ask = {
+    dissatisfied: !out.dissatisfied,
+    claim: !out.claim_requested,
+    category: needCategory,
+  };
+  if (!ask.dissatisfied && !ask.claim && !ask.category) return out;
+
+  const questions = [];
+  if (ask.dissatisfied) questions.push(
+    `"dissatisfied": true ONLY if the customer is genuinely unhappy with how the case is being handled — ` +
+    `demanding escalation, losing trust, threatening to leave. Ordinary impatience about a delayed parcel ` +
+    `("any update?", "this is taking ages") is normal and is false.`);
+  if (ask.claim) questions.push(
+    `"claim_requested": true if the customer is now asking to FILE A CLAIM (compensation for a lost, damaged ` +
+    `or missing parcel), e.g. "please start a claim", "send me the claim form". Asking for a status update is false.`);
+  if (ask.category) questions.push(
+    `"ticket_type": exactly one of ${JSON.stringify(FOLLOW_UP_CATEGORIES)} — "query" = delivery status of a parcel ` +
+    `in transit, "collection" = a pickup that didn't happen, "supplies" = labels/bags/packaging, "other" if unclear.`);
+
+  const prompt =
+    `Read this customer's reply on an open parcel-delivery support ticket. Return STRICT JSON only, with these keys:\n` +
+    questions.map(q => `- ${q}`).join('\n') +
+    `\n- "reasoning": one short sentence.\n\nCustomer reply:\n${text.slice(0, 2000)}`;
+
+  try {
+    out.ai_called = true;
+    const raw = await geminiGenerate(prompt, { json: true, temperature: 0, maxTokens: 200, feature: 'follow_up' });
+    const parsed = JSON.parse(raw || '{}');
+    if (ask.dissatisfied && parsed.dissatisfied === true) {
+      Object.assign(out, { dissatisfied: true, dissatisfaction_source: 'ai_grader', dissatisfaction_reasoning: parsed.reasoning || null });
+    }
+    if (ask.claim && parsed.claim_requested === true) {
+      Object.assign(out, { claim_requested: true, claim_source: 'ai_grader' });
+    }
+    if (ask.category && FOLLOW_UP_CATEGORIES.includes(parsed.ticket_type)) out.ticket_type = parsed.ticket_type;
+  } catch (e) {
+    console.warn('[FollowUpCheck] AI check failed, keyword results only:', e.message);
+  }
+  return out;
+}
+
 // Courier-side claim signal — a claim usually starts life looking exactly like a
 // query (customers rarely say "I want to claim"; they report "it hasn't been
 // scanned" or "it's lost", same as any other WISMO query). Studying real Freshdesk
@@ -88,6 +162,26 @@ const COURIER_CLAIM_HARD_RULES = [
 export function checkCourierClaimSignal({ subject = '', body = '' } = {}) {
   const text = `${subject}\n${body}`;
   return { claim_detected: COURIER_CLAIM_HARD_RULES.some(re => re.test(text)) };
+}
+
+// Automatic mail — auto-replies ("We've Got Your Email", out-of-office) and
+// newsletters/marketing ("Check your route before you go"). Recognised from
+// standard headers for free, so they're sorted by keywords only and never cost
+// an AI call. Courier mail is only treated as automatic when it's a genuine
+// auto-REPLY: couriers' real answers and claim forms can come from automated
+// systems too, and those still need reading.
+export function automaticMailKind(headers = [], subject = '') {
+  const h = (name) => (headers.find(x => x.name?.toLowerCase() === name)?.value || '').toLowerCase();
+  const autoSubmitted = h('auto-submitted');
+  if (autoSubmitted === 'auto-replied' || h('x-autoreply') || h('x-autorespond')
+      || /^\s*(auto(matic)?[\s-]?reply|out of (the )?office|we'?ve got your email)\b/i.test(subject || '')) {
+    return 'auto_reply';
+  }
+  if (h('list-unsubscribe') || h('list-id') || ['bulk', 'list', 'junk'].includes(h('precedence'))
+      || (autoSubmitted && autoSubmitted !== 'no')) {
+    return 'bulk';
+  }
+  return null;
 }
 
 // Automated third-party portal notifications — not genuine correspondence from

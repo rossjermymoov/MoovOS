@@ -24,8 +24,19 @@ const HARD_RULES = [
   /\b(escalat\w+)\b/i,
 ];
 
-function hardRuleMatch(text) {
+export function hardRuleMatch(text) {
   return HARD_RULES.some(re => re.test(text));
+}
+
+/**
+ * Priority for a new email without a separate AI call: the hard rules first,
+ * then the grade the combined triage call already returned (gmailSync's
+ * triageAndSummarize with grade: true), else 'medium'.
+ */
+export function priorityFor({ subject = '', body = '', aiPriority = null } = {}) {
+  if (hardRuleMatch(`${subject}\n${body}`)) return { priority: 'urgent', source: 'hard_rule' };
+  if (['high', 'medium', 'low'].includes(aiPriority)) return { priority: aiPriority, source: 'ai_grader' };
+  return { priority: 'medium', source: 'fallback' };
 }
 
 // PHASE 2 — Gemini grader → 'high' | 'medium' | 'low'

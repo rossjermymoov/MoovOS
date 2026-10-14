@@ -2412,9 +2412,19 @@ export default function QueriesPage() {
   const cycleSort = (key) => setSort(s =>
     s.key !== key ? { key, dir: 'asc' } : s.dir === 'asc' ? { key, dir: 'desc' } : { key: '', dir: 'asc' });
 
+  // Activity window: Queries opens on the last 14 days, not every ticket ever
+  // imported (3,000+ old ones). Remembered per browser; a search ignores it.
+  const [windowDays, setWindowDays] = useState(() => {
+    try { const v = localStorage.getItem('moov.queries.window'); return v === null ? 14 : Number(v); } catch { return 14; }
+  });
+  const changeWindow = (d) => {
+    setWindowDays(d);
+    try { localStorage.setItem('moov.queries.window', String(d)); } catch { /* keep in memory */ }
+  };
+
   useEffect(() => {
-    fetchStats(user?.id).then(setStats).catch(console.error);
-  }, [refreshKey, user?.id]);
+    fetchStats(user?.id, windowDays || undefined).then(setStats).catch(console.error);
+  }, [refreshKey, user?.id, windowDays]);
 
   // List view, remembered per browser. Compact is the default: managers want the
   // whole page of tickets in view at once, like Freshdesk's list.
@@ -2438,7 +2448,7 @@ export default function QueriesPage() {
   }, []);
 
   // A new filter or search is a new result set — start it from page 1.
-  useEffect(() => { setPage(1); }, [filters, sort]);
+  useEffect(() => { setPage(1); }, [filters, sort, windowDays]);
 
   // Search also scans email bodies, so wait for typing to pause before querying.
   const [searchInput, setSearchInput] = useState('');
@@ -2458,14 +2468,14 @@ export default function QueriesPage() {
 
   const refresh = useCallback(() => {
     setLoading(true);
-    fetchInbox({ ...filters, page, limit: 30, sort: sort.key, order: sort.key ? sort.dir : undefined })
+    fetchInbox({ ...filters, page, limit: 30, sort: sort.key, order: sort.key ? sort.dir : undefined, activity_days: windowDays || undefined })
       .then(d => {
         setQueries(d.queries || []);
         setTotal(d.total || 0);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, [filters, page, sort]);
+  }, [filters, page, sort, windowDays]);
 
   // Staff for the owner column and filter (the inbox API doesn't return them).
   useEffect(() => {
@@ -2618,6 +2628,19 @@ export default function QueriesPage() {
             style={{ background: C.card, border: `0.5px solid ${C.border}`, borderRadius: 8, color: C.text,
               fontSize: 12, padding: '7px 10px 7px 28px', width: 280, outline: 'none' }}
           />
+        </div>
+        {/* Activity window — which tickets the list and counters cover */}
+        <div role="group" aria-label="Activity period" title={filters.search ? 'Search looks across all tickets' : 'Tickets with activity in this period'}
+          className="inline-flex items-center gap-1 rounded-lg p-0.5" style={{ background: 'var(--mv-bg)', opacity: filters.search ? 0.5 : 1 }}>
+          {[{ d: 14, label: '14 days' }, { d: 30, label: '30 days' }, { d: 0, label: 'All' }].map(o => (
+            <button key={o.d} onClick={() => changeWindow(o.d)} aria-pressed={windowDays === o.d}
+              className="rounded-md px-2.5 py-1 text-xs font-semibold"
+              style={{ background: windowDays === o.d ? 'var(--mv-surface)' : 'transparent',
+                color: windowDays === o.d ? 'var(--mv-ink)' : 'var(--mv-ink-52)',
+                boxShadow: windowDays === o.d ? '0 1px 2px color-mix(in srgb, var(--mv-ink) 10%, transparent)' : 'none' }}>
+              {o.label}
+            </button>
+          ))}
         </div>
         {/* View switch — compact list (one line per ticket) or detailed cards */}
         <div role="group" aria-label="List view" className="inline-flex items-center gap-1 rounded-lg p-0.5" style={{ background: 'var(--mv-bg)' }}>
@@ -2805,7 +2828,11 @@ export default function QueriesPage() {
               <div style={{ padding: 60, textAlign: 'center' }}>
                 <div style={{ fontSize: 36, marginBottom: 12 }}>📭</div>
                 <div style={{ fontSize: 15, fontWeight: 700, color: C.sub, marginBottom: 6 }}>No queries match</div>
-                <div style={{ fontSize: 12, color: C.muted }}>Try a different filter or check back later</div>
+                <div style={{ fontSize: 12, color: C.muted }}>
+                  {windowDays && !filters.search
+                    ? `Showing tickets with activity in the last ${windowDays} days. Choose 30 days or All to see older ones.`
+                    : 'Try a different filter or check back later'}
+                </div>
               </div>
             )}
             {!loading && displayQueries.length > 0 && (

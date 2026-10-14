@@ -60,7 +60,11 @@ function triageFallback(subject, body) {
   };
 }
 
-export async function triageAndSummarize(subject, body) {
+// `grade: true` (new customer emails) also asks for priority and an
+// unhappy-customer read in the SAME call — previously each was a separate Gemini
+// call that re-sent the whole email. Leave it off for Moov-started tickets and
+// summary backfills, where those reads mean nothing.
+export async function triageAndSummarize(subject, body, { grade = false } = {}) {
   // No key check here: geminiGenerate() throws (and records the failure in
   // Settings → AI usage) when the key is missing, and the catch below falls back.
 
@@ -97,6 +101,14 @@ export async function triageAndSummarize(subject, body) {
     `- summary: max 2 sentences describing the core issue (no "The email"/"This email").\n` +
     `- courier: the courier name (e.g. "DPD","DHL","Evri") or null if none mentioned.\n` +
     `- tracking_number: the tracking/consignment number if present, else null.\n` +
+    (grade
+      ? `- priority: exactly one of "High","Medium","Low" — how urgently this needs handling, weighing how ` +
+        `distressed the sender is, how much it blocks a shipment or their business, and risk to the parcel. ` +
+        `An ordinary delivery question is "Medium".\n` +
+        `- dissatisfied: true ONLY if the sender is genuinely unhappy with how Moov is handling things ` +
+        `(demanding escalation, losing trust, threatening to leave) — NOT ordinary impatience about a ` +
+        `delayed parcel, which is normal here. Otherwise false.\n`
+      : '') +
     trackingGuide +
     `\nSubject: ${subject || '(none)'}\nBody: ${(body || '').slice(0, 2000)}`;
 
@@ -112,6 +124,9 @@ export async function triageAndSummarize(subject, body) {
       summary: (parsed.summary || subject || 'Customer enquiry').toString().slice(0, 400),
       courier: parsed.courier || null,
       tracking_number: isLikelyTracking(parsed.tracking_number) ? String(parsed.tracking_number).trim() : null,
+      priority: grade && ['high', 'medium', 'low'].includes(String(parsed.priority || '').toLowerCase())
+        ? String(parsed.priority).toLowerCase() : null,
+      dissatisfied: grade ? parsed.dissatisfied === true : null,
       source: GEMINI_MODEL,
     };
   } catch (e) {
@@ -145,14 +160,17 @@ const GROUP_BY_TICKET_TYPE = {
 import { getAuthedClient, getConfig, updateLastSync } from './gmailService.js';
 import { query } from '../db/index.js';
 import { evaluateAutomationRules } from './automationEngine.js';
-import { triagePriority } from './triageEngine.js';
+import { priorityFor } from './triageEngine.js';
 import { isLikelyTracking, geminiGenerate, GEMINI_MODEL } from './geminiService.js';
 import { identifyCourierByTracking, getAllTrackingExamples } from './courierAutomation.js';
 import { interpretCourierReply } from './replyInterpreter.js';
-import { recordClassification, checkClaimIntent, checkCourierClaimSignal, moveTicketToClaims, isAutomatedNotification } from './emailTriage.js';
+import { recordClassification, checkFollowUp, checkCourierClaimSignal, moveTicketToClaims, isAutomatedNotification, automaticMailKind } from './emailTriage.js';
+import { isComplaintLanguage } from './dissatisfactionEngine.js';
+import { textForAi } from './emailText.js';
 import { scoreUrgency } from './urgencyScorer.js';
 import { intakeClaimForm } from './claimIntake.js';
 import { STATUS_GROUPS } from './statusGroups.js';
+import { AI_WINDOW_DAYS } from './aiUsage.js';
 
 // Sender domains that are couriers / our wholesaler (AGL) — never the customer.
 const COURIER_DOMAINS = /@(?:[a-z0-9-]+\.)*(dpd|dhl|evri|hermes|myhermes|yodel|ups|parcelforce|royalmail|fedex|agl)\.[a-z.]{2,}/i;
@@ -451,6 +469,12 @@ async function upsertTicket(msg, gmail = null) {
 
   const customer = isCourierSender ? null : await resolveCustomer(senderEmail);
 
+  // Token savings: AI sees only the new message (quoted history stripped — it was
+  // re-sent on every reply), and automatic mail (auto-replies, newsletters) gets
+  // no AI at all — keyword rules only.
+  const aiText   = textForAi(subject, body);
+  const autoKind = isOurs ? null : automaticMailKind(headers, subject);
+
   // Find the ticket this Gmail thread belongs to.
   //  • Our own reply (outbound) attaches to its thread under ANY status —
   //    open, pending, resolved or closed — so sent replies are never dropped.
@@ -490,6 +514,7 @@ async function upsertTicket(msg, gmail = null) {
   // follow-up on an existing ticket apart from a freshly triaged email.
   let newTicketCategory = null;
   let newTicketTriageSource = null;
+  let newTicketDissatisfied = null;   // from the combined triage call, new tickets only
 
   // Conversation started by Moov (no ticket on this thread yet). Queries is the
   // single record of every conversation, so these are kept too:
@@ -516,10 +541,15 @@ async function upsertTicket(msg, gmail = null) {
   }
 
   if (!queryId) {
-    // Gemini triage — drives group routing, summary, courier and tracking.
-    const triage      = await triageAndSummarize(subject, body);
+    // ONE Gemini call per new email — group, summary, courier, tracking, priority
+    // and an unhappy-customer read together (previously up to three calls, each
+    // re-sending the email). Automatic mail is sorted by keywords only.
+    const triage = autoKind
+      ? { ...triageFallback(subject, body), source: `keywords_${autoKind}` }
+      : await triageAndSummarize(subject, aiText, { grade: true });
     newTicketCategory = triage.ticket_type;
     newTicketTriageSource = triage.source;
+    newTicketDissatisfied = triage.dissatisfied;
     console.log(`[Gmail sync] Triage (${triage.source}): "${subject}" → ${triage.ticket_type}`);
     const groupName   = GROUP_BY_TICKET_TYPE[triage.ticket_type] || 'Queries';
     const tracking    = triage.tracking_number || null;
@@ -571,14 +601,15 @@ async function upsertTicket(msg, gmail = null) {
     } catch (e) {
       console.warn('[Gmail sync] Automation rule evaluation failed:', e.message);
     }
-    // Hybrid triage — only when no automation rule already forced a priority.
-    // Phase 1 hard rules (P1 → urgent) then Phase 2 Gemini grader (high/medium/low).
+    // Priority — only when no automation rule already forced one. Hard rules
+    // (P1 → urgent) first, else the grade the triage call above already returned:
+    // no separate AI call. Automatic mail is always low.
     if (!triggerPriority) {
       try {
-        const { priority } = await triagePriority({ subject, body });
+        const priority = autoKind ? 'low' : priorityFor({ subject, body: aiText, aiPriority: triage.priority }).priority;
         await query(`UPDATE queries SET priority = $1 WHERE id = $2`, [priority, queryId]);
       } catch (e) {
-        console.warn('[Gmail sync] Hybrid triage failed:', e.message);
+        console.warn('[Gmail sync] priority update failed:', e.message);
       }
     }
   }
@@ -627,7 +658,8 @@ async function upsertTicket(msg, gmail = null) {
 
     // The customer replied, so a ticket that was Pending (waiting on them or the
     // courier) is waiting on us again — back into the work queue as In Progress.
-    if (!newTicketCategory) {
+    // An out-of-office or other auto-reply isn't a reply, so it doesn't count.
+    if (!newTicketCategory && !autoKind) {
       await query(
         `UPDATE queries SET status = 'in_progress', updated_at = NOW()
           WHERE id = $1 AND status::text = ANY($2)`,
@@ -645,7 +677,7 @@ async function upsertTicket(msg, gmail = null) {
     // escalated).
     let urgency = { urgent: false, reason: null };
     try {
-      urgency = await scoreUrgency({ subject, body, gmailThreadId });
+      urgency = await scoreUrgency({ subject, body: aiText, gmailThreadId });
       if (urgency.urgent) {
         await query(
           `UPDATE queries
@@ -673,54 +705,55 @@ async function upsertTicket(msg, gmail = null) {
       triageSource: newTicketTriageSource,
     });
 
-    // Claim-intent watch — a claim is frequently a state change mid-conversation
-    // on an already-open ticket, not a fresh email (Section 6.2 of the plan).
-    // Only checked on a FOLLOW-UP (newTicketCategory is null here) — a brand-new
-    // claim email is already classified 'claim' by triage above, no need to ask twice.
-    if (!newTicketCategory) {
-      // Re-route a ticket triage left in the catch-all group once a follow-up
-      // makes its topic clear. Never touches a group an agent chose by hand.
+    // Unhappy customer / claim request / group — the checks that used to be up to
+    // three separate Gemini calls per email.
+    //  • New ticket: already answered by the single triage call above (plus the
+    //    free complaint-language rule).
+    //  • Follow-up: checkFollowUp() asks AI only what the keyword rules couldn't
+    //    settle, in one call — or none. A claim is often a state change
+    //    mid-conversation (Section 6.2 of the triage plan), so follow-ups are
+    //    where claim requests are watched for; a ticket triage left in Customer
+    //    Service is re-sorted once a follow-up makes its topic clear (never a
+    //    group an agent chose by hand).
+    //  • Automatic mail: nothing — an auto-reply can't be unhappy or ask for a claim.
+    let unhappy = null;   // { source, reasoning } when the customer should be flagged
+    if (autoKind) {
+      console.log(`[Gmail sync] Automatic mail (${autoKind}) on ticket ${queryId} — no AI checks`);
+    } else if (newTicketCategory) {
+      if (isComplaintLanguage(`${subject}\n${aiText}`)) unhappy = { source: 'hard_rule', reasoning: 'Complaint language pattern matched.' };
+      else if (newTicketDissatisfied) unhappy = { source: 'ai_grader', reasoning: 'Read as genuinely unhappy when the email was sorted.' };
+    } else {
       try {
         const t = await query(`SELECT group_name, group_set_by FROM queries WHERE id = $1`, [queryId]);
-        if (t.rows[0]?.group_set_by === 'triage' && t.rows[0]?.group_name === GROUP_BY_TICKET_TYPE.other) {
-          const retriage = await triageAndSummarize(subject, body);
-          if (retriage.ticket_type !== 'other') {
-            await query(`UPDATE queries SET group_name = $2, updated_at = NOW() WHERE id = $1 AND group_set_by = 'triage'`,
-              [queryId, GROUP_BY_TICKET_TYPE[retriage.ticket_type]]);
-            console.log(`[Gmail sync] Follow-up re-routed ticket ${queryId} → ${GROUP_BY_TICKET_TYPE[retriage.ticket_type]} (${retriage.source})`);
-          }
-        }
-      } catch (e) { console.warn('[Gmail sync] follow-up re-route failed:', e.message); }
+        const needCategory = t.rows[0]?.group_set_by === 'triage' && t.rows[0]?.group_name === GROUP_BY_TICKET_TYPE.other;
+        const fu = await checkFollowUp({ subject, body: aiText, needCategory });
 
-      try {
-        const claimCheck = await checkClaimIntent({ subject, body });
-        if (claimCheck.claim_requested) {
+        if (needCategory && fu.ticket_type && fu.ticket_type !== 'other') {
+          await query(`UPDATE queries SET group_name = $2, updated_at = NOW() WHERE id = $1 AND group_set_by = 'triage'`,
+            [queryId, GROUP_BY_TICKET_TYPE[fu.ticket_type]]);
+          console.log(`[Gmail sync] Follow-up re-routed ticket ${queryId} → ${GROUP_BY_TICKET_TYPE[fu.ticket_type]}`);
+        }
+        if (fu.claim_requested) {
           await moveTicketToClaims(queryId, 'Customer asked to make a claim — moved to Claims.');
         }
-      } catch (e) { console.warn('[Gmail sync] claim-intent check failed:', e.message); }
+        if (fu.dissatisfied) unhappy = { source: fu.dissatisfaction_source, reasoning: fu.dissatisfaction_reasoning };
+      } catch (e) { console.warn('[Gmail sync] follow-up check failed:', e.message); }
     }
 
-    // Dissatisfaction check (WISMO Phase 3, MOS-6) — this is a customer follow-up
-    // on an ALREADY-OPEN ticket (brand-new tickets are triaged above, courier
-    // replies are excluded by this branch). Previously nothing automated ran here
-    // at all. Escalates to a human on either of Ross's two confirmed triggers
-    // (explicit complaint language or AI sentiment read); never auto-sends anything.
-    try {
-      const { checkDissatisfaction } = await import('./dissatisfactionEngine.js');
-      const d = await checkDissatisfaction({ subject, body });
-      if (d.dissatisfied) {
-        await query(
-          `UPDATE queries
-              SET requires_attention = true,
-                  attention_reason = $2,
-                  escalation_source = 'dissatisfaction',
-                  internal_automation_state = 'action_required',
-                  updated_at = NOW()
-            WHERE id = $1`,
-          [queryId, `Customer dissatisfaction detected (${d.source}): ${d.reasoning || 'pattern match'}`],
-        );
-      }
-    } catch (e) { console.warn('[Gmail sync] dissatisfaction check failed:', e.message); }
+    // Escalate an unhappy customer to a human (WISMO Phase 3, MOS-6) — one of
+    // Ross's two triggers. Never auto-sends anything.
+    if (unhappy) {
+      await query(
+        `UPDATE queries
+            SET requires_attention = true,
+                attention_reason = $2,
+                escalation_source = 'dissatisfaction',
+                internal_automation_state = 'action_required',
+                updated_at = NOW()
+          WHERE id = $1`,
+        [queryId, `Customer dissatisfaction detected (${unhappy.source}): ${unhappy.reasoning || 'pattern match'}`],
+      );
+    }
   } else {
     await query(`UPDATE queries SET updated_at = NOW() WHERE id = $1`, [queryId]);
   }
@@ -730,8 +763,13 @@ async function upsertTicket(msg, gmail = null) {
   // MOS-3) before deciding what to draft: resolves → customer update, needs more
   // info / generic non-answer → follow-up to the courier, GDPR request →
   // auto-confirm the address, ambiguous → escalate to a human.
-  if (isCourierSender) {
-    try { await interpretCourierReply(queryId, body); }
+  // A courier's auto-acknowledgement ("we've received your email") isn't an
+  // answer — skip the AI read. Their real replies are read as before, with
+  // quoted history stripped.
+  if (isCourierSender && autoKind === 'auto_reply') {
+    console.log(`[Gmail sync] Courier auto-reply on ticket ${queryId} — not interpreted`);
+  } else if (isCourierSender) {
+    try { await interpretCourierReply(queryId, aiText); }
     catch (e) { console.warn('[Gmail sync] courier reply interpretation failed:', e.message); }
   }
 
@@ -831,12 +869,18 @@ export async function backfillSummaries() {
     LEFT JOIN query_emails qe ON qe.query_id = q.id
       AND qe.direction = 'inbound_customer'
     WHERE q.description IS NULL
+      AND q.created_at >= NOW() - ($1 || ' days')::INTERVAL
     ORDER BY q.id, qe.received_at ASC
-  `);
+    LIMIT 20
+  `, [AI_WINDOW_DAYS]);
+  // Runs after every 3-minute sync, so it's limited to recent tickets and 20 a
+  // run: old imported tickets without a summary would otherwise each cost an AI
+  // call. A ticket whose AI call fails gets its subject as the summary, so it's
+  // never retried in a loop.
 
-  console.log(`[Gmail sync] Backfilling summaries for ${res.rows.length} tickets...`);
+  if (res.rows.length) console.log(`[Gmail sync] Backfilling summaries for ${res.rows.length} tickets...`);
   for (const row of res.rows) {
-    const summary = await generateSummary(row.subject, row.body_text || '');
+    const summary = await generateSummary(row.subject, textForAi(row.subject, row.body_text || ''));
     await query(`UPDATE queries SET description = $1 WHERE id = $2`, [summary, row.id]);
   }
   if (res.rows.length) console.log(`[Gmail sync] Backfill complete — ${res.rows.length} tickets updated`);

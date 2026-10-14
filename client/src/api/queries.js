@@ -17,6 +17,7 @@ export async function fetchInbox(params = {}) {
   if (params.customer_q)    qs.set('customer_q',    params.customer_q);
   if (params.subject_q)     qs.set('subject_q',     params.subject_q);
   if (params.sort)          qs.set('sort',          params.sort);
+  if (params.activity_days) qs.set('activity_days', params.activity_days);
   if (params.order)         qs.set('order',         params.order);
   if (params.pending_draft)       qs.set('pending_draft',       'true');
   if (params.claim_deadline_days) qs.set('claim_deadline_days',  params.claim_deadline_days);
@@ -31,9 +32,11 @@ export async function fetchInbox(params = {}) {
   return r.json();
 }
 
-export async function fetchStats(assignedTo) {
-  const qs = assignedTo ? `?assigned_to=${encodeURIComponent(assignedTo)}` : '';
-  const r = await fetch(`${BASE}/stats${qs}`);
+export async function fetchStats(assignedTo, activityDays) {
+  const qs = new URLSearchParams();
+  if (assignedTo)   qs.set('assigned_to', assignedTo);
+  if (activityDays) qs.set('activity_days', activityDays);
+  const r = await fetch(`${BASE}/stats?${qs}`);
   if (!r.ok) throw new Error(await r.text());
   return r.json();
 }
