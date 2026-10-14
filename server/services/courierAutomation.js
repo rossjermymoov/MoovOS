@@ -338,10 +338,12 @@ export async function processCustomerEmail(queryId, { subject = '', body = '' } 
          `${friendly || 'a few outstanding details'}? As soon as we have that we'll progress this straight away.`;
     const clarBody = stitch(tpl.customer_header_template, clarMiddle, tpl.customer_footer_template, vars);
     await insertDraft(queryId, 'outbound_customer', `Re: ${ticket.subject || 'your enquiry'}`, clarBody);
+    // Status is NOT changed here: this is only a draft, and moving an unanswered
+    // ticket to Pending would drop it down the work queue. The approve endpoint
+    // moves it to Pending once the question has actually been sent.
     await query(
       `UPDATE queries
           SET internal_automation_state = 'awaiting_customer',
-              status = 'awaiting_customer_info'::query_status,
               missing_variables = $2,
               triage_intent = $3,
               updated_at = NOW()

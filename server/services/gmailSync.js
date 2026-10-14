@@ -162,7 +162,7 @@ import { query } from '../db/index.js';
 import { evaluateAutomationRules } from './automationEngine.js';
 import { priorityFor } from './triageEngine.js';
 import { isLikelyTracking, geminiGenerate, GEMINI_MODEL } from './geminiService.js';
-import { identifyCourierByTracking, getAllTrackingExamples } from './courierAutomation.js';
+import { identifyCourierByTracking, getAllTrackingExamples, processCustomerEmail } from './courierAutomation.js';
 import { interpretCourierReply } from './replyInterpreter.js';
 import { recordClassification, checkFollowUp, checkCourierClaimSignal, moveTicketToClaims, isAutomatedNotification, automaticMailKind } from './emailTriage.js';
 import { isComplaintLanguage } from './dissatisfactionEngine.js';
@@ -753,6 +753,21 @@ async function upsertTicket(msg, gmail = null) {
           WHERE id = $1`,
         [queryId, `Customer dissatisfaction detected (${unhappy.source}): ${unhappy.reasoning || 'pattern match'}`],
       );
+    }
+
+    // WISMO drafts for a new delivery enquiry ("where's my parcel"): the customer
+    // acknowledgement and the courier inquiry — or, when the parcel description,
+    // contents, value or tracking number is missing, a question back to the
+    // customer. Drafts only: they wait in the QA Bay for a person to approve,
+    // unless that courier + issue category has earned autopilot AND
+    // AUTOPILOT_LIVE_SEND_ENABLED is on (both off today). Delivery enquiries only:
+    // this costs one extra AI call (it reads out the parcel details), which other
+    // categories don't need. Never for automatic mail.
+    if (newTicketCategory === 'query' && !autoKind) {
+      try {
+        const r = await processCustomerEmail(queryId, { subject, body: aiText });
+        console.log(`[Gmail sync] WISMO drafts for ticket ${queryId}: ${r.status}`);
+      } catch (e) { console.warn('[Gmail sync] WISMO drafting failed:', e.message); }
     }
   } else {
     await query(`UPDATE queries SET updated_at = NOW() WHERE id = $1`, [queryId]);
