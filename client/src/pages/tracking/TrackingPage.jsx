@@ -858,7 +858,9 @@ export default function TrackingPage() {
   const [statusFilter, setStatusFilter]     = useState('');
   const [courierFilter, setCourierFilter]   = useState('');
   const [page, setPage]                     = useState(0);
-  const [selected, setSelected]             = useState(null);
+  // ?open=<consignment> opens that parcel's details straight away — the ticket
+  // page's Track button links here.
+  const [selected, setSelected]             = useState(() => searchParams.get('open') || null);
   const [datePreset, setDatePreset]         = useState('');
   const [dateFrom, setDateFrom]             = useState('');
   const [dateTo, setDateTo]                 = useState('');
