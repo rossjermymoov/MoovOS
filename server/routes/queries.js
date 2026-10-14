@@ -11,7 +11,6 @@ import { google } from 'googleapis';
 import { query } from '../db/index.js';
 import { getAuthedClient } from '../services/gmailService.js';
 import { extractBody, hydratePayload, buildInlineHtml } from '../services/gmailSync.js';
-import EmailReplyParser from 'email-reply-parser';
 import { parse as parseHtml } from 'node-html-parser';
 import { processCustomerEmail, recordCourierReply, getCourierTemplates, stitch } from '../services/courierAutomation.js';
 import { geminiGenerate } from '../services/geminiService.js';
@@ -20,7 +19,12 @@ import { triagePriority } from '../services/triageEngine.js';
 import { aiAutonomouslyLearnPreference } from '../services/learningEngine.js';
 import { recordApproval } from '../services/workflowTrust.js';
 import { sendQueryEmail } from '../services/sendGateway.js';
+import { cleanReplyBody } from '../services/emailText.js';
+import { AI_WINDOW_DAYS } from '../services/aiUsage.js';
 import { STATUS_BUCKET_SQL, STATUS_GROUPS, GROUP_DEFAULT_STATUS, statusGroupOf } from '../services/statusGroups.js';
+
+// A ticket's latest activity: its newest email, or when it was created.
+const ACTIVITY_AT = `GREATEST(created_at, COALESCE(latest_email_at, created_at))`;
 
 const sqlList = (arr) => `(${arr.map(v => `'${v}'`).join(', ')})`;
 
@@ -64,41 +68,8 @@ function splitHtmlNewMessage(html) {
   } catch { return html; }
 }
 
-// ── Reply-chain parsing ──────────────────────────────────────────────────────
-// Reduce a raw email body to just the NEW message: email-reply-parser strips
-// Gmail-style quotes ("> …", "On <date> … wrote:"), and we additionally strip
-// Outlook header blocks ("From:/Sent:/To:/Subject:") and divider lines, which
-// the library leaves behind. Never returns blank — falls back to the full body.
-const _erp = new EmailReplyParser();
-
-function stripOutlookHistory(text) {
-  const lines = (text || '').replace(/\r\n/g, '\n').split('\n');
-  const isCut = (raw, i) => {
-    const t = raw.trim();
-    if (/^_{10,}$/.test(t)) return true;
-    if (/^-{2,}\s*(Original|Forwarded) Message\s*-{2,}/i.test(t)) return true;
-    if (/^From:\s?\S/i.test(t)) {
-      const ahead = lines.slice(i + 1, i + 6).map(l => l.trim());
-      if (ahead.some(l => /^(Sent|Date|To|Cc|Subject):/i.test(l))) return true;
-    }
-    return false;
-  };
-  let cut = -1;
-  for (let i = 1; i < lines.length; i++) { if (isCut(lines[i], i)) { cut = i; break; } }
-  if (cut < 1) return (text || '').trim();
-  const main = lines.slice(0, cut).join('\n').trim();
-  return main || (text || '').trim();
-}
-
-function cleanReplyBody(text) {
-  let visible;
-  try { visible = _erp.read(text || '').getVisibleText(); }
-  catch { visible = text || ''; }
-  return stripOutlookHistory(visible)
-    .replace(/\[cid:[^\]]+\]/gi, '')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
+// Reply-chain parsing (cleanReplyBody) lives in services/emailText.js — Gmail
+// sync uses the same function to keep quoted history out of AI prompts.
 
 // Shape each stored email into a clean conversation fragment for the timeline.
 // `html_body` keeps the new message's rich markup (images/styles); `body` is the
@@ -200,6 +171,7 @@ router.get('/', async (req, res, next) => {
       courier_sla_breached,               // filter to tickets where the courier missed its SLA
       status_group,                       // one of the five agent statuses (statusGroups.js)
       customer_q, subject_q,              // column filters on the compact list
+      activity_days,                      // only tickets with activity in the last N days
       search,
       date_from, date_to,
       sort = 'updated_at', order = 'desc',
@@ -265,6 +237,13 @@ router.get('/', async (req, res, next) => {
     }
     if (courier_sla_breached === 'true') {
       conditions.push(`courier_sla_breached = true`);
+    }
+    // Activity window (Queries defaults to the last 14 days). A search always
+    // looks across every ticket, so an old ticket can still be found by number.
+    const windowDays = parseInt(activity_days, 10);
+    if (windowDays > 0 && !search) {
+      conditions.push(`${ACTIVITY_AT} >= NOW() - ($${idx++} || ' days')::INTERVAL`);
+      values.push(windowDays);
     }
     if (status_group) {
       if (!STATUS_GROUPS[status_group]) return res.status(400).json({ error: 'Unknown status_group' });
@@ -672,6 +651,9 @@ router.get('/stats', async (req, res, next) => {
     const RESOLVED = `('resolved','resolved_claim_approved','resolved_claim_rejected')`;
     // Current user (for the "Assigned to me" count) — validated as a UUID.
     const me = /^[0-9a-f-]{36}$/i.test(req.query.assigned_to || '') ? req.query.assigned_to : null;
+    // Same activity window as the list, so the counters match what's shown.
+    const windowDays = parseInt(req.query.activity_days, 10);
+    const windowWhere = windowDays > 0 ? `WHERE ${ACTIVITY_AT} >= NOW() - INTERVAL '${windowDays} days'` : '';
 
     const [overview, byStatus, byType, claimDeadlines, unmatched, autopilot] = await Promise.all([
 
@@ -706,6 +688,7 @@ router.get('/stats', async (req, res, next) => {
                              AND status NOT IN ${RESOLVED})                          AS assigned_to_me,
           COUNT(*)                                                                   AS total_queries
         FROM queries_inbox_view
+        ${windowWhere}
       `, [me]),
 
       // By status (open only)
@@ -884,6 +867,7 @@ async function backfillTriageHandler(req, res, next) {
       SELECT id, subject, priority
       FROM queries
       WHERE status NOT IN ${RESOLVED}
+        AND created_at >= NOW() - INTERVAL '${AI_WINDOW_DAYS} days'
         ${force ? '' : "AND (priority IS NULL OR priority = 'medium' OR assigned_to IS NULL)"}
       ORDER BY created_at ASC
       LIMIT 200
@@ -1830,6 +1814,7 @@ router.post('/triage-all', async (req, res, next) => {
              claim_deadline_at, requires_attention, priority
       FROM queries_inbox_view
       WHERE status NOT IN ${RESOLVED}
+        AND created_at >= NOW() - INTERVAL '${AI_WINDOW_DAYS} days'
         ${force ? '' : "AND (priority IS NULL OR priority = 'medium')"}
       ORDER BY created_at ASC
       LIMIT 30
@@ -1974,6 +1959,7 @@ router.post('/auto-draft-all', async (req, res, next) => {
              status, subject, sender_email
       FROM queries_inbox_view
       WHERE status NOT IN ${RESOLVED}
+        AND created_at >= NOW() - INTERVAL '${AI_WINDOW_DAYS} days'
         AND pending_drafts = 0
       ORDER BY created_at ASC
       LIMIT 20

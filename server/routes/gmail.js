@@ -1,6 +1,7 @@
 import express from 'express';
 import { getAuthUrl, exchangeCodeForTokens, saveTokens, getConfig, disconnect, createOAuthClient } from '../services/gmailService.js';
 import { syncGmail } from '../services/gmailSync.js';
+import { AI_WINDOW_DAYS } from '../services/aiUsage.js';
 import { google } from 'googleapis';
 
 const router = express.Router();
@@ -95,7 +96,8 @@ router.post('/test-insert', async (req, res, next) => {
   }
 });
 
-// Force regenerate ALL summaries regardless of existing description
+// Regenerate summaries for recent tickets (last AI_WINDOW_DAYS days) regardless
+// of existing description. Was every ticket ever — 3,000+ AI calls in one go.
 router.post('/regenerate-summaries', async (req, res, next) => {
   try {
     const { query: dbQuery } = await import('../db/index.js');
@@ -106,8 +108,9 @@ router.post('/regenerate-summaries', async (req, res, next) => {
       SELECT DISTINCT ON (q.id) q.id, q.subject, qe.body_text
       FROM queries q
       LEFT JOIN query_emails qe ON qe.query_id = q.id AND qe.direction = 'inbound_customer'
+      WHERE q.created_at >= NOW() - ($1 || ' days')::INTERVAL
       ORDER BY q.id, qe.received_at ASC
-    `);
+    `, [AI_WINDOW_DAYS]);
 
     const results = [];
     for (const row of rows.rows) {
