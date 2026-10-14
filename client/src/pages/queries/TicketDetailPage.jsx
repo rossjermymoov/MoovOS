@@ -1098,12 +1098,14 @@ export default function TicketDetailPage() {
           {/* 1. Parcel — always shown */}
           <SbSection title="Parcel" action={
             consignment ? (
-              <button onClick={() => navigate(`/tracking?q=${encodeURIComponent(consignment)}`)}
+              // Opens this parcel's tracking details in a new tab, so the ticket stays open.
+              <a href={`/tracking?q=${encodeURIComponent(consignment)}&open=${encodeURIComponent(consignment)}`}
+                target="_blank" rel="noopener noreferrer" title="Open tracking details in a new tab"
                 style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700,
                   color: 'var(--mv-purple)', background: 'var(--mv-purple-100)', border: '1px solid var(--mv-purple-200)',
-                  borderRadius: 6, padding: '3px 9px', cursor: 'pointer' }}>
+                  borderRadius: 6, padding: '3px 9px', cursor: 'pointer', textDecoration: 'none' }}>
                 <ExternalLink size={10} /> Track
-              </button>
+              </a>
             ) : null
           }>
             {consignment ? (
@@ -1209,13 +1211,15 @@ export default function TicketDetailPage() {
                 </div>
               </div>
               {ticket.customer_id && (
-                <button onClick={() => navigate(`/customers/${ticket.customer_id}`)}
-                  style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                // Opens the customer's account in a new tab, so the ticket stays open.
+                <a href={`/customers/${ticket.customer_id}`} target="_blank" rel="noopener noreferrer"
+                  title="Open the customer's account in a new tab"
+                  style={{ width: '100%', boxSizing: 'border-box', display: 'flex', alignItems: 'center', justifyContent: 'center',
                     gap: 5, padding: '7px 0', borderRadius: 8, border: '1px solid var(--mv-purple-200)',
                     background: 'var(--mv-purple-100)', color: 'var(--mv-purple)', fontSize: 12, fontWeight: 600,
-                    cursor: 'pointer' }}>
-                  View account →
-                </button>
+                    cursor: 'pointer', textDecoration: 'none' }}>
+                  View account <ExternalLink size={11} />
+                </a>
               )}
             </SbSection>
           )}
