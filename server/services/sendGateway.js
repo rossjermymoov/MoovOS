@@ -24,6 +24,9 @@ function encodeSubject(s) {
   return /[^\x00-\x7F]/.test(s) ? `=?UTF-8?B?${Buffer.from(s, 'utf-8').toString('base64')}?=` : s;
 }
 
+// Public disposable-inbox services (readable by anyone who knows the address).
+const TEST_INBOX_DOMAINS = /@(?:[a-z0-9-]+\.)*(yopmail|mailinator|guerrillamail|sharklasers|10minutemail|temp-mail|tempmail|maildrop|dispostable|trashmail|getnada|mailnesia)\.[a-z.]{2,}\s*>?\s*$/i;
+
 // Send one query_emails row for real. Idempotent: a row already marked sent is
 // returned as-is rather than sent twice. Throws on failure (after recording
 // send_status='failed' + send_error) so the caller can keep the draft in QA Bay.
@@ -42,6 +45,19 @@ export async function sendQueryEmail(emailId, { sentBy = 'human' } = {}) {
     const reason = row.direction === 'outbound_courier'
       ? `No courier address configured for '${ticket?.courier_code || 'unknown'}' — set it in Settings → Comms Templates.`
       : 'No recipient address resolvable for this draft.';
+    await query(`UPDATE query_emails SET send_status = 'failed', send_error = $2 WHERE id = $1`, [emailId, reason]);
+    throw new Error(reason);
+  }
+
+  // Never send a courier inquiry to a throwaway test inbox. These inboxes are
+  // public — anyone can read them — and a courier inquiry carries the customer's
+  // name, consignment and parcel details. DPD's address was left on a yopmail
+  // test inbox after the September send test. Override only for a deliberate
+  // test with ALLOW_TEST_COURIER_ADDRESSES=true.
+  if (row.direction === 'outbound_courier' && process.env.ALLOW_TEST_COURIER_ADDRESSES !== 'true'
+      && TEST_INBOX_DOMAINS.test(to)) {
+    const reason = `The ${ticket?.courier_code || 'courier'} address (${to}) is a public test inbox, not the courier's — ` +
+      `set the real address in Settings → Comms Templates.`;
     await query(`UPDATE query_emails SET send_status = 'failed', send_error = $2 WHERE id = $1`, [emailId, reason]);
     throw new Error(reason);
   }

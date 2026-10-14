@@ -1651,6 +1651,24 @@ router.patch('/:id/emails/:emailId/approve', async (req, res, next) => {
       `, [queryId]);
     }
 
+    // Once our message has actually gone out, the ticket is waiting on someone
+    // else: a courier inquiry → Awaiting courier; the "please confirm the
+    // details" question → Awaiting customer info. Only for tickets still Open or
+    // In Progress — never overrides a claim or a resolved ticket.
+    try {
+      const t = await query(`SELECT internal_automation_state FROM queries WHERE id = $1`, [queryId]);
+      const nextStatus = draft.direction === 'outbound_courier' ? 'awaiting_courier'
+        : draft.direction === 'outbound_customer' && t.rows[0]?.internal_automation_state === 'awaiting_customer' ? 'awaiting_customer_info'
+        : null;
+      if (nextStatus) {
+        await query(
+          `UPDATE queries SET status = $2::query_status, updated_at = NOW()
+            WHERE id = $1 AND status::text = ANY($3)`,
+          [queryId, nextStatus, [...STATUS_GROUPS.open, ...STATUS_GROUPS.in_progress]],
+        );
+      }
+    } catch (e) { console.warn('[Approve] status update failed:', e.message); }
+
     // Trust metric: an untouched approval increments the autopilot streak; an
     // edited approval breaks it (the AI needed correcting), so reset to 0.
     await query(
