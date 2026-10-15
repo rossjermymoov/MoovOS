@@ -585,7 +585,23 @@ function getFallbackTrackingUrl(consignment, courierCode, postcode) {
 }
 
 // ─── Parcel drawer ────────────────────────────────────────────
-function ParcelDrawer({ consignment, onClose }) {
+// Display name for a courier code, for "View on DPD"-style links.
+export function courierLabel(code) {
+  const c = (code || '').toLowerCase();
+  if (c.startsWith('dpd')) return 'DPD';
+  if (c.startsWith('dhl')) return 'DHL';
+  if (c === 'evri' || c === 'hermes') return 'Evri';
+  if (c.startsWith('yodel') || c === 'agl') return 'Yodel';
+  if (c.startsWith('ups')) return 'UPS';
+  if (c.startsWith('royal')) return 'Royal Mail';
+  if (c === 'parcelforce') return 'Parcelforce';
+  if (c === 'fedex') return 'FedEx';
+  return 'the courier';
+}
+
+// Exported so the ticket page can open it as a pop-up. `courierCode` is a hint
+// for the courier-website link when MoovOS has no record of the parcel.
+export function ParcelDrawer({ consignment, onClose, courierCode = null }) {
   const [activeTab, setActiveTab] = useState('events');
   const [copied, setCopied] = useState(false);
 
@@ -593,7 +609,9 @@ function ParcelDrawer({ consignment, onClose }) {
     queryKey: ['parcel', consignment],
     queryFn:  () => api.get(`/tracking/${encodeURIComponent(consignment)}`).then(r => r.data),
     enabled:  !!consignment,
+    retry:    false,   // a 404 just means MoovOS has no tracking for it
   });
+  const notTracked = !isLoading && !data;
 
   useEffect(() => {
     function onKey(e) { if (e.key === 'Escape') onClose(); }
@@ -609,7 +627,8 @@ function ParcelDrawer({ consignment, onClose }) {
   };
 
   const isIntl = data?.is_international || (data?.country_code && data.country_code !== 'GB' && data.country_code !== 'UK');
-  const trackingUrl = data?.tracking_url || getFallbackTrackingUrl(consignment, data?.courier_code, data?.recipient_postcode);
+  const trackingUrl = data?.tracking_url || getFallbackTrackingUrl(consignment, data?.courier_code || courierCode, data?.recipient_postcode);
+  const courierName = courierLabel(data?.courier_code || courierCode);
 
   return (
     <>
@@ -640,6 +659,13 @@ function ParcelDrawer({ consignment, onClose }) {
                   {copied ? <Check size={12} color="var(--mv-green-deep)" /> : <Copy size={12} />}
                   {copied ? 'Copied' : 'Copy'}
                 </button>
+                {trackingUrl && (
+                  <a href={trackingUrl} target="_blank" rel="noopener noreferrer" className="mv-btn-ghost"
+                    title={`Open ${courierName}'s own tracking page in a new tab`}
+                    style={{ padding: '3px 7px', fontSize: 11, display: 'inline-flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}>
+                    <ExternalLink size={12} /> View on {courierName}
+                  </a>
+                )}
               </div>
             </div>
             <button onClick={onClose} className="mv-icon-btn" title="Close"><X size={16} /></button>
@@ -680,7 +706,29 @@ function ParcelDrawer({ consignment, onClose }) {
           )}
         </div>
 
+        {/* No record: say why, and point to the courier's own page */}
+        {notTracked && (
+          <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--mv-ink)' }}>MoovOS has no tracking for this parcel.</div>
+            <p style={{ fontSize: 13, color: 'var(--mv-ink-62)', lineHeight: 1.55, margin: 0 }}>
+              Tracking arrives from Voila only for parcels booked through Moov, and is kept for 30 days.
+              Either this parcel was booked elsewhere (for example on the customer's own courier account),
+              it's older than that, or {courierName} hasn't sent an update yet.
+            </p>
+            {trackingUrl ? (
+              <a href={trackingUrl} target="_blank" rel="noopener noreferrer"
+                style={{ alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700,
+                  color: 'var(--mv-on-brand)', background: 'var(--mv-purple)', borderRadius: 'var(--v2-r-8, 8px)', padding: '8px 14px', textDecoration: 'none' }}>
+                <ExternalLink size={13} /> Track on {courierName}'s website
+              </a>
+            ) : (
+              <p style={{ fontSize: 13, color: 'var(--mv-ink-52)', margin: 0 }}>The courier isn't known, so there's no tracking link to offer.</p>
+            )}
+          </div>
+        )}
+
         {/* Tabs */}
+        {!notTracked && (<>
         <div className="mv-tabs" style={{ margin: '0 24px', borderBottom: '1px solid var(--mv-divider)' }}>
           <button className={`mv-tab ${activeTab === 'events' ? 'is-active' : ''}`} onClick={() => setActiveTab('events')}>
             Timeline Events {data?.events?.length ? `(${data.events.length})` : ''}
@@ -828,6 +876,7 @@ function ParcelDrawer({ consignment, onClose }) {
             </div>
           )}
         </div>
+        </>)}
       </div>
     </>
   );
