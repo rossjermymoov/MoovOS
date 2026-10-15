@@ -11,10 +11,12 @@ import {
   ArrowLeft, CheckCircle2, Mail, MessageSquare, Truck,
   Send, RefreshCw, ExternalLink, Sparkles, Edit2,
   AlertTriangle, Clock,
+  Navigation,
 } from 'lucide-react';
 import { getCourierLogo } from '../../utils/courierLogos';
 import { STATUS_GROUPS, statusGroupOf } from './statusGroups';
 import { TICKET_GROUPS } from './groups';
+import { ParcelDrawer } from '../tracking/TrackingPage';
 
 const api = axios.create({ baseURL: '/api' });
 
@@ -822,6 +824,7 @@ function ComposeBar({ queryId, courierName, onSent }) {
 export default function TicketDetailPage() {
   const { id }   = useParams();
   const navigate = useNavigate();
+  const [showTracking, setShowTracking] = useState(false);
   const qc       = useQueryClient();
   const messagesRef = useRef(null);
   const [convTab, setConvTab] = useState('customer');  // 'customer' | 'courier'
@@ -931,6 +934,9 @@ export default function TicketDetailPage() {
 
   return (
     <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', background: 'var(--mv-bg)', overflow: 'hidden' }}>
+      {showTracking && consignment && (
+        <ParcelDrawer consignment={consignment} courierCode={ticket.courier_code} onClose={() => setShowTracking(false)} />
+      )}
 
       {/* ── Header ── */}
       <div style={{ flexShrink: 0 }}>
@@ -1098,14 +1104,13 @@ export default function TicketDetailPage() {
           {/* 1. Parcel — always shown */}
           <SbSection title="Parcel" action={
             consignment ? (
-              // Opens this parcel's tracking details in a new tab, so the ticket stays open.
-              <a href={`/tracking?q=${encodeURIComponent(consignment)}&open=${encodeURIComponent(consignment)}`}
-                target="_blank" rel="noopener noreferrer" title="Open tracking details in a new tab"
+              // Opens the parcel's tracking details as a pop-up on this page.
+              <button onClick={() => setShowTracking(true)} title="Show tracking details"
                 style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700,
                   color: 'var(--mv-purple)', background: 'var(--mv-purple-100)', border: '1px solid var(--mv-purple-200)',
-                  borderRadius: 6, padding: '3px 9px', cursor: 'pointer', textDecoration: 'none' }}>
-                <ExternalLink size={10} /> Track
-              </a>
+                  borderRadius: 6, padding: '3px 9px', cursor: 'pointer' }}>
+                <Navigation size={10} /> Track
+              </button>
             ) : null
           }>
             {consignment ? (

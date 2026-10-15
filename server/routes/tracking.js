@@ -757,11 +757,28 @@ function detectCountryCode(parcel, charge) {
   return 'GB';
 }
 
+// The same parcel can be written several ways: DPD's 10-digit consignment vs
+// its "1550"-prefixed 14-digit form, with spaces, or in lower case. Tickets get
+// the number from customer emails, so match on any of these, exact first.
+function consignmentVariants(raw) {
+  const exact = String(raw || '').trim();
+  const u = exact.replace(/\s+/g, '').toUpperCase();
+  const out = new Set([exact, u]);
+  const m = u.match(/^1550(\d{10}[A-Z]?)$/);
+  if (m) out.add(m[1]);                                // strip DPD 1550
+  if (/^\d{10}[A-Z]?$/.test(u)) out.add(`1550${u}`);   // add DPD 1550
+  return [...out].filter(Boolean);
+}
+
 router.get('/:consignment', async (req, res, next) => {
   try {
+    const variants = consignmentVariants(req.params.consignment);
     const parcelRes = await query(
-      'SELECT * FROM parcels WHERE consignment_number = $1',
-      [req.params.consignment]
+      `SELECT * FROM parcels
+        WHERE upper(consignment_number) = ANY($1)
+        ORDER BY (consignment_number = $2) DESC
+        LIMIT 1`,
+      [variants.map(v => v.toUpperCase()), req.params.consignment]
     );
     if (!parcelRes.rows.length) return res.status(404).json({ error: 'Parcel not found' });
 
@@ -772,7 +789,7 @@ router.get('/:consignment', async (req, res, next) => {
        FROM tracking_events
        WHERE consignment_number = $1
        ORDER BY event_at DESC`,
-      [req.params.consignment]
+      [parcel.consignment_number]
     );
 
     // Look up associated shipment record if available
@@ -789,7 +806,7 @@ router.get('/:consignment', async (req, res, next) => {
             OR raw_payload::text ILIKE '%' || $1 || '%'
          ORDER BY created_at DESC
          LIMIT 1`,
-        [req.params.consignment]
+        [parcel.consignment_number]
       );
       if (shipRes.rows.length) {
         shipmentRecord = shipRes.rows[0];
@@ -817,7 +834,7 @@ router.get('/:consignment', async (req, res, next) => {
             OR c.raw_payload::text ILIKE '%' || $1 || '%'
          ORDER BY c.created_at DESC
          LIMIT 1`,
-        [req.params.consignment]
+        [parcel.consignment_number]
       );
       if (chargeRes.rows.length) {
         charge = chargeRes.rows[0];
