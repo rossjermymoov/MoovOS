@@ -112,12 +112,15 @@ export async function findMergedThreads({ ticketNumbers = null } = {}) {
 }
 
 /** Move each wrongly merged thread to a ticket of its own. Returns what was done. */
-export async function splitMergedThreads({ ticketNumbers = null } = {}) {
+export async function splitMergedThreads({ ticketNumbers = null, onProgress = null } = {}) {
   const matchers = await getTrackingMatchers();
   const { tickets } = await findMergedThreads({ ticketNumbers });
   const done = [];
+  const failed = [];
+  const total = tickets.reduce((n, t) => n + t.threads.length, 0);
   for (const t of tickets) {
     for (const f of t.threads) {
+      try {
       const counterpart = f.counterpart;
       const family = courierFamily(counterpart);
       const customer = family ? null : (counterpart ? await resolveCustomer(counterpart) : null);
@@ -139,8 +142,8 @@ export async function splitMergedThreads({ ticketNumbers = null } = {}) {
           (customer_id, customer_name, sender_email, sender_matched, subject, description,
            status, query_type, group_name, group_set_by, courier_code, courier_name, consignment_number,
            trigger, created_at, updated_at, resolved_at)
-        VALUES ($1, $2, $3, $4, $5, $5, $6::query_status, 'other', 'Customer Service', 'triage', $7, $8, $9,
-                'customer_email', $10, $11, CASE WHEN $6 = 'resolved' THEN $11::timestamptz END)
+        VALUES ($1, $2, $3, $4, $5::text, $5::text, $6::text::query_status, 'other', 'Customer Service', 'triage', $7, $8, $9,
+                'customer_email', $10::timestamptz, $11::timestamptz, CASE WHEN $6::text = 'resolved' THEN $11::timestamptz END)
         RETURNING id, ticket_number`,
         [customer?.id || null,
          customer?.business_name || counterpart || '(unknown)',
@@ -156,27 +159,68 @@ export async function splitMergedThreads({ ticketNumbers = null } = {}) {
         [ins.rows[0].id, t.ticket_id, f.gmail_thread_id]);
       done.push({ from_ticket: t.ticket_number, new_ticket: Number(ins.rows[0].ticket_number), thread: f.gmail_thread_id,
                   subject: f.first_subject, status, emails_moved: moved.rowCount });
+      } catch (e) {
+        // One bad thread is recorded and skipped, not allowed to stop the rest.
+        failed.push({ from_ticket: t.ticket_number, thread: f.gmail_thread_id, subject: f.first_subject, error: e.message });
+        console.warn(`[Thread repair] #${t.ticket_number} thread ${f.gmail_thread_id} failed:`, e.message);
+      }
+      if (onProgress) await onProgress({ total, moved: done.length, failed: failed.length, last_error: failed.at(-1)?.error || null });
     }
     // The junk "consignment" that caused the merging is cleared.
     if (!t.consignment_is_real && t.consignment) {
       await query(`UPDATE queries SET consignment_number = NULL, updated_at = NOW() WHERE id = $1`, [t.ticket_id]);
     }
   }
-  return { tickets_split: tickets.length, new_tickets: done.length, moves: done };
+  return { tickets_split: tickets.length, new_tickets: done.length, moves: done, failed };
 }
 
 const SPLIT_MARKER = 'split_merged_threads_v1';
+const JOB = 'split_merged_threads';
+
+// Progress / outcome of the one-time job, readable through the report endpoint
+// (the API can't see the server logs).
+async function setJobStatus(fields) {
+  await query(`CREATE TABLE IF NOT EXISTS app_job_status (job TEXT PRIMARY KEY, status JSONB NOT NULL, updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
+  await query(
+    `INSERT INTO app_job_status (job, status, updated_at) VALUES ($1, $2::jsonb, NOW())
+     ON CONFLICT (job) DO UPDATE SET status = app_job_status.status || EXCLUDED.status, updated_at = NOW()`,
+    [JOB, JSON.stringify(fields)],
+  );
+}
+
+export async function getSplitJobStatus() {
+  try {
+    const r = await query(`SELECT status, updated_at FROM app_job_status WHERE job = $1`, [JOB]);
+    return r.rows[0] ? { ...r.rows[0].status, updated_at: r.rows[0].updated_at } : null;
+  } catch { return null; }
+}
 
 /** Run the split once, ever. Safe to call on every start; a rerun after a crash is harmless (already-moved threads aren't found again). */
 export async function splitMergedThreadsOnce() {
-  await query(`CREATE TABLE IF NOT EXISTS app_backfill_markers (key TEXT PRIMARY KEY, completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
-  const done = await query(`SELECT 1 FROM app_backfill_markers WHERE key = $1`, [SPLIT_MARKER]);
-  if (done.rows.length) return { skipped: 'already run' };
-  console.log('[Thread repair] Splitting wrongly merged email threads into their own tickets…');
-  const result = await splitMergedThreads();
-  const resolved = result.moves.filter(m => m.status === 'resolved').length;
-  console.log(`[Thread repair] Done: ${result.tickets_split} ticket(s) cleaned, ${result.new_tickets} new ticket(s) ` +
-    `(${resolved} resolved as quiet for ${STALE_DAYS}+ days), ${result.moves.reduce((n, m) => n + m.emails_moved, 0)} email(s) moved.`);
-  await query(`INSERT INTO app_backfill_markers (key) VALUES ($1) ON CONFLICT DO NOTHING`, [SPLIT_MARKER]);
-  return result;
+  try {
+    await query(`CREATE TABLE IF NOT EXISTS app_backfill_markers (key TEXT PRIMARY KEY, completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
+    const done = await query(`SELECT 1 FROM app_backfill_markers WHERE key = $1`, [SPLIT_MARKER]);
+    if (done.rows.length) return { skipped: 'already run' };
+    await setJobStatus({ state: 'running', started_at: new Date().toISOString(), error: null });
+    console.log('[Thread repair] Splitting wrongly merged email threads into their own tickets…');
+    let lastWrite = 0;
+    const result = await splitMergedThreads({
+      onProgress: async (p) => {
+        if (Date.now() - lastWrite > 5000 || p.moved + p.failed === p.total) { lastWrite = Date.now(); await setJobStatus(p); }
+      },
+    });
+    const resolved = result.moves.filter(m => m.status === 'resolved').length;
+    const emails = result.moves.reduce((n, m) => n + m.emails_moved, 0);
+    console.log(`[Thread repair] Done: ${result.tickets_split} ticket(s) cleaned, ${result.new_tickets} new ticket(s) ` +
+      `(${resolved} resolved as quiet for ${STALE_DAYS}+ days), ${emails} email(s) moved, ${result.failed.length} failed.`);
+    await setJobStatus({ state: result.failed.length ? 'done_with_failures' : 'done', finished_at: new Date().toISOString(),
+      new_tickets: result.new_tickets, resolved, emails_moved: emails, failures: result.failed.slice(0, 20) });
+    // Only mark complete when nothing failed, so a fix + redeploy retries the rest.
+    if (!result.failed.length) await query(`INSERT INTO app_backfill_markers (key) VALUES ($1) ON CONFLICT DO NOTHING`, [SPLIT_MARKER]);
+    return result;
+  } catch (e) {
+    console.warn('[Thread repair] stopped:', e.message);
+    await setJobStatus({ state: 'error', error: e.message, failed_at: new Date().toISOString() }).catch(() => {});
+    throw e;
+  }
 }

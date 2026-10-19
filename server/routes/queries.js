@@ -386,8 +386,9 @@ const parseTicketList = (v) => (Array.isArray(v) ? v : String(v || '').split(','
 
 router.get('/maintenance/merged-threads', async (req, res, next) => {
   try {
-    const { findMergedThreads } = await import('../services/threadRepair.js');
+    const { findMergedThreads, getSplitJobStatus } = await import('../services/threadRepair.js');
     const report = await findMergedThreads({ ticketNumbers: parseTicketList(req.query.tickets) });
+    report.split_job = await getSplitJobStatus();   // progress / error of the one-time split
     // Email ids aren't needed to read the report.
     for (const t of report.tickets) for (const th of t.threads) delete th.email_ids;
     res.set('Cache-Control', 'no-store');
