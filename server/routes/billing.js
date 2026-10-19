@@ -1285,7 +1285,7 @@ export async function processShipmentCreatedWebhook(body) {
     if (cr3.rows.length) customerId = cr3.rows[0].id;
   }
   if (!customerId && accountName) {
-    const cr4 = await query('SELECT id FROM customers WHERE LOWER(business_name) = LOWER($1) OR LOWER(trading_name) = LOWER($1) LIMIT 1', [accountName.trim()]);
+    const cr4 = await query('SELECT id FROM customers WHERE LOWER(business_name) = LOWER($1) LIMIT 1', [accountName.trim()]);
     if (cr4.rows.length) customerId = cr4.rows[0].id;
   }
   if (!customerId && accountName) {

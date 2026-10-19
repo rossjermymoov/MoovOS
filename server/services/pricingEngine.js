@@ -654,7 +654,7 @@ export async function processShipment(payload) {
       if (r.rows.length) pickCustomer(r.rows[0]);
     }
 
-    // Step 4: business_name / company_name / trading_name exact or partial match
+    // Step 4: business_name exact or partial match (customers has no trading/company name columns)
     const nameCandidates = [accountName, accountNumber, authCompany, customerDcId].filter(Boolean);
     for (const cand of nameCandidates) {
       if (!customerId && cand) {
@@ -663,10 +663,6 @@ export async function processShipment(payload) {
            WHERE LOWER(business_name) = LOWER($1)
               OR LOWER(business_name) LIKE LOWER($2)
               OR LOWER($1) LIKE '%' || LOWER(business_name) || '%'
-              OR LOWER(trading_name) = LOWER($1)
-              OR LOWER(trading_name) LIKE LOWER($2)
-              OR LOWER(company_name) = LOWER($1)
-              OR LOWER(company_name) LIKE LOWER($2)
            ORDER BY (CASE WHEN LOWER(business_name) = LOWER($1) THEN 0 ELSE 1 END)
            LIMIT 1`,
           [cand, `%${cand}%`]
