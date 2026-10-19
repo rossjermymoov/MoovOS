@@ -321,9 +321,12 @@ router.get('/', async (req, res, next) => {
       query(`
         SELECT *,
           LEFT(latest_email_preview, 120) AS latest_email_preview,
-          (SELECT LEFT(qe.body_text, 8000) FROM query_emails qe
-            WHERE qe.query_id = queries_inbox_view.id AND qe.direction = 'inbound_customer'
-            ORDER BY COALESCE(qe.received_at, qe.created_at) DESC LIMIT 1) AS latest_customer_body
+          (SELECT json_agg(x) FROM (
+             SELECT qe.direction, qe.from_address, COALESCE(qe.received_at, qe.created_at) AS at,
+                    LEFT(qe.body_text, 8000) AS body
+               FROM query_emails qe
+              WHERE qe.query_id = queries_inbox_view.id AND COALESCE(qe.is_ai_draft, false) = false
+              ORDER BY COALESCE(qe.received_at, qe.created_at) DESC LIMIT 3) x) AS recent_emails
         FROM queries_inbox_view
         ${where}
         ORDER BY ${orderBy}
@@ -332,10 +335,17 @@ router.get('/', async (req, res, next) => {
       query(`SELECT COUNT(*)::int AS total FROM queries_inbox_view ${where}`, values),
     ]);
 
-    // Hover preview: the customer's latest message, quoted history stripped.
-    const rows = dataRes.rows.map(({ latest_customer_body, ...r }) => ({
+    // Hover preview: the last three messages from anyone (customer, Moov or
+    // courier), newest first, quoted history stripped. It used to show only the
+    // customer's last message, so a ticket Moov had replied to since looked stale.
+    const rows = dataRes.rows.map(({ recent_emails, ...r }) => ({
       ...r,
-      latest_customer_message: latest_customer_body ? cleanReplyBody(latest_customer_body).slice(0, 700) : null,
+      recent_messages: (recent_emails || []).map(e => ({
+        direction: e.direction,
+        from: e.from_address,
+        at: e.at,
+        text: e.body ? cleanReplyBody(e.body).slice(0, 500) : '',
+      })),
     }));
 
     res.set('Cache-Control', 'no-store');
@@ -360,6 +370,40 @@ router.get('/by-number/:number', async (req, res, next) => {
     const r = await query(`SELECT id FROM queries WHERE ticket_number = $1::bigint LIMIT 1`, [n]);
     if (!r.rows.length) return res.status(404).json({ error: 'Ticket not found' });
     res.json({ id: r.rows[0].id });
+  } catch (err) { next(err); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Wrongly merged email threads (see services/threadRepair.js)
+//   GET  /api/queries/maintenance/merged-threads[?tickets=2153,2416]
+//        — report only, changes nothing
+//   POST /api/queries/maintenance/merged-threads/split   { ticket_numbers? }
+//        — moves each wrongly merged thread to its own ticket. Needs the
+//          x-maintenance-token header to equal MAINTENANCE_TOKEN (Railway env);
+//          disabled while that isn't set.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const parseTicketList = (v) => (Array.isArray(v) ? v : String(v || '').split(','))
+  .map(x => parseInt(String(x).replace('#', ''), 10)).filter(n => n > 0);
+
+router.get('/maintenance/merged-threads', async (req, res, next) => {
+  try {
+    const { findMergedThreads } = await import('../services/threadRepair.js');
+    const report = await findMergedThreads({ ticketNumbers: parseTicketList(req.query.tickets) });
+    // Email ids aren't needed to read the report.
+    for (const t of report.tickets) for (const th of t.threads) delete th.email_ids;
+    res.set('Cache-Control', 'no-store');
+    res.json(report);
+  } catch (err) { next(err); }
+});
+
+router.post('/maintenance/merged-threads/split', async (req, res, next) => {
+  try {
+    const token = process.env.MAINTENANCE_TOKEN;
+    if (!token) return res.status(403).json({ error: 'Splitting is disabled: MAINTENANCE_TOKEN is not set.' });
+    if (req.get('x-maintenance-token') !== token) return res.status(403).json({ error: 'Wrong or missing maintenance token.' });
+    const { splitMergedThreads } = await import('../services/threadRepair.js');
+    res.json(await splitMergedThreads({ ticketNumbers: parseTicketList(req.body?.ticket_numbers) }));
   } catch (err) { next(err); }
 });
 
@@ -1425,6 +1469,33 @@ router.post('/', async (req, res, next) => {
 // PATCH /api/queries/:id
 // Update query — status change, assign, resolve, flag for attention
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PATCH /api/queries/bulk  { ids: [...], assigned_to?, group_name? }
+// Assign and/or regroup many tickets at once from the inbox. A group set here is
+// an agent's choice, so automatic re-sorting never overrides it.
+// ─────────────────────────────────────────────────────────────────────────────
+router.patch('/bulk', async (req, res, next) => {
+  try {
+    const { ids, assigned_to, group_name } = req.body || {};
+    if (!Array.isArray(ids) || !ids.length || ids.length > 500) return res.status(400).json({ error: 'Give between 1 and 500 ticket ids' });
+    const sets = [];
+    const values = [ids];
+    if (assigned_to !== undefined) {
+      if (assigned_to !== null && !/^[0-9a-f-]{36}$/i.test(assigned_to)) return res.status(400).json({ error: 'Invalid assignee' });
+      values.push(assigned_to); sets.push(`assigned_to = $${values.length}::uuid`);
+    }
+    if (group_name !== undefined) {
+      values.push(group_name || null); sets.push(`group_name = $${values.length}`, `group_set_by = 'agent'`);
+    }
+    if (!sets.length) return res.status(400).json({ error: 'Nothing to change' });
+    const r = await query(
+      `UPDATE queries SET ${sets.join(', ')}, updated_at = NOW() WHERE id = ANY($1::uuid[]) RETURNING id`,
+      values,
+    );
+    res.json({ updated: r.rowCount });
+  } catch (err) { next(err); }
+});
 
 router.patch('/:id', async (req, res, next) => {
   try {

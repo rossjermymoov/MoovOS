@@ -84,7 +84,10 @@ function normalizeTracking(courierCode, raw) {
   if (!raw) return null;
   let t = String(raw).replace(/\s+/g, '').toUpperCase();
   if ((courierCode || '').toLowerCase() === 'dpd') {
-    const m = t.match(/^1550(\d{10}[A-Z]?)$/);   // 1550 + 10 digits (+ letter)
+    // 1550 + the 10-digit consignment + an optional check character, which DPD
+    // writes as a letter ("…204 Q") or a digit ("…401 2"). The consignment is
+    // the 10 digits in between.
+    const m = t.match(/^1550(\d{10})[A-Z0-9]?$/);
     if (m) t = m[1];
   }
   return t || null;
@@ -174,6 +177,78 @@ export async function identifyCourierByTracking(candidate) {
     console.warn('[CourierAutomation] courier identify failed:', e.message);
   }
   return null;
+}
+
+// ── Recognising real consignment numbers (cached) ───────────────────────────
+// A "tracking number" is only trusted when it matches a configured courier's
+// real format (Settings → Comms Templates samples/pattern). Anything else — a
+// Google Maps place ID from a signature, an 8-digit reference, an order number —
+// is not a consignment, must not be stored on a ticket, and must never be used
+// to attach an email to a ticket (that's how unrelated courier emails merged
+// into #2153 and #2416).
+let trackingMatchersCache = null, trackingMatchersAt = 0;
+
+export async function getTrackingMatchers() {
+  if (trackingMatchersCache && Date.now() - trackingMatchersAt < 5 * 60_000) return trackingMatchersCache;
+  try {
+    const r = await query(
+      `SELECT courier_code, courier_name, tracking_samples, tracking_pattern
+         FROM courier_routing_rules
+        WHERE is_active = true AND courier_code <> 'default'`,
+    );
+    trackingMatchersCache = r.rows.map(row => {
+      const regexes = String(row.tracking_samples || '').split(/[\n,;]+/).map(x => x.trim()).filter(Boolean)
+        .map(x => deriveTrackingRegex(normalizeTracking(row.courier_code, x))).filter(Boolean);
+      if (row.tracking_pattern) regexes.push(row.tracking_pattern);
+      const compiled = regexes.map(p => { try { return new RegExp(p, 'i'); } catch { return null; } }).filter(Boolean);
+      return { courier_code: row.courier_code, courier_name: row.courier_name, regexes: compiled };
+    }).filter(m => m.regexes.length);
+    trackingMatchersAt = Date.now();
+  } catch (e) {
+    console.warn('[CourierAutomation] tracking matchers load failed:', e.message);
+    trackingMatchersCache = trackingMatchersCache || [];
+  }
+  return trackingMatchersCache;
+}
+
+/** Every courier whose real format `candidate` matches: [{ courier_code, courier_name, normalized }]. */
+export function recognizeTrackingAll(candidate, matchers) {
+  if (!candidate || !matchers?.length) return [];
+  const hits = [];
+  for (const m of matchers) {
+    const norm = normalizeTracking(m.courier_code, candidate);
+    if (norm && m.regexes.some(re => re.test(norm))) hits.push({ courier_code: m.courier_code, courier_name: m.courier_name, normalized: norm });
+  }
+  return hits;
+}
+
+/**
+ * The best courier reading of `candidate`, or null when it isn't a real
+ * consignment. Shapes can collide — DPD's "1550"+10 digits is also 14 digits,
+ * like DHL's — so a 1550-prefixed number prefers DPD.
+ */
+export function recognizeTracking(candidate, matchers) {
+  const hits = recognizeTrackingAll(candidate, matchers);
+  if (hits.length > 1 && /^1550\d{10}[A-Z]?$/i.test(String(candidate).replace(/\s+/g, ''))) {
+    return hits.find(h => courierFamily(h.courier_code) === 'dpd') || hits[0];
+  }
+  return hits[0] || null;
+}
+
+// Courier family from a courier code or an email address/domain, so a DHL email
+// can never be attached to a DPD ticket. AGL (wholesaler) carries Evri/Yodel.
+export function courierFamily(codeOrEmail) {
+  const s = String(codeOrEmail || '').toLowerCase();
+  for (const f of ['dpd', 'dhl', 'evri', 'hermes', 'yodel', 'ups', 'royalmail', 'royal_mail', 'parcelforce', 'fedex', 'agl']) {
+    if (s.includes(f)) return f === 'hermes' ? 'evri' : f === 'royal_mail' ? 'royalmail' : f;
+  }
+  return null;
+}
+
+export function sameCourier(a, b) {
+  if (!a || !b) return true;              // unknown on either side doesn't rule it out
+  if (a === b) return true;
+  return (a === 'agl' && (b === 'evri' || b === 'yodel')) || (b === 'agl' && (a === 'evri' || a === 'yodel'));
 }
 
 // Validate a candidate against the courier's sample-derived shapes (falling back

@@ -537,7 +537,10 @@ function priorityStripColor(q) {
 // and pointer-events:none so it never steals the hover from the row.
 const PREVIEW_W = 440;
 function HoverPreview({ q, pos }) {
-  const msg = q.latest_customer_message;
+  const msgs = q.recent_messages || [];
+  const who = (m) => m.direction === 'inbound_customer' ? (q.customer_name || 'Customer')
+    : m.direction === 'inbound_courier' ? `Courier · ${m.from || ''}`
+    : String(m.direction || '').startsWith('outbound') ? 'Moov' : (m.from || 'Unknown');
   return createPortal(
     <div
       role="tooltip"
@@ -551,17 +554,29 @@ function HoverPreview({ q, pos }) {
       }}
     >
       <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.09em', textTransform: 'uppercase', color: 'var(--mv-ink-45)', marginBottom: 4 }}>
-        Latest from customer
+        Latest messages
       </div>
-      <div style={{ fontSize: 12, color: 'var(--mv-ink-52)', marginBottom: 10, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {q.sender_email || q.customer_name}{q.subject ? ` · ${q.subject}` : ''}
+      <div style={{ fontSize: 12, color: 'var(--mv-ink-52)', marginBottom: 8, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {q.subject || q.customer_name}
       </div>
-      <div style={{
-        fontSize: 13, lineHeight: 1.55, color: msg ? 'var(--mv-ink)' : 'var(--mv-ink-52)', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-        display: '-webkit-box', WebkitLineClamp: 12, WebkitBoxOrient: 'vertical', overflow: 'hidden',
-      }}>
-        {msg || 'No message from the customer on this ticket yet.'}
-      </div>
+      {msgs.length === 0 && (
+        <div style={{ fontSize: 13, color: 'var(--mv-ink-52)' }}>No messages on this ticket yet.</div>
+      )}
+      {msgs.map((m, i) => (
+        <div key={i} style={{ padding: '8px 0', borderTop: i ? '1px solid var(--mv-hairline)' : 'none' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, fontSize: 11.5, marginBottom: 3 }}>
+            <span style={{ fontWeight: 700, color: String(m.direction).startsWith('outbound') ? 'var(--mv-purple)' : 'var(--mv-ink)',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{who(m)}</span>
+            <span style={{ color: 'var(--mv-ink-45)', flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>{timeAgo(m.at)}</span>
+          </div>
+          <div style={{
+            fontSize: 12.5, lineHeight: 1.5, color: 'var(--mv-ink)', whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+            display: '-webkit-box', WebkitLineClamp: i === 0 ? 6 : 3, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+          }}>
+            {m.text || '(no text)'}
+          </div>
+        </div>
+      ))}
     </div>,
     document.body,
   );
@@ -605,7 +620,7 @@ function useHoverPreview() {
 // are bold; the left edge carries the same priority strip as the detailed card.
 // Headings sort (server-side, so across every page) and a filter row narrows
 // each column; both share state with the tabs/switchers above the list.
-const COMPACT_COLS = '72px minmax(120px, 1.1fr) minmax(160px, 2.4fr) minmax(110px, .8fr) 150px 52px 110px';
+const COMPACT_COLS = '20px 72px minmax(120px, 1.1fr) minmax(160px, 2.4fr) minmax(110px, .8fr) 150px 52px 120px';
 
 const COMPACT_COLUMNS = [
   { key: 'ticket',   label: 'Ticket' },
@@ -634,7 +649,32 @@ function ColumnTextFilter({ value, onChange, label }) {
   return <input value={v} onChange={e => setV(e.target.value)} placeholder="Filter" aria-label={`Filter by ${label}`} style={filterInput} />;
 }
 
-function CompactHeader({ sort, onSort, filters, setFilters, staffList, meId }) {
+// Tick box for row selection (bulk assign / regroup). Clicks never open the ticket.
+function SelectBox({ checked, indeterminate = false, onChange, label }) {
+  return (
+    <input type="checkbox" aria-label={label} checked={checked}
+      ref={el => { if (el) el.indeterminate = indeterminate; }}
+      onClick={e => e.stopPropagation()} onChange={e => onChange(e.target.checked)}
+      style={{ width: 15, height: 15, margin: 0, cursor: 'pointer', accentColor: 'var(--mv-purple)' }} />
+  );
+}
+
+// A row cell that opens a native picker on click (invisible <select> laid over
+// the cell): keyboard- and screen-reader-friendly, and the click never opens
+// the ticket.
+function CellPicker({ label, value, options, onChange, children }) {
+  return (
+    <span style={{ position: 'relative', minWidth: 0, display: 'flex', alignItems: 'center' }} onClick={e => e.stopPropagation()}>
+      {children}
+      <select aria-label={label} title={label} value={value} onChange={e => onChange(e.target.value)}
+        style={{ position: 'absolute', inset: 0, width: '100%', opacity: 0, cursor: 'pointer' }}>
+        {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+    </span>
+  );
+}
+
+function CompactHeader({ sort, onSort, filters, setFilters, staffList, meId, allSelected, someSelected, onToggleAll }) {
   const head = { fontSize: 11, fontWeight: 700, letterSpacing: '.09em', textTransform: 'uppercase' };
   const set = (k, v) => setFilters(f => ({ ...f, [k]: v }));
   const anyFilter = filters.customer_q || filters.subject_q || filters.group_name || filters.status_group || filters.assigned_to;
@@ -643,6 +683,7 @@ function CompactHeader({ sort, onSort, filters, setFilters, staffList, meId }) {
     <div style={{ position: 'sticky', top: 0, zIndex: 1, background: 'var(--mv-surface)', borderBottom: '2px solid var(--mv-ink)' }}>
       {/* Headings — click to sort; again to reverse; a third time returns to queue order */}
       <div role="row" style={{ display: 'grid', gridTemplateColumns: COMPACT_COLS, gap: 12, alignItems: 'center', padding: '8px 14px 4px 17px' }}>
+        <SelectBox label="Select all tickets on this page" checked={allSelected} indeterminate={someSelected && !allSelected} onChange={onToggleAll} />
         {COMPACT_COLUMNS.map(c => {
           const active = sort.key === c.key;
           const Icon = active && sort.dir === 'desc' ? ChevronDown : ChevronUp;
@@ -662,6 +703,7 @@ function CompactHeader({ sort, onSort, filters, setFilters, staffList, meId }) {
 
       {/* Filter row */}
       <div role="row" style={{ display: 'grid', gridTemplateColumns: COMPACT_COLS, gap: 12, alignItems: 'center', padding: '4px 14px 8px 17px' }}>
+        <span />
         <span>
           {anyFilter && (
             <button onClick={() => setFilters(f => ({ ...f, customer_q: '', subject_q: '', group_name: '', status_group: '', assigned_to: '' }))}
@@ -692,7 +734,7 @@ function CompactHeader({ sort, onSort, filters, setFilters, staffList, meId }) {
   );
 }
 
-function CompactRow({ q, onClick, staffList = [] }) {
+function CompactRow({ q, onClick, staffList = [], selected = false, onToggleSelect, onChange }) {
   const { hoverPos, startHover, endHover } = useHoverPreview();
   const unread    = (parseInt(q.unread_emails) || 0) > 0 || q.has_new_reply;
   const humanName = staffList.find(s => s.id === q.assigned_to)?.full_name || q.assignee_name;
@@ -713,11 +755,13 @@ function CompactRow({ q, onClick, staffList = [] }) {
         display: 'grid', gridTemplateColumns: COMPACT_COLS, gap: 12, alignItems: 'center',
         padding: '9px 14px', cursor: 'pointer', fontSize: 13,
         borderLeft: `3px solid ${priorityStripColor(q)}`, borderBottom: '1px solid var(--mv-hairline)',
-        background: 'var(--mv-surface)',
+        background: selected ? 'var(--mv-purple-100)' : 'var(--mv-surface)',
       }}
-      onMouseOver={e => { e.currentTarget.style.background = 'var(--mv-bg)'; }}
-      onMouseOut={e => { e.currentTarget.style.background = 'var(--mv-surface)'; }}
+      onMouseOver={e => { if (!selected) e.currentTarget.style.background = 'var(--mv-bg)'; }}
+      onMouseOut={e => { e.currentTarget.style.background = selected ? 'var(--mv-purple-100)' : 'var(--mv-surface)'; }}
+      aria-selected={selected}
     >
+      <SelectBox label={`Select ticket #${q.ticket_number}`} checked={selected} onChange={() => onToggleSelect?.(q.id)} />
       <span style={{ fontWeight: 700, color: (q.priority || '').toLowerCase() === 'urgent' ? 'var(--mv-magenta-deep)' : 'var(--mv-ink-62)', fontVariantNumeric: 'tabular-nums' }}>
         {q.ticket_number != null ? `#${q.ticket_number}` : '—'}
       </span>
@@ -727,13 +771,20 @@ function CompactRow({ q, onClick, staffList = [] }) {
       <span style={{ ...text, fontWeight: unread ? 700 : 400, color: resolved ? 'var(--mv-ink-45)' : 'var(--mv-ink-78)' }}>
         {q.subject || '(no subject)'}
       </span>
-      <span style={{ ...text, color: 'var(--mv-ink-52)' }}>{q.group_name || '—'}</span>
+      <CellPicker label={`Group for ticket #${q.ticket_number}`} value={q.group_name || ''}
+        options={[{ value: '', label: '— None —' }, ...TICKET_GROUPS.map(g => ({ value: g, label: g }))]}
+        onChange={v => onChange?.(q.id, { group_name: v || null })}>
+        <span style={{ ...text, color: 'var(--mv-ink-52)', borderBottom: '1px dashed var(--mv-hairline-2)' }}>{q.group_name || '—'}</span>
+      </CellPicker>
       <span style={text}><StatusBadge status={q.status} small /></span>
       <span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: overdue ? 700 : 400,
         color: overdue ? 'var(--mv-magenta-deep)' : 'var(--mv-ink-52)' }}
         title={overdue ? 'Past its SLA' : `Opened ${fmtDate(q.created_at)}`}>
         {age}
       </span>
+      <CellPicker label={`Assign ticket #${q.ticket_number}`} value={q.assigned_to || ''}
+        options={[{ value: '', label: 'Unassigned' }, ...staffList.map(st => ({ value: st.id, label: st.full_name }))]}
+        onChange={v => onChange?.(q.id, { assigned_to: v || null })}>
       <span title={humanName ? `Assigned to ${humanName}` : isKatana ? 'Katana (AI) — draft awaiting review' : 'Unassigned'}
         style={{ ...text, display: 'flex', alignItems: 'center', gap: 6 }}>
         <span style={{ width: 22, height: 22, flexShrink: 0, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -747,6 +798,7 @@ function CompactRow({ q, onClick, staffList = [] }) {
           {humanName ? humanName.split(' ')[0] : isKatana ? 'Katana' : 'Unassigned'}
         </span>
       </span>
+      </CellPicker>
       {hoverPos && <HoverPreview q={q} pos={hoverPos} />}
     </div>
   );
@@ -2447,6 +2499,41 @@ export default function QueriesPage() {
     return () => clearInterval(t);
   }, []);
 
+  // Selected tickets for bulk assign / regroup. Kept only while they're still
+  // on screen (a new page, filter or refresh drops the rest).
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkError, setBulkError] = useState('');
+  useEffect(() => {
+    setSelectedIds(prev => {
+      const onScreen = new Set(queries.map(q => q.id));
+      const kept = [...prev].filter(id => onScreen.has(id));
+      return kept.length === prev.size ? prev : new Set(kept);
+    });
+  }, [queries]);
+  const toggleSelect = (id) => setSelectedIds(prev => {
+    const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next;
+  });
+
+  // One ticket's owner or group changed from its row.
+  async function updateTicket(id, patch) {
+    try { await api.patch(`/queries/${id}`, patch); refresh(); }
+    catch (e) { console.error('Ticket update failed', e); }
+  }
+
+  // Many tickets at once from the bulk bar.
+  async function bulkUpdate(patch) {
+    if (!selectedIds.size) return;
+    setBulkBusy(true); setBulkError('');
+    try {
+      await api.patch('/queries/bulk', { ids: [...selectedIds], ...patch });
+      setSelectedIds(new Set());
+      refresh();
+    } catch (e) {
+      setBulkError(e.response?.data?.error || 'Could not update the selected tickets.');
+    } finally { setBulkBusy(false); }
+  }
+
   // A new filter or search is a new result set — start it from page 1.
   useEffect(() => { setPage(1); }, [filters, sort, windowDays]);
 
@@ -2679,20 +2766,8 @@ export default function QueriesPage() {
           🧪 Simulator
         </button>
 
-        {/* New query */}
-        <button style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          padding: '7px 16px', borderRadius: 8, cursor: 'pointer',
-          border: 'none', background: 'var(--mv-ink)',
-          color: 'var(--mv-bg)', fontSize: 12, fontWeight: 700,
-          letterSpacing: '0.01em',
-          transition: 'background 0.12s, box-shadow 0.12s',
-        }}
-          onMouseEnter={e => { e.currentTarget.style.background = 'color-mix(in srgb, var(--mv-ink) 85%, transparent)'; e.currentTarget.style.boxShadow = '0 4px 12px color-mix(in srgb, var(--mv-ink) 22%, transparent)'; }}
-          onMouseLeave={e => { e.currentTarget.style.background = 'var(--mv-ink)'; e.currentTarget.style.boxShadow = 'none'; }}
-        >
-          <span style={{ fontSize: 15, lineHeight: 1, fontWeight: 400 }}>+</span> New query
-        </button>
+        {/* New query button hidden until creating a ticket by hand is built (the
+            button had no action). */}
       </div>
 
       {(aiHealth?.status === 'failing' || aiHealth?.status === 'paused') && (
@@ -2840,9 +2915,39 @@ export default function QueriesPage() {
                 {/* Rows arrive in queue order from the API: status group, then oldest first */}
                 {view === 'compact' ? (
                   <div role="table" aria-label="Tickets">
-                    <CompactHeader sort={sort} onSort={cycleSort} filters={filters} setFilters={setFilters} staffList={staffList} meId={user?.id} />
+                    {selectedIds.size > 0 && (
+                      <div role="toolbar" aria-label="Bulk actions"
+                        style={{ position: 'sticky', top: 0, zIndex: 2, display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+                          padding: '8px 14px', background: 'var(--mv-purple-100)', borderBottom: '1px solid var(--mv-purple-200)', fontSize: 13 }}>
+                        <strong style={{ color: 'var(--mv-ink)' }}>{selectedIds.size} selected</strong>
+                        <select aria-label="Assign selected tickets to" value="" disabled={bulkBusy}
+                          onChange={e => { const v = e.target.value; if (v) bulkUpdate({ assigned_to: v === '__none' ? null : v }); }}
+                          style={{ ...filterInput, width: 'auto' }}>
+                          <option value="">Assign to…</option>
+                          <option value="__none">Unassigned</option>
+                          {staffList.map(st => <option key={st.id} value={st.id}>{st.full_name}</option>)}
+                        </select>
+                        <select aria-label="Move selected tickets to group" value="" disabled={bulkBusy}
+                          onChange={e => { const v = e.target.value; if (v) bulkUpdate({ group_name: v }); }}
+                          style={{ ...filterInput, width: 'auto' }}>
+                          <option value="">Move to group…</option>
+                          {TICKET_GROUPS.map(g => <option key={g} value={g}>{g}</option>)}
+                        </select>
+                        <button onClick={() => setSelectedIds(new Set())} disabled={bulkBusy}
+                          style={{ fontSize: 13, fontWeight: 600, color: 'var(--mv-purple)', background: 'none', border: 'none', padding: 0, cursor: 'pointer' }}>
+                          Clear selection
+                        </button>
+                        {bulkBusy && <span style={{ color: 'var(--mv-ink-52)' }}>Updating…</span>}
+                        {bulkError && <span role="alert" style={{ color: 'var(--mv-magenta-deep)' }}>{bulkError}</span>}
+                      </div>
+                    )}
+                    <CompactHeader sort={sort} onSort={cycleSort} filters={filters} setFilters={setFilters} staffList={staffList} meId={user?.id}
+                      allSelected={displayQueries.length > 0 && displayQueries.every(q => selectedIds.has(q.id))}
+                      someSelected={displayQueries.some(q => selectedIds.has(q.id))}
+                      onToggleAll={on => setSelectedIds(on ? new Set(displayQueries.map(q => q.id)) : new Set())} />
                     {displayQueries.map(q => (
-                      <CompactRow key={q.id} q={q} onClick={() => navigate(`/queries/${q.id}`)} staffList={staffList} />
+                      <CompactRow key={q.id} q={q} onClick={() => navigate(`/queries/${q.id}`)} staffList={staffList}
+                        selected={selectedIds.has(q.id)} onToggleSelect={toggleSelect} onChange={updateTicket} />
                     ))}
                   </div>
                 ) : displayQueries.map(q => (

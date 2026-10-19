@@ -162,7 +162,7 @@ import { query } from '../db/index.js';
 import { evaluateAutomationRules } from './automationEngine.js';
 import { priorityFor } from './triageEngine.js';
 import { isLikelyTracking, geminiGenerate, GEMINI_MODEL } from './geminiService.js';
-import { identifyCourierByTracking, getAllTrackingExamples, processCustomerEmail } from './courierAutomation.js';
+import { getAllTrackingExamples, processCustomerEmail, getTrackingMatchers, recognizeTracking, recognizeTrackingAll, courierFamily, sameCourier } from './courierAutomation.js';
 import { interpretCourierReply } from './replyInterpreter.js';
 import { recordClassification, checkFollowUp, checkCourierClaimSignal, moveTicketToClaims, isAutomatedNotification, automaticMailKind } from './emailTriage.js';
 import { isComplaintLanguage } from './dissatisfactionEngine.js';
@@ -189,26 +189,44 @@ async function findTicketByRef(text) {
   return r.rows[0]?.id || null;
 }
 
-// Find the original ticket a courier reply belongs to, by the tracking number(s)
-// in its body — covering DPD's 1550-prefixed vs bare 10-digit forms.
-async function findTicketByTrackingInBody(body) {
-  const tokens = (String(body || '').match(/\b[A-Za-z0-9]{8,30}\b/g) || []).filter(isLikelyTracking);
-  if (!tokens.length) return null;
+// Find the ticket a courier email belongs to by the consignment number(s) in it.
+// Only REAL consignment formats count (recognizeTracking), and only the same
+// courier: a signature's map-link ID or a random reference used to match
+// whichever ticket had wrongly stored it, piling a courier's unrelated emails
+// into one ticket (#2153, #2416). DPD numbers written with spaces
+// ("1550 1940 217 401 2") are recognised too.
+async function findTicketByTrackingInBody(text, courierHint = null) {
+  const str = String(text || '');
+  const candidates = new Set(str.match(/\b[A-Za-z0-9]{8,30}\b/g) || []);
+  for (const spaced of str.match(/\b\d[\d ]{8,22}\d[A-Za-z]?\b/g) || []) candidates.add(spaced.replace(/\s+/g, ''));
+
+  const matchers = await getTrackingMatchers();
   const variants = new Set();
-  for (const tok of tokens) {
-    const u = tok.toUpperCase();
+  for (const c of candidates) {
+    // Any reading that fits the sending courier (a 14-digit number can be DPD or DHL).
+    const hit = recognizeTrackingAll(c, matchers).find(h => sameCourier(courierFamily(h.courier_code), courierHint));
+    if (!hit) continue;
+    const u = hit.normalized;
     variants.add(u);
     const m = u.match(/^1550(\d{10}[A-Z]?)$/); if (m) variants.add(m[1]);   // strip DPD 1550
     if (/^\d{10}[A-Z]?$/.test(u)) variants.add('1550' + u);                 // add DPD 1550
   }
+  if (!variants.size) return null;
+
   const r = await query(
-    `SELECT id FROM queries
-      WHERE upper(consignment_number) = ANY($1)
+    `SELECT id, courier_code FROM queries
+      WHERE upper(replace(consignment_number, ' ', '')) = ANY($1)
         AND status NOT IN ('resolved','resolved_claim_approved','resolved_claim_rejected')
-      ORDER BY created_at DESC LIMIT 1`,
+      ORDER BY created_at DESC LIMIT 5`,
     [[...variants]],
   );
-  return r.rows[0]?.id || null;
+  return r.rows.find(t => sameCourier(courierFamily(t.courier_code), courierHint))?.id || null;
+}
+
+/** A consignment number worth storing on a ticket: a real courier format, normalised; else null. */
+async function validTracking(candidate) {
+  const hit = recognizeTracking(candidate, await getTrackingMatchers());
+  return hit ? { tracking: hit.normalized, courier_code: hit.courier_code, courier_name: hit.courier_name } : null;
 }
 
 function decodeBase64(str) {
@@ -365,7 +383,7 @@ function forwardedOriginalSender(subject, body) {
   return { email, name };
 }
 
-async function resolveCustomer(senderEmail) {
+export async function resolveCustomer(senderEmail) {
   let res = await query(`SELECT id, business_name, tier FROM customers WHERE lower(primary_email) = $1 LIMIT 1`, [senderEmail.toLowerCase()]);
   if (res.rows[0]) return res.rows[0];
   res = await query(`SELECT id, business_name, tier FROM customers WHERE lower(accounts_email) = $1 LIMIT 1`, [senderEmail.toLowerCase()]);
@@ -385,10 +403,8 @@ async function createMoovStartedTicket({ subject, body, receivedAt, counterpart,
   const triage   = await triageAndSummarize(subject, body);
   let courierName = triage.courier && !/^agl$/i.test(triage.courier.trim()) ? triage.courier : null;
   let courierCode = courierName ? courierName.toLowerCase().replace(/\s+/g, '_') : null;
-  if (!courierCode && triage.tracking_number) {
-    const id = await identifyCourierByTracking(triage.tracking_number);
-    if (id) { courierCode = id.courier_code; courierName = id.courier_name; }
-  }
+  const valid = await validTracking(triage.tracking_number);   // real consignment formats only
+  if (!courierCode && valid) { courierCode = valid.courier_code; courierName = valid.courier_name; }
   const r = await query(`
     INSERT INTO queries
       (customer_id, customer_name, sender_email, sender_matched, subject, description,
@@ -406,7 +422,41 @@ async function createMoovStartedTicket({ subject, body, receivedAt, counterpart,
     GROUP_BY_TICKET_TYPE[triage.ticket_type] || GROUP_BY_TICKET_TYPE.other,
     courierName,
     courierCode,
-    triage.tracking_number || null,
+    valid?.tracking || null,
+    receivedAt,
+  ]);
+  return r.rows[0].id;
+}
+
+// A courier wrote to us on a thread that isn't any ticket's — e.g. DPD's account
+// manager starting a new chain about a different customer's missing pallet.
+// It becomes its own Open ticket (a person needs to read it). Before, these were
+// either dropped or, via a junk "consignment" match, piled into an unrelated
+// ticket.
+async function createCourierStartedTicket({ subject, body, aiText, receivedAt, senderEmail, senderName, autoKind }) {
+  const triage = autoKind
+    ? { ...triageFallback(subject, body), source: `keywords_${autoKind}` }
+    : await triageAndSummarize(subject, aiText);
+  const valid = await validTracking(triage.tracking_number);
+  const family = courierFamily(senderEmail);
+  const courierCode = family === 'royalmail' ? 'royal_mail' : family;
+  const courierName = valid?.courier_name || (family ? family.toUpperCase() : null);
+  const r = await query(`
+    INSERT INTO queries
+      (customer_id, customer_name, sender_email, sender_matched, subject, description,
+       status, query_type, group_name, courier_name, courier_code, consignment_number,
+       trigger, created_at, updated_at)
+    VALUES (NULL, $1, $2, false, $3, $4, 'open', 'other', $5, $6, $7, $8, 'customer_email', $9, $9)
+    RETURNING id
+  `, [
+    senderName ? `${senderName} (${courierName || 'courier'})` : senderEmail,
+    senderEmail,
+    subject,
+    triage.summary,
+    GROUP_BY_TICKET_TYPE[triage.ticket_type] || GROUP_BY_TICKET_TYPE.other,
+    courierName,
+    courierCode,
+    valid?.tracking || null,
     receivedAt,
   ]);
   return r.rows[0].id;
@@ -496,15 +546,24 @@ async function upsertTicket(msg, gmail = null) {
     if (match.rows[0]) queryId = match.rows[0].id;
   }
 
+  let courierStarted = false;   // this courier email started a new ticket (not a reply to us)
+
   // A courier replied outside our thread — route it back to the ORIGINAL ticket
   // by the tracking number, never spin up a new "DPD-as-customer" ticket.
   if (!queryId && isCourierSender) {
     // Authoritative: our [Ref: Moov-XXXX] tag; fallback: tracking number in body.
     queryId = await findTicketByRef(`${subject}\n${body}`)
-           || await findTicketByTrackingInBody(`${subject}\n${body}`);
+           || await findTicketByTrackingInBody(`${subject}\n${body}`, courierFamily(senderEmail));
+    if (!queryId && autoKind) {
+      // An automatic courier email (auto-acknowledgement, bulk notice) that
+      // belongs to no ticket isn't worth a ticket of its own.
+      console.log(`[Gmail sync] Automatic courier email (${autoKind}) from ${senderEmail} matched no ticket — skipped`);
+      return { status: 'skipped', reason: 'automatic courier email with no matching ticket' };
+    }
     if (!queryId) {
-      console.warn(`[Gmail sync] Courier reply from ${senderEmail} unmatched to any ticket (no tracking match) — skipped`);
-      return { status: 'skipped', reason: 'courier reply with no matching ticket' };
+      queryId = await createCourierStartedTicket({ subject, body, aiText, receivedAt, senderEmail, senderName, autoKind });
+      courierStarted = true;
+      console.log(`[Gmail sync] Courier email from ${senderEmail} matched no ticket — new ticket ${queryId}`);
     }
     console.log(`[Gmail sync] Courier reply from ${senderEmail} routed to original ticket ${queryId} via tracking`);
   }
@@ -526,7 +585,7 @@ async function upsertTicket(msg, gmail = null) {
   if (!queryId && isOurs) {
     if (courierRecipient) {
       queryId = await findTicketByRef(`${subject}\n${body}`)
-             || await findTicketByTrackingInBody(`${subject}\n${body}`);
+             || await findTicketByTrackingInBody(`${subject}\n${body}`, courierFamily(courierRecipient));
       if (queryId) console.log(`[Gmail sync] Moov email to ${courierRecipient} attached to ticket ${queryId}`);
     }
     if (!queryId) {
@@ -552,17 +611,17 @@ async function upsertTicket(msg, gmail = null) {
     newTicketDissatisfied = triage.dissatisfied;
     console.log(`[Gmail sync] Triage (${triage.source}): "${subject}" → ${triage.ticket_type}`);
     const groupName   = GROUP_BY_TICKET_TYPE[triage.ticket_type] || 'Queries';
-    const tracking    = triage.tracking_number || null;
+    // Only a real consignment format is stored — see findTicketByTrackingInBody
+    // for what a junk one (a signature's map-link ID) used to cause.
+    const valid       = await validTracking(triage.tracking_number);
+    const tracking    = valid?.tracking || null;
 
     // Resolve courier — never store AGL (wholesaler). Strip it, then identify
     // Evri vs Yodel from the tracking number's shape when the text didn't say.
     let courierName = triage.courier || null;
     if (courierName && /^agl$/i.test(courierName.trim())) courierName = null;
     let courierCode = courierName ? courierName.toLowerCase().replace(/\s+/g, '_') : null;
-    if (!courierCode && tracking) {
-      const id = await identifyCourierByTracking(tracking);
-      if (id) { courierCode = id.courier_code; courierName = id.courier_name; }
-    }
+    if (!courierCode && valid) { courierCode = valid.courier_code; courierName = valid.courier_name; }
 
     // Whole-case SLA clock (WISMO Phase 3, MOS-6) — set once here, never reset by
     // later exchanges. Separate from the existing per-hop courier_sla_expires_at.
@@ -783,6 +842,8 @@ async function upsertTicket(msg, gmail = null) {
   // quoted history stripped.
   if (isCourierSender && autoKind === 'auto_reply') {
     console.log(`[Gmail sync] Courier auto-reply on ticket ${queryId} — not interpreted`);
+  } else if (isCourierSender && courierStarted) {
+    console.log(`[Gmail sync] Courier-started ticket ${queryId} — not a reply to our inquiry, not interpreted`);
   } else if (isCourierSender) {
     try { await interpretCourierReply(queryId, aiText); }
     catch (e) { console.warn('[Gmail sync] courier reply interpretation failed:', e.message); }
