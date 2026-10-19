@@ -383,7 +383,7 @@ function forwardedOriginalSender(subject, body) {
   return { email, name };
 }
 
-async function resolveCustomer(senderEmail) {
+export async function resolveCustomer(senderEmail) {
   let res = await query(`SELECT id, business_name, tier FROM customers WHERE lower(primary_email) = $1 LIMIT 1`, [senderEmail.toLowerCase()]);
   if (res.rows[0]) return res.rows[0];
   res = await query(`SELECT id, business_name, tier FROM customers WHERE lower(accounts_email) = $1 LIMIT 1`, [senderEmail.toLowerCase()]);

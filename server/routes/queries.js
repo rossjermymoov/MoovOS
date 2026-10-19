@@ -364,6 +364,40 @@ router.get('/by-number/:number', async (req, res, next) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Wrongly merged email threads (see services/threadRepair.js)
+//   GET  /api/queries/maintenance/merged-threads[?tickets=2153,2416]
+//        — report only, changes nothing
+//   POST /api/queries/maintenance/merged-threads/split   { ticket_numbers? }
+//        — moves each wrongly merged thread to its own ticket. Needs the
+//          x-maintenance-token header to equal MAINTENANCE_TOKEN (Railway env);
+//          disabled while that isn't set.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const parseTicketList = (v) => (Array.isArray(v) ? v : String(v || '').split(','))
+  .map(x => parseInt(String(x).replace('#', ''), 10)).filter(n => n > 0);
+
+router.get('/maintenance/merged-threads', async (req, res, next) => {
+  try {
+    const { findMergedThreads } = await import('../services/threadRepair.js');
+    const report = await findMergedThreads({ ticketNumbers: parseTicketList(req.query.tickets) });
+    // Email ids aren't needed to read the report.
+    for (const t of report.tickets) for (const th of t.threads) delete th.email_ids;
+    res.set('Cache-Control', 'no-store');
+    res.json(report);
+  } catch (err) { next(err); }
+});
+
+router.post('/maintenance/merged-threads/split', async (req, res, next) => {
+  try {
+    const token = process.env.MAINTENANCE_TOKEN;
+    if (!token) return res.status(403).json({ error: 'Splitting is disabled: MAINTENANCE_TOKEN is not set.' });
+    if (req.get('x-maintenance-token') !== token) return res.status(403).json({ error: 'Wrong or missing maintenance token.' });
+    const { splitMergedThreads } = await import('../services/threadRepair.js');
+    res.json(await splitMergedThreads({ ticketNumbers: parseTicketList(req.body?.ticket_numbers) }));
+  } catch (err) { next(err); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // GET /api/queries/debug  — diagnostic
 // POST /api/queries/seed-now — force-seed 10 practice queries right now
 // ─────────────────────────────────────────────────────────────────────────────
