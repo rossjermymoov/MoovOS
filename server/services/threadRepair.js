@@ -142,8 +142,8 @@ export async function splitMergedThreads({ ticketNumbers = null, onProgress = nu
           (customer_id, customer_name, sender_email, sender_matched, subject, description,
            status, query_type, group_name, group_set_by, courier_code, courier_name, consignment_number,
            trigger, created_at, updated_at, resolved_at)
-        VALUES ($1, $2, $3, $4, $5, $5, $6::query_status, 'other', 'Customer Service', 'triage', $7, $8, $9,
-                'customer_email', $10, $11, CASE WHEN $6 = 'resolved' THEN $11::timestamptz END)
+        VALUES ($1, $2, $3, $4, $5::text, $5::text, $6::text::query_status, 'other', 'Customer Service', 'triage', $7, $8, $9,
+                'customer_email', $10::timestamptz, $11::timestamptz, CASE WHEN $6::text = 'resolved' THEN $11::timestamptz END)
         RETURNING id, ticket_number`,
         [customer?.id || null,
          customer?.business_name || counterpart || '(unknown)',
