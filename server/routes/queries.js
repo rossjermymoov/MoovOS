@@ -321,9 +321,12 @@ router.get('/', async (req, res, next) => {
       query(`
         SELECT *,
           LEFT(latest_email_preview, 120) AS latest_email_preview,
-          (SELECT LEFT(qe.body_text, 8000) FROM query_emails qe
-            WHERE qe.query_id = queries_inbox_view.id AND qe.direction = 'inbound_customer'
-            ORDER BY COALESCE(qe.received_at, qe.created_at) DESC LIMIT 1) AS latest_customer_body
+          (SELECT json_agg(x) FROM (
+             SELECT qe.direction, qe.from_address, COALESCE(qe.received_at, qe.created_at) AS at,
+                    LEFT(qe.body_text, 8000) AS body
+               FROM query_emails qe
+              WHERE qe.query_id = queries_inbox_view.id AND COALESCE(qe.is_ai_draft, false) = false
+              ORDER BY COALESCE(qe.received_at, qe.created_at) DESC LIMIT 3) x) AS recent_emails
         FROM queries_inbox_view
         ${where}
         ORDER BY ${orderBy}
@@ -332,10 +335,17 @@ router.get('/', async (req, res, next) => {
       query(`SELECT COUNT(*)::int AS total FROM queries_inbox_view ${where}`, values),
     ]);
 
-    // Hover preview: the customer's latest message, quoted history stripped.
-    const rows = dataRes.rows.map(({ latest_customer_body, ...r }) => ({
+    // Hover preview: the last three messages from anyone (customer, Moov or
+    // courier), newest first, quoted history stripped. It used to show only the
+    // customer's last message, so a ticket Moov had replied to since looked stale.
+    const rows = dataRes.rows.map(({ recent_emails, ...r }) => ({
       ...r,
-      latest_customer_message: latest_customer_body ? cleanReplyBody(latest_customer_body).slice(0, 700) : null,
+      recent_messages: (recent_emails || []).map(e => ({
+        direction: e.direction,
+        from: e.from_address,
+        at: e.at,
+        text: e.body ? cleanReplyBody(e.body).slice(0, 500) : '',
+      })),
     }));
 
     res.set('Cache-Control', 'no-store');
@@ -1459,6 +1469,33 @@ router.post('/', async (req, res, next) => {
 // PATCH /api/queries/:id
 // Update query — status change, assign, resolve, flag for attention
 // ─────────────────────────────────────────────────────────────────────────────
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PATCH /api/queries/bulk  { ids: [...], assigned_to?, group_name? }
+// Assign and/or regroup many tickets at once from the inbox. A group set here is
+// an agent's choice, so automatic re-sorting never overrides it.
+// ─────────────────────────────────────────────────────────────────────────────
+router.patch('/bulk', async (req, res, next) => {
+  try {
+    const { ids, assigned_to, group_name } = req.body || {};
+    if (!Array.isArray(ids) || !ids.length || ids.length > 500) return res.status(400).json({ error: 'Give between 1 and 500 ticket ids' });
+    const sets = [];
+    const values = [ids];
+    if (assigned_to !== undefined) {
+      if (assigned_to !== null && !/^[0-9a-f-]{36}$/i.test(assigned_to)) return res.status(400).json({ error: 'Invalid assignee' });
+      values.push(assigned_to); sets.push(`assigned_to = $${values.length}::uuid`);
+    }
+    if (group_name !== undefined) {
+      values.push(group_name || null); sets.push(`group_name = $${values.length}`, `group_set_by = 'agent'`);
+    }
+    if (!sets.length) return res.status(400).json({ error: 'Nothing to change' });
+    const r = await query(
+      `UPDATE queries SET ${sets.join(', ')}, updated_at = NOW() WHERE id = ANY($1::uuid[]) RETURNING id`,
+      values,
+    );
+    res.json({ updated: r.rowCount });
+  } catch (err) { next(err); }
+});
 
 router.patch('/:id', async (req, res, next) => {
   try {

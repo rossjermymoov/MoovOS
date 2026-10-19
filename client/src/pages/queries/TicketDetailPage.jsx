@@ -855,6 +855,15 @@ export default function TicketDetailPage() {
     onSuccess:  () => qc.invalidateQueries(['ticket', id]),
   });
 
+  // Ticket number first in the browser tab (like Freshdesk), so a tab can be
+  // found at a glance while logging claims or collections elsewhere.
+  useEffect(() => {
+    if (!ticket?.ticket_number) return undefined;
+    const previous = document.title;
+    document.title = `#${ticket.ticket_number} · ${ticket.customer_name || ticket.subject || 'Ticket'} — Moov OS`;
+    return () => { document.title = previous; };
+  }, [ticket?.ticket_number, ticket?.customer_name, ticket?.subject]);
+
   // Mark emails read on open
   useEffect(() => {
     if (ticket?.id) api.post(`/queries/${ticket.id}/mark-read`).catch(() => {});
