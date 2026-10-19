@@ -15,6 +15,11 @@
  *
  *   findMergedThreads()          — report only, changes nothing
  *   splitMergedThreads({ ... })  — applies the report
+ *   splitMergedThreadsOnce()     — runs the split once, at server start after
+ *                                  deploy, guarded by a marker row (same pattern
+ *                                  as gmailSync's one-time email repair). There
+ *                                  is deliberately no web endpoint that applies
+ *                                  it: the API has no login.
  */
 
 import { query } from '../db/index.js';
@@ -23,6 +28,9 @@ import { resolveCustomer } from './gmailSync.js';
 
 const SUPPORT = /@(moovparcel\.co\.uk|moov-os\.com|moovparcel\.com)\s*>?$/i;
 const RESOLVED = ['resolved', 'resolved_claim_approved', 'resolved_claim_rejected'];
+// A split-out conversation quiet for this long comes back Resolved, so finished
+// threads from weeks ago don't flood the queue as new Open tickets.
+const STALE_DAYS = 30;
 
 function consignmentForms(c) {
   const u = String(c || '').replace(/\s+/g, '').toUpperCase();
@@ -113,7 +121,8 @@ export async function splitMergedThreads({ ticketNumbers = null } = {}) {
       const counterpart = f.counterpart;
       const family = courierFamily(counterpart);
       const customer = family ? null : (counterpart ? await resolveCustomer(counterpart) : null);
-      const status = RESOLVED.includes(t.status) ? 'resolved'
+      const stale = Date.now() - new Date(f.last_at).getTime() > STALE_DAYS * 86400000;
+      const status = RESOLVED.includes(t.status) || stale ? 'resolved'
         : String(f.latest_direction || '').startsWith('inbound') ? 'open' : 'pending';
 
       // A real consignment mentioned in the thread, if any.
@@ -129,9 +138,9 @@ export async function splitMergedThreads({ ticketNumbers = null } = {}) {
         INSERT INTO queries
           (customer_id, customer_name, sender_email, sender_matched, subject, description,
            status, query_type, group_name, group_set_by, courier_code, courier_name, consignment_number,
-           trigger, created_at, updated_at)
+           trigger, created_at, updated_at, resolved_at)
         VALUES ($1, $2, $3, $4, $5, $5, $6::query_status, 'other', 'Customer Service', 'triage', $7, $8, $9,
-                'customer_email', $10, $11)
+                'customer_email', $10, $11, CASE WHEN $6 = 'resolved' THEN $11::timestamptz END)
         RETURNING id, ticket_number`,
         [customer?.id || null,
          customer?.business_name || counterpart || '(unknown)',
@@ -146,7 +155,7 @@ export async function splitMergedThreads({ ticketNumbers = null } = {}) {
         `UPDATE query_emails SET query_id = $1 WHERE query_id = $2 AND gmail_thread_id = $3`,
         [ins.rows[0].id, t.ticket_id, f.gmail_thread_id]);
       done.push({ from_ticket: t.ticket_number, new_ticket: Number(ins.rows[0].ticket_number), thread: f.gmail_thread_id,
-                  subject: f.first_subject, emails_moved: moved.rowCount });
+                  subject: f.first_subject, status, emails_moved: moved.rowCount });
     }
     // The junk "consignment" that caused the merging is cleared.
     if (!t.consignment_is_real && t.consignment) {
@@ -154,4 +163,20 @@ export async function splitMergedThreads({ ticketNumbers = null } = {}) {
     }
   }
   return { tickets_split: tickets.length, new_tickets: done.length, moves: done };
+}
+
+const SPLIT_MARKER = 'split_merged_threads_v1';
+
+/** Run the split once, ever. Safe to call on every start; a rerun after a crash is harmless (already-moved threads aren't found again). */
+export async function splitMergedThreadsOnce() {
+  await query(`CREATE TABLE IF NOT EXISTS app_backfill_markers (key TEXT PRIMARY KEY, completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
+  const done = await query(`SELECT 1 FROM app_backfill_markers WHERE key = $1`, [SPLIT_MARKER]);
+  if (done.rows.length) return { skipped: 'already run' };
+  console.log('[Thread repair] Splitting wrongly merged email threads into their own tickets…');
+  const result = await splitMergedThreads();
+  const resolved = result.moves.filter(m => m.status === 'resolved').length;
+  console.log(`[Thread repair] Done: ${result.tickets_split} ticket(s) cleaned, ${result.new_tickets} new ticket(s) ` +
+    `(${resolved} resolved as quiet for ${STALE_DAYS}+ days), ${result.moves.reduce((n, m) => n + m.emails_moved, 0)} email(s) moved.`);
+  await query(`INSERT INTO app_backfill_markers (key) VALUES ($1) ON CONFLICT DO NOTHING`, [SPLIT_MARKER]);
+  return result;
 }
