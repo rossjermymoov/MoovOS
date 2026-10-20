@@ -807,28 +807,32 @@ function ComposeBar({ queryId, courierName, onSent }) {
 
   return (
     <div style={{ flexShrink: 0, borderTop: '1px solid var(--mv-divider)', background: 'var(--mv-surface)' }}>
-      {/* Premium tab bar */}
-      <div style={{ display: 'flex', padding: '10px 16px 0', gap: 2, borderBottom: '1px solid var(--mv-hairline)', background: 'var(--mv-surface)' }}>
-        {tabs.map(t => (
-          <button key={t.key} onClick={() => switchTab(t.key)} style={{
-            padding: '6px 12px',
-            border: active === t.key ? '1px solid var(--mv-hairline)' : 'none',
-            borderBottom: active === t.key ? '2px solid var(--mv-ink)' : '2px solid transparent',
-            borderRadius: 'var(--v2-r-sm) var(--v2-r-sm) 0 0',
-            background: 'transparent',
-            color: active === t.key ? 'var(--mv-ink)' : 'var(--mv-ink-45)',
-            fontSize: 12.5, fontWeight: active === t.key ? 700 : 500,
-            cursor: 'pointer', marginBottom: 0,
-            display: 'flex', alignItems: 'center', gap: 6,
-            transition: 'all 0.1s', fontFamily: 'inherit',
-          }}
-            onMouseEnter={e => { if (active !== t.key) e.currentTarget.style.color = 'var(--mv-ink-52)'; }}
-            onMouseLeave={e => { if (active !== t.key) e.currentTarget.style.color = 'var(--mv-ink-45)'; }}
-          >
-            <t.icon size={12} />
-            {t.label}
-          </button>
-        ))}
+      {/* Reply / chase / note — real buttons so they read as actions at a glance.
+          The open one is filled purple (interactive); the others are outlined. */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8, padding: '12px 20px',
+        borderBottom: active ? '1px solid var(--mv-hairline)' : 'none', background: 'var(--mv-surface)' }}>
+        {tabs.map(t => {
+          const on = active === t.key;
+          return (
+            <button key={t.key} onClick={() => switchTab(t.key)} aria-pressed={on} style={{
+              padding: '8px 14px',
+              border: `1px solid ${on ? 'var(--mv-purple)' : 'var(--mv-hairline-2)'}`,
+              borderRadius: 'var(--v2-r-sm, 8px)',
+              background: on ? 'var(--mv-purple)' : 'var(--mv-surface)',
+              color: on ? 'var(--mv-on-brand)' : 'var(--mv-ink)',
+              fontSize: 13, fontWeight: 600,
+              cursor: 'pointer', whiteSpace: 'nowrap',
+              display: 'flex', alignItems: 'center', gap: 7,
+              transition: 'border-color 0.1s', fontFamily: 'inherit',
+            }}
+              onMouseEnter={e => { if (!on) e.currentTarget.style.borderColor = 'var(--mv-purple)'; }}
+              onMouseLeave={e => { if (!on) e.currentTarget.style.borderColor = 'var(--mv-hairline-2)'; }}
+            >
+              <t.icon size={14} style={{ color: on ? 'var(--mv-on-brand)' : 'var(--mv-purple)' }} />
+              {t.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* Compose area */}
