@@ -12,13 +12,14 @@ import { query } from '../db/index.js';
 import { getAuthedClient } from '../services/gmailService.js';
 import { extractBody, hydratePayload, buildInlineHtml } from '../services/gmailSync.js';
 import { parse as parseHtml } from 'node-html-parser';
-import { processCustomerEmail, recordCourierReply, getCourierTemplates, stitch } from '../services/courierAutomation.js';
+import { processCustomerEmail, recordCourierReply, getCourierTemplates, stitch, resolveCourierEmail } from '../services/courierAutomation.js';
 import { geminiGenerate } from '../services/geminiService.js';
 import { evaluateAutomationRules } from '../services/automationEngine.js';
 import { triagePriority } from '../services/triageEngine.js';
 import { aiAutonomouslyLearnPreference } from '../services/learningEngine.js';
 import { recordApproval } from '../services/workflowTrust.js';
 import { sendQueryEmail } from '../services/sendGateway.js';
+import { sendNow, validateScheduleTime } from '../services/scheduledSend.js';
 import { cleanReplyBody } from '../services/emailText.js';
 import { AI_WINDOW_DAYS } from '../services/aiUsage.js';
 import { STATUS_BUCKET_SQL, STATUS_GROUPS, GROUP_DEFAULT_STATUS, statusGroupOf } from '../services/statusGroups.js';
@@ -326,6 +327,7 @@ router.get('/', async (req, res, next) => {
                     LEFT(qe.body_text, 8000) AS body
                FROM query_emails qe
               WHERE qe.query_id = queries_inbox_view.id AND COALESCE(qe.is_ai_draft, false) = false
+                AND NOT (qe.sent_at IS NULL AND qe.scheduled_send_at IS NOT NULL)
               ORDER BY COALESCE(qe.received_at, qe.created_at) DESC LIMIT 3) x) AS recent_emails
         FROM queries_inbox_view
         ${where}
@@ -1135,35 +1137,45 @@ router.get('/drafts', async (req, res, next) => {
   try {
     const RESOLVED = `('resolved','resolved_claim_approved','resolved_claim_rejected')`;
 
-    // 1. Pending AI drafts awaiting human QA → kind 'draft'.
+    // 1. Pending AI drafts awaiting human QA → kind 'draft'. Only the newest
+    // unsent draft per ticket and direction: older ones on the same ticket are
+    // superseded and only counted (older_drafts). There used to be a 50-email cap
+    // ordered urgent-first, so a few old urgent tickets with stacks of stale
+    // drafts filled it and new drafts never reached the panel.
     const drafts = await query(`
+      WITH pending AS (
+        SELECT qe.id, qe.query_id, qe.body_text, qe.direction, qe.created_at, qe.reply_to_message_id,
+               COUNT(*)     OVER (PARTITION BY qe.query_id, qe.direction) AS n,
+               ROW_NUMBER() OVER (PARTITION BY qe.query_id, qe.direction ORDER BY qe.created_at DESC) AS rn
+          FROM query_emails qe
+         WHERE qe.is_ai_draft = true
+           AND qe.sent_at IS NULL
+           AND qe.ai_draft_approved_by IS NULL
+      )
       SELECT
         'draft'        AS kind,
-        qe.id          AS email_id,
-        qe.query_id    AS query_id,
-        qe.body_text   AS body_text,
-        qe.direction   AS direction,
-        qe.created_at  AS draft_created_at,
+        p.id           AS email_id,
+        p.query_id     AS query_id,
+        p.body_text    AS body_text,
+        p.direction    AS direction,
+        p.created_at   AS draft_created_at,
+        p.n - 1        AS older_drafts,
         q.ticket_number, q.priority, q.status, q.subject,
         q.customer_name, q.group_name, q.courier_name, q.description,
         q.consecutive_approvals, q.missing_variables, q.triage_intent,
         COALESCE(
-          (SELECT rep.body_text FROM query_emails rep WHERE rep.id = qe.reply_to_message_id),
+          (SELECT rep.body_text FROM query_emails rep WHERE rep.id = p.reply_to_message_id),
           (SELECT qe2.body_text FROM query_emails qe2
             WHERE qe2.query_id = q.id
               AND qe2.direction IN ('inbound_customer','inbound_courier')
             ORDER BY COALESCE(qe2.received_at, qe2.created_at) DESC LIMIT 1)
         ) AS incoming_text
-      FROM query_emails qe
-      JOIN queries q ON q.id = qe.query_id
-      WHERE qe.is_ai_draft = true
-        AND qe.sent_at IS NULL
-        AND qe.ai_draft_approved_by IS NULL
+      FROM pending p
+      JOIN queries q ON q.id = p.query_id
+      WHERE p.rn = 1
         AND q.status NOT IN ${RESOLVED}
-      ORDER BY
-        CASE q.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
-        qe.created_at DESC
-      LIMIT 50
+      ORDER BY p.created_at DESC
+      LIMIT 300
     `);
 
     // 2. Autopilot-paused tickets (needs manual triage, no pending draft) → kind 'paused'.
@@ -1238,9 +1250,13 @@ router.get('/drafts', async (req, res, next) => {
           incoming_text: r.incoming_text,
           customer_email_id: null, customer_body: null,
           courier_email_id:  null, courier_body:  null,
+          draft_created_at: r.draft_created_at,
+          older_drafts: 0,
         };
         byTicket.set(r.query_id, card);
       }
+      card.older_drafts += Number(r.older_drafts) || 0;
+      if (new Date(r.draft_created_at) > new Date(card.draft_created_at)) card.draft_created_at = r.draft_created_at;
       if (r.direction === 'outbound_courier') {
         card.courier_email_id = r.email_id; card.courier_body = r.body_text;
       } else {
@@ -1249,7 +1265,12 @@ router.get('/drafts', async (req, res, next) => {
       }
     }
 
-    res.json([...closures.rows, ...paused.rows, ...byTicket.values()]);
+    // Newest draft first, and drafts ahead of the paused "needs a person" cards
+    // so a fresh draft is always near the top of the panel.
+    const draftCards = [...byTicket.values()]
+      .sort((a, b) => new Date(b.draft_created_at) - new Date(a.draft_created_at))
+      .slice(0, 100);
+    res.json([...closures.rows, ...draftCards, ...paused.rows]);
   } catch (err) { next(err); }
 });
 
@@ -1306,7 +1327,8 @@ router.get('/:id', async (req, res, next) => {
                from_address, to_address, cc_address,
                is_ai_draft, ai_draft_approved_by, ai_draft_approved_at, ai_draft_edited,
                sent_at, received_at, read_at, created_at,
-               gmail_message_id, gmail_thread_id
+               gmail_message_id, gmail_thread_id,
+               send_status, send_error, scheduled_send_at
         FROM query_emails
         WHERE query_id = $1
         ORDER BY created_at DESC
@@ -1333,8 +1355,8 @@ router.get('/:id', async (req, res, next) => {
     // Replies are ingested into the DB by the Gmail sync worker (inbox + sent),
     // so page load just orders the stored thread chronologically — no live fetch.
     const ordered = [...emailsRes.rows].sort((a, b) =>
-      new Date(a.sent_at || a.received_at || a.created_at) -
-      new Date(b.sent_at || b.received_at || b.created_at)
+      new Date(a.sent_at || a.received_at || a.scheduled_send_at || a.created_at) -
+      new Date(b.sent_at || b.received_at || b.scheduled_send_at || b.created_at)
     );
 
     res.json({
@@ -1563,8 +1585,82 @@ router.patch('/:id', async (req, res, next) => {
 // Approve an AI draft and mark as sent, OR log an inbound/manual email
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Address, subject and thread for a reply typed in MoovOS: answer the latest
+// message from that party so Gmail keeps it in the thread they already see.
+async function replyEnvelope(queryId, direction) {
+  const inbound = direction === 'outbound_courier' ? 'inbound_courier' : 'inbound_customer';
+  const t = (await query(
+    `SELECT subject, courier_code, query_type FROM queries WHERE id = $1`, [queryId],
+  )).rows[0];
+  if (!t) return null;
+  const parent = (await query(
+    `SELECT id, from_address, subject FROM query_emails
+      WHERE query_id = $1 AND direction = $2
+      ORDER BY COALESCE(received_at, created_at) DESC LIMIT 1`,
+    [queryId, inbound],
+  )).rows[0];
+  const base = (parent?.subject || t.subject || 'your enquiry').trim();
+  const subject = /^re:/i.test(base) ? base : `Re: ${base}`;
+  let to = null;
+  if (direction === 'outbound_courier') {
+    to = parent?.from_address || await resolveCourierEmail(t.courier_code, null);
+  }
+  return { subject, to, replyTo: parent?.id || null };
+}
+
+// Typed reply: send now ({ send: true }) or at a time ({ scheduled_at }).
+// A failed immediate send removes the row and returns the reason, so the text
+// stays in the compose box and nothing looks sent that wasn't.
+async function createTypedReply(req, res) {
+  const { direction, body_text, scheduled_at, scheduled_by } = req.body;
+  const queryId = req.params.id;
+  if (!['outbound_customer', 'outbound_courier'].includes(direction)) {
+    return res.status(400).json({ error: 'Only replies to the customer or courier can be sent.' });
+  }
+  if (!body_text || !body_text.trim()) return res.status(400).json({ error: 'The message is empty.' });
+
+  let at = null;
+  if (scheduled_at) {
+    const v = validateScheduleTime(scheduled_at);
+    if (v.error) return res.status(400).json({ error: v.error });
+    at = v.at;
+  }
+
+  const env = await replyEnvelope(queryId, direction);
+  if (!env) return res.status(404).json({ error: 'Ticket not found' });
+  if (direction === 'outbound_courier' && !env.to) {
+    return res.status(400).json({ error: 'No address for this courier — set it in Settings → Comms Templates.' });
+  }
+
+  const ins = await query(`
+    INSERT INTO query_emails (
+      query_id, direction, subject, body_text, from_address, to_address,
+      reply_to_message_id, is_ai_draft, send_status, scheduled_send_at, scheduled_by
+    ) VALUES ($1, $2, $3, $4, 'service@moovparcel.co.uk', $5, $6, false, $7, $8, $9)
+    RETURNING id`,
+    [queryId, direction, env.subject, body_text.trim(), env.to, env.replyTo,
+     at ? 'scheduled' : null, at, at ? (scheduled_by || null) : null]);
+  const emailId = ins.rows[0].id;
+
+  if (at) {
+    const row = (await query(`SELECT * FROM query_emails WHERE id = $1`, [emailId])).rows[0];
+    return res.status(201).json(row);
+  }
+
+  try {
+    await sendNow(emailId);
+  } catch (e) {
+    await query(`DELETE FROM query_emails WHERE id = $1 AND sent_at IS NULL`, [emailId]);
+    return res.status(502).json({ error: `Not sent: ${e.message}` });
+  }
+  const row = (await query(`SELECT * FROM query_emails WHERE id = $1`, [emailId])).rows[0];
+  res.status(201).json(row);
+}
+
 router.post('/:id/emails', async (req, res, next) => {
   try {
+    if (req.body?.send === true || req.body?.scheduled_at) return await createTypedReply(req, res);
+
     const {
       direction, subject, body_text, body_html,
       from_address, to_address, cc_address,
@@ -1641,6 +1737,18 @@ router.patch('/:id/mark-read', async (req, res, next) => {
 // This avoids re-inserting a new row — we simply mark the draft sent.
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Once a draft on one side (customer or courier) is approved, older unsent AI
+// drafts on that side are out of date — remove them so they don't keep the
+// ticket in the QA Bay or get approved by mistake later.
+async function discardSupersededDrafts(queryId, direction, createdAt) {
+  await query(
+    `DELETE FROM query_emails
+      WHERE query_id = $1 AND direction = $2 AND is_ai_draft = true
+        AND sent_at IS NULL AND ai_draft_approved_by IS NULL AND created_at < $3`,
+    [queryId, direction, createdAt],
+  );
+}
+
 router.patch('/:id/emails/:emailId/approve', async (req, res, next) => {
   try {
     const { body_text } = req.body;
@@ -1666,6 +1774,34 @@ router.patch('/:id/emails/:emailId/approve', async (req, res, next) => {
     // Sandbox mode bypasses any live mail transport — used by the demo loop-back
     // below so a full ping-pong cycle can be watched with no real mail sent.
     const sandbox = req.query.sandbox === 'true' || req.body.sandbox === true;
+
+    // Approve for later: the draft leaves the QA Bay as a scheduled message and
+    // the scheduler sends it at that time. The approval itself counts now (a
+    // person checked it); the status move happens when it actually goes out.
+    if (req.body.scheduled_at && !sandbox) {
+      const v = validateScheduleTime(req.body.scheduled_at);
+      if (v.error) return res.status(400).json({ error: v.error });
+      const result = await query(`
+        UPDATE query_emails SET
+          body_text = $1, is_ai_draft = false,
+          ai_draft_approved_at = NOW(), ai_draft_edited = $2,
+          send_status = 'scheduled', send_error = NULL,
+          scheduled_send_at = $3, scheduled_by = $4
+        WHERE id = $5 AND query_id = $6 AND sent_at IS NULL
+        RETURNING *`,
+        [finalBody, !!wasEdited, v.at, req.body.scheduled_by || null, emailId, queryId]);
+      await query(
+        `UPDATE queries SET consecutive_approvals = CASE WHEN $2 THEN 0 ELSE consecutive_approvals + 1 END
+          WHERE id = $1`,
+        [queryId, !!wasEdited],
+      );
+      try {
+        const c = await query(`SELECT courier_code, triage_intent FROM queries WHERE id = $1`, [queryId]);
+        if (c.rows[0]) await recordApproval(c.rows[0].courier_code, c.rows[0].triage_intent, !!wasEdited);
+      } catch (e) { console.warn('[WorkflowTrust] scheduled-approve calibration failed:', e.message); }
+      await discardSupersededDrafts(queryId, draft.direction, draft.created_at);
+      return res.json(result.rows[0]);
+    }
 
     // Live send — via the Gmail-backed Send Gateway, not SendGrid, so the reply
     // lands in the same thread the customer/courier already sees. On failure,
@@ -1696,6 +1832,7 @@ router.patch('/:id/emails/:emailId/approve', async (req, res, next) => {
       WHERE id = $3 AND query_id = $4
       RETURNING *
     `, [finalBody, wasEdited, emailId, queryId]);
+    if (!sandbox) await discardSupersededDrafts(queryId, draft.direction, draft.created_at);
 
     // Record first response time if not already set
     if (draft.direction && draft.direction.startsWith('outbound')) {
@@ -1794,10 +1931,14 @@ router.post('/:id/approve-strategy', async (req, res, next) => {
     const { customer_body, courier_body } = req.body || {};
     const sandbox = req.query.sandbox === 'true' || req.body.sandbox === true;
 
+    // Newest draft per direction only — the bodies the QA card showed. Older
+    // drafts on the same side are superseded (removed once the newest is sent);
+    // sending all of them used to send one email per stale draft.
     const pending = await query(
-      `SELECT id, direction, body_text FROM query_emails
+      `SELECT DISTINCT ON (direction) id, direction, body_text, created_at FROM query_emails
         WHERE query_id = $1 AND is_ai_draft = true
-          AND sent_at IS NULL AND ai_draft_approved_by IS NULL`,
+          AND sent_at IS NULL AND ai_draft_approved_by IS NULL
+        ORDER BY direction, created_at DESC`,
       [queryId],
     );
     if (!pending.rows.length) return res.status(404).json({ error: 'No pending drafts on this ticket' });
@@ -1837,6 +1978,7 @@ router.post('/:id/approve-strategy', async (req, res, next) => {
         WHERE id = $3
       `, [finalBody, wasEdited, d.id]);
       dispatched.push({ email_id: d.id, direction: d.direction, edited: wasEdited });
+      await discardSupersededDrafts(queryId, d.direction, d.created_at);
     }
 
     // Only move the ticket forward / touch the trust streak for what actually
@@ -2799,6 +2941,64 @@ router.delete('/:id/emails/:emailId', async (req, res, next) => {
     );
     if (!r.rows.length) return res.status(404).json({ error: 'AI draft not found' });
     res.json({ ok: true, deleted: r.rows[0].id });
+  } catch (e) { next(e); }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Scheduled messages (a typed reply or approved AI draft queued for later, or
+// one whose send failed):
+//   POST   /:id/emails/:emailId/send-now  — send it now
+//   PATCH  /:id/emails/:emailId/schedule  — move it to another time
+//   DELETE /:id/emails/:emailId/schedule  — cancel: an approved AI draft goes
+//                                           back to the QA Bay, a typed reply is removed
+// ─────────────────────────────────────────────────────────────────────────────
+const UNSENT_SCHEDULED = `sent_at IS NULL AND send_status IN ('scheduled','failed') AND is_ai_draft = false`;
+
+router.post('/:id/emails/:emailId/send-now', async (req, res, next) => {
+  try {
+    const own = await query(`SELECT 1 FROM query_emails WHERE id = $1 AND query_id = $2 AND ${UNSENT_SCHEDULED}`,
+      [req.params.emailId, req.params.id]);
+    if (!own.rows.length) return res.status(404).json({ error: 'No unsent scheduled message found.' });
+    try {
+      await sendNow(req.params.emailId);
+    } catch (e) {
+      return res.status(502).json({ error: `Not sent: ${e.message}` });
+    }
+    const row = (await query(`SELECT * FROM query_emails WHERE id = $1`, [req.params.emailId])).rows[0];
+    res.json(row);
+  } catch (e) { next(e); }
+});
+
+router.patch('/:id/emails/:emailId/schedule', async (req, res, next) => {
+  try {
+    const v = validateScheduleTime(req.body?.scheduled_at);
+    if (v.error) return res.status(400).json({ error: v.error });
+    const r = await query(
+      `UPDATE query_emails
+          SET scheduled_send_at = $3, send_status = 'scheduled', send_error = NULL
+        WHERE id = $1 AND query_id = $2 AND ${UNSENT_SCHEDULED}
+        RETURNING *`,
+      [req.params.emailId, req.params.id, v.at]);
+    if (!r.rows.length) return res.status(404).json({ error: 'No unsent scheduled message found.' });
+    res.json(r.rows[0]);
+  } catch (e) { next(e); }
+});
+
+router.delete('/:id/emails/:emailId/schedule', async (req, res, next) => {
+  try {
+    const back = await query(
+      `UPDATE query_emails
+          SET is_ai_draft = true, ai_draft_approved_at = NULL, send_status = NULL, send_error = NULL,
+              scheduled_send_at = NULL, scheduled_by = NULL
+        WHERE id = $1 AND query_id = $2 AND ${UNSENT_SCHEDULED} AND ai_draft_approved_at IS NOT NULL
+        RETURNING id`,
+      [req.params.emailId, req.params.id]);
+    if (back.rows.length) return res.json({ ok: true, returned_to_drafts: true });
+    const del = await query(
+      `DELETE FROM query_emails WHERE id = $1 AND query_id = $2 AND ${UNSENT_SCHEDULED} RETURNING id`,
+      [req.params.emailId, req.params.id]);
+    if (!del.rows.length) return res.status(404).json({ error: 'No unsent scheduled message found.' });
+    res.json({ ok: true, deleted: true });
   } catch (e) { next(e); }
 });
 

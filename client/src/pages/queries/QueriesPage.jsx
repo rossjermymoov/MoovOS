@@ -1059,8 +1059,16 @@ function MessageBubble({ email, onApprove, onEdit, approving, courierName, couri
               AI Draft
             </span>
           )}
-          <span style={{ fontSize: 10, color: C.muted }}>
-            {isSent ? fmtDate(email.sent_at) : fmtDate(email.received_at || email.created_at)}
+          {!isSent && !isDraft && email.scheduled_send_at && (
+            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.09em', textTransform: 'uppercase',
+              color: email.send_status === 'failed' ? 'var(--mv-magenta)' : 'var(--mv-purple)' }}>
+              {email.send_status === 'failed' ? 'Not sent' : 'Scheduled'}
+            </span>
+          )}
+          <span style={{ fontSize: 10, color: C.muted, fontVariantNumeric: 'tabular-nums' }}>
+            {isSent ? fmtDate(email.sent_at)
+              : (!isDraft && email.scheduled_send_at) ? fmtDate(email.scheduled_send_at)
+              : fmtDate(email.received_at || email.created_at)}
           </span>
         </div>
 
@@ -2407,7 +2415,11 @@ function AutopilotQABay({ refreshKey, onChanged }) {
                 </div>
               )}
 
-              <p className="mb-3 line-clamp-3 text-sm leading-snug" style={{ color: 'var(--mv-ink-78)' }}>{intentLine(c)}</p>
+              <p className="mb-2 line-clamp-3 text-sm leading-snug" style={{ color: 'var(--mv-ink-78)' }}>{intentLine(c)}</p>
+              <p className="mb-3 text-xs" style={{ color: 'var(--mv-ink-45)', fontVariantNumeric: 'tabular-nums' }}>
+                {c.draft_created_at ? `Drafted ${timeAgo(c.draft_created_at)}` : 'Drafted'}
+                {c.older_drafts > 0 && ` · replaces ${c.older_drafts} older draft${c.older_drafts === 1 ? '' : 's'}`}
+              </p>
 
               <div className="flex flex-wrap gap-2">
                 <button onClick={() => quickApprove(c)} disabled={busyId === c.query_id}

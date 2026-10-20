@@ -44,6 +44,7 @@ import tasksRouter from './routes/tasks.js';
 import notificationsRouter from './routes/notifications.js';
 import taskConfigRouter from './routes/taskConfig.js';
 import { startGmailSync, backfillEmailBodiesOnce, backfillSentRepliesOnce } from './services/gmailSync.js';
+import { startScheduledSender } from './services/scheduledSend.js';
 import { runSlaScreamScan } from './services/slaMonitor.js';
 import { runWholeCaseSlaScan, runAutoChaseScan, runSpotCheckSampling } from './services/loopController.js';
 
@@ -146,6 +147,8 @@ async function start() {
     // Webhook health monitor — checks every 5 minutes during UK business hours
     startWebhookHealthMonitor();
     startGmailSync(3 * 60 * 1000); // poll every 3 minutes
+    // Scheduled replies — send any whose time has come, checked every minute.
+    startScheduledSender(60 * 1000);
     // SLA scream monitor — escalate breached tickets to Google Chat every 5 min.
     setInterval(() => { runSlaScreamScan().catch(e => console.warn('[SLA] scan error:', e.message)); }, 5 * 60 * 1000);
     // WISMO Phase 3 (MOS-6) — whole-case SLA clock + spot-check sampling (both

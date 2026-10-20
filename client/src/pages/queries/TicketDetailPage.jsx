@@ -17,6 +17,7 @@ import { getCourierLogo } from '../../utils/courierLogos';
 import { STATUS_GROUPS, statusGroupOf } from './statusGroups';
 import { TICKET_GROUPS } from './groups';
 import { ParcelDrawer } from '../tracking/TrackingPage';
+import SchedulePicker, { formatSendTime } from './SchedulePicker';
 
 const api = axios.create({ baseURL: '/api' });
 
@@ -416,6 +417,10 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
   const isCourier = dir === 'inbound_courier' || dir === 'outbound_courier';
   const isNote    = dir === 'note';
   const isOut     = dir === 'outbound_customer' || dir === 'outbound_courier';
+  // A reply queued for later, or a scheduled one that failed to go out.
+  const isScheduled = isOut && !email.sent_at && !email.is_ai_draft
+    && ['scheduled', 'sending', 'failed'].includes(email.send_status);
+  const [schedBusy, setSchedBusy] = useState(null);
 
   const logoUrl = isCourier && courierCode ? getCourierLogo(courierCode) : null;
 
@@ -454,18 +459,39 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
   // Full stored body; splitMessage() separates the new content from quoted history.
   const displayBody = (email.body_text || '').trim();
 
-  const ts = email.sent_at || email.received_at || email.created_at;
+  const ts = email.sent_at || email.received_at || (isScheduled ? email.scheduled_send_at : null) || email.created_at;
 
-  async function doApprove(body) {
+  async function doApprove(body, scheduledAt = null) {
     setApproving(true);
     try {
       await api.patch(`/queries/${queryId}/emails/${email.id}/approve`, {
         body_text: body ?? email.body_text,
+        ...(scheduledAt ? { scheduled_at: scheduledAt } : {}),
       });
       qc.invalidateQueries(['ticket', queryId]);
       onApproved?.();
-    } catch (e) { alert('Approval failed: ' + (e.response?.data?.error || e.message)); }
+    } catch (e) { alert((scheduledAt ? 'Not scheduled: ' : 'Approval failed: ') + (e.response?.data?.error || e.message)); }
     finally { setApproving(false); }
+  }
+
+  // Scheduled message actions: send now, move the time, or cancel.
+  async function scheduleAction(kind, scheduledAt) {
+    if (kind === 'cancel') {
+      const fromAi = !!email.ai_draft_approved_at;
+      if (!window.confirm(fromAi
+        ? 'Cancel this scheduled email? It goes back to the AI drafts for review.'
+        : 'Cancel this scheduled email? It will not be sent.')) return;
+    }
+    setSchedBusy(kind);
+    try {
+      const base = `/queries/${queryId}/emails/${email.id}`;
+      if (kind === 'now')        await api.post(`${base}/send-now`);
+      else if (kind === 'move')  await api.patch(`${base}/schedule`, { scheduled_at: scheduledAt });
+      else                       await api.delete(`${base}/schedule`);
+      qc.invalidateQueries(['ticket', queryId]);
+      onApproved?.();
+    } catch (e) { alert(e.response?.data?.error || e.message); }
+    finally { setSchedBusy(null); }
   }
 
   async function discardDraft() {
@@ -574,6 +600,48 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
           </pre>
         )}
 
+        {/* Scheduled send — status line + actions */}
+        {isScheduled && (
+          <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--mv-hairline)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              {email.send_status === 'failed' ? (
+                <span aria-hidden style={{ width: 9, height: 9, background: 'var(--mv-magenta)', flexShrink: 0 }} />
+              ) : (
+                <span aria-hidden style={{ width: 0, height: 0, borderLeft: '5px solid transparent', borderRight: '5px solid transparent',
+                  borderBottom: '9px solid var(--mv-purple)', flexShrink: 0 }} />
+              )}
+              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.09em', textTransform: 'uppercase',
+                color: email.send_status === 'failed' ? 'var(--mv-magenta)' : 'var(--mv-purple)', fontVariantNumeric: 'tabular-nums' }}>
+                {email.send_status === 'failed' ? 'Not sent'
+                  : email.send_status === 'sending' ? 'Sending'
+                  : `Scheduled for ${formatSendTime(email.scheduled_send_at)}`}
+              </span>
+            </div>
+            {email.send_status === 'failed' && email.send_error && (
+              <p style={{ margin: '0 0 10px', fontSize: 13, color: 'var(--mv-ink-78)' }}>{email.send_error}</p>
+            )}
+            {email.send_status !== 'sending' && (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', whiteSpace: 'nowrap' }}>
+                <button onClick={() => scheduleAction('now')} disabled={!!schedBusy} style={{
+                  padding: '6px 14px', borderRadius: 8, border: 'none', background: C.green, color: 'var(--mv-on-brand)',
+                  fontSize: 12, fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5,
+                  opacity: schedBusy ? 0.6 : 1,
+                }}>
+                  <Send size={11} /> {schedBusy === 'now' ? 'Sending…' : email.send_status === 'failed' ? 'Try again now' : 'Send now'}
+                </button>
+                <SchedulePicker placement="down" align="left" label="Change time" busy={schedBusy === 'move'} disabled={!!schedBusy}
+                  onPick={at => scheduleAction('move', at)} />
+                <button onClick={() => scheduleAction('cancel')} disabled={!!schedBusy} style={{
+                  padding: '6px 12px', borderRadius: 8, border: '0.5px solid var(--mv-magenta-200)', background: 'transparent',
+                  color: 'var(--mv-magenta)', fontSize: 12, cursor: 'pointer', marginLeft: 'auto',
+                }}>
+                  {schedBusy === 'cancel' ? 'Cancelling…' : 'Cancel send'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* AI draft actions */}
         {isDraft && (
           <div style={{ marginTop: 14 }}>
@@ -622,7 +690,7 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
                 </button>
               </div>
             ) : editMode ? (
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', whiteSpace: 'nowrap' }}>
                 <button onClick={() => { doApprove(editBody); setEditMode(false); }} disabled={approving} style={{
                   padding: '6px 14px', borderRadius: 8, border: 'none',
                   background: C.green, color: 'var(--mv-on-brand)', fontSize: 12, fontWeight: 500,
@@ -630,6 +698,8 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
                 }}>
                   <CheckCircle2 size={11} /> {approving ? 'Saving…' : 'Approve & send'}
                 </button>
+                <SchedulePicker placement="down" align="left" label="Approve & schedule" disabled={approving}
+                  onPick={at => { doApprove(editBody, at); setEditMode(false); }} />
                 <button onClick={() => { setEditMode(false); setEditBody(email.body_text || ''); }} style={{
                   padding: '6px 12px', borderRadius: 8, border: `0.5px solid ${C.border}`,
                   background: 'transparent', color: C.muted, fontSize: 12, cursor: 'pointer',
@@ -638,7 +708,7 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
                 </button>
               </div>
             ) : (
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', whiteSpace: 'nowrap' }}>
                 <button onClick={() => doApprove()} disabled={approving} style={{
                   padding: '6px 14px', borderRadius: 8, border: 'none',
                   background: C.green, color: 'var(--mv-on-brand)', fontSize: 12, fontWeight: 500,
@@ -647,6 +717,7 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
                 }}>
                   <CheckCircle2 size={11} /> {approving ? 'Sending…' : 'Approve & send'}
                 </button>
+                <SchedulePicker placement="down" align="left" label="Approve & schedule" disabled={approving} onPick={at => doApprove(undefined, at)} />
                 <button onClick={() => setReviseMode(true)} style={{
                   padding: '6px 12px', borderRadius: 8, border: `0.5px solid ${C.border}`,
                   background: 'transparent', color: C.sub, fontSize: 12, cursor: 'pointer',
@@ -709,19 +780,28 @@ function ComposeBar({ queryId, courierName, onSent }) {
     finally { setGen(false); }
   }
 
-  async function send() {
+  // Replies go out through Gmail now (or at the scheduled time); a note is only
+  // saved. On failure the text stays in the box so nothing is lost.
+  async function send(scheduledAt = null) {
     if (!text.trim() || sending) return;
-    setSending(true);
+    const isNote = activeCfg.dir === 'note';
+    setSending(scheduledAt ? 'schedule' : 'send');
     try {
-      await api.post(`/queries/${queryId}/emails`, {
+      await api.post(`/queries/${queryId}/emails`, isNote ? {
+        direction: 'note',
+        body_text: text.trim(),
+        from_address: 'internal',
+      } : {
         direction: activeCfg.dir,
         body_text: text.trim(),
-        from_address: activeCfg.dir === 'note' ? 'internal' : 'service@moovparcel.co.uk',
+        ...(scheduledAt ? { scheduled_at: scheduledAt } : { send: true }),
       });
       setText(''); setDrafted(false);
       qc.invalidateQueries(['ticket', queryId]);
       onSent?.();
-    } catch (e) { alert('Send failed: ' + (e.response?.data?.error || e.message)); }
+    } catch (e) {
+      alert((scheduledAt ? 'Not scheduled: ' : 'Not sent: ') + (e.response?.data?.error || e.message));
+    }
     finally { setSending(false); }
   }
 
@@ -803,7 +883,11 @@ function ComposeBar({ queryId, courierName, onSent }) {
                 Template
               </button>
             </div>
-            <button onClick={send} disabled={sending || !text.trim()} style={{
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {active !== 'note' && (
+              <SchedulePicker onPick={at => send(at)} disabled={!!sending || !text.trim()} busy={sending === 'schedule'} />
+            )}
+            <button onClick={() => send()} disabled={!!sending || !text.trim()} style={{
               display: 'flex', alignItems: 'center', gap: 5, padding: '7px 18px',
               borderRadius: 7, border: 'none',
               background: text.trim() ? 'var(--mv-ink)' : 'color-mix(in srgb, var(--mv-ink) 22%, var(--mv-surface))',
@@ -811,8 +895,9 @@ function ComposeBar({ queryId, courierName, onSent }) {
               cursor: sending || !text.trim() ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
             }}>
               <Send size={12} />
-              {sending ? 'Sending…' : active === 'note' ? 'Save note' : 'Send'}
+              {sending === 'send' ? (active === 'note' ? 'Saving…' : 'Sending…') : active === 'note' ? 'Save note' : 'Send'}
             </button>
+            </div>
           </div>
         </div>
       )}
