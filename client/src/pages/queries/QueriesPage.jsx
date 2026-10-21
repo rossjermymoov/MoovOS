@@ -2764,7 +2764,7 @@ export default function QueriesPage() {
                 Reset
               </button>
             </>
-          ) : 'Oldest first'}
+          ) : 'Newest email first'}
         </span>
         {/* Automation simulator */}
         <button
@@ -2924,7 +2924,7 @@ export default function QueriesPage() {
             )}
             {!loading && displayQueries.length > 0 && (
               <>
-                {/* Rows arrive in queue order from the API: status group, then oldest first */}
+                {/* Rows arrive in order from the API: newest email first */}
                 {view === 'compact' ? (
                   <div role="table" aria-label="Tickets">
                     {selectedIds.size > 0 && (

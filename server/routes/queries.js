@@ -27,6 +27,16 @@ import { STATUS_BUCKET_SQL, STATUS_GROUPS, GROUP_DEFAULT_STATUS, statusGroupOf }
 // A ticket's latest activity: its newest email, or when it was created.
 const ACTIVITY_AT = `GREATEST(created_at, COALESCE(latest_email_at, created_at))`;
 
+// When the newest real email on a ticket arrived or went out — the Queries
+// list's default order. Ticket creation time when it has no email yet.
+const LAST_EMAIL_AT = `COALESCE((
+  SELECT MAX(COALESCE(qe.sent_at, qe.received_at, qe.created_at)) FROM query_emails qe
+   WHERE qe.query_id = queries_inbox_view.id
+     AND COALESCE(qe.is_ai_draft, false) = false
+     AND qe.direction <> 'internal_note'
+     AND NOT (qe.sent_at IS NULL AND qe.direction IN ('outbound_customer', 'outbound_courier'))
+), created_at)`;
+
 const sqlList = (arr) => `(${arr.map(v => `'${v}'`).join(', ')})`;
 
 const router = express.Router();
@@ -304,17 +314,18 @@ router.get('/', async (req, res, next) => {
       owner:    `assignee_name ${sortDir} NULLS LAST`,
     };
 
-    // Default = the work queue: tickets waiting on us come first (Open, then In
-    // Progress, then Claims, then Pending on someone else), oldest first within
-    // each, so the ticket closest to missing the response target is on top.
+    // Default = newest email first, like an inbox: a ticket moves to the top
+    // whenever a customer or courier writes, or Moov sends a reply. AI drafts,
+    // unsent scheduled replies and internal notes don't count as new email.
+    // (Until Oct 2026 the default was status group, then oldest first.)
     // Priority is deliberately NOT a sort key — customers flag "P1"/"urgent" on
     // routine mail, and pinning those starved older tickets. An explicit `sort`
     // param still orders by that column.
     const orderBy = COLUMN_SORTS[req.query.sort]
-      ? `${COLUMN_SORTS[req.query.sort]}, created_at ASC`
+      ? `${COLUMN_SORTS[req.query.sort]}, ${LAST_EMAIL_AT} DESC`
       : validSorts.includes(req.query.sort)
         ? `${sort} ${sortDir} NULLS LAST`
-        : `${STATUS_BUCKET_SQL} ASC, created_at ASC`;
+        : `${LAST_EMAIL_AT} DESC`;
 
     const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 

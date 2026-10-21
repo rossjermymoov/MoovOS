@@ -415,7 +415,7 @@ function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
   const dir       = email.direction;
   const isDraft   = email.is_ai_draft && !email.sent_at && !email.ai_draft_approved_by;
   const isCourier = dir === 'inbound_courier' || dir === 'outbound_courier';
-  const isNote    = dir === 'note';
+  const isNote    = dir === 'internal_note' || dir === 'note';
   const isOut     = dir === 'outbound_customer' || dir === 'outbound_courier';
   // A reply queued for later, or a scheduled one that failed to go out.
   const isScheduled = isOut && !email.sent_at && !email.is_ai_draft
@@ -760,7 +760,7 @@ function ComposeBar({ queryId, courierName, onSent }) {
   const tabs = [
     { key: 'customer', label: 'Reply to customer',            icon: Mail,          dir: 'outbound_customer' },
     { key: 'courier',  label: `Chase ${courierName || 'courier'}`, icon: Truck,    dir: 'outbound_courier'  },
-    { key: 'note',     label: 'Internal note',                icon: MessageSquare, dir: 'note'              },
+    { key: 'note',     label: 'Internal note',                icon: MessageSquare, dir: 'internal_note'     },
   ];
   const activeCfg = tabs.find(t => t.key === active);
 
@@ -784,11 +784,11 @@ function ComposeBar({ queryId, courierName, onSent }) {
   // saved. On failure the text stays in the box so nothing is lost.
   async function send(scheduledAt = null) {
     if (!text.trim() || sending) return;
-    const isNote = activeCfg.dir === 'note';
+    const isNote = active === 'note';
     setSending(scheduledAt ? 'schedule' : 'send');
     try {
       await api.post(`/queries/${queryId}/emails`, isNote ? {
-        direction: 'note',
+        direction: 'internal_note',   // the only note value the database accepts
         body_text: text.trim(),
         from_address: 'internal',
       } : {
