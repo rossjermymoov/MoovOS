@@ -402,8 +402,9 @@ router.get('/maintenance/merged-threads', async (req, res, next) => {
     const { findMergedThreads, getSplitJobStatus } = await import('../services/threadRepair.js');
     const report = await findMergedThreads({ ticketNumbers: parseTicketList(req.query.tickets) });
     report.split_job = await getSplitJobStatus();   // progress / error of the one-time split
-    const { getMatchingCleanupStatus } = await import('../services/matchingCleanup.js');
+    const { getMatchingCleanupStatus, getUndoStatus } = await import('../services/matchingCleanup.js');
     report.matching_cleanup = await getMatchingCleanupStatus();
+    report.matching_undo = await getUndoStatus();
     // Email ids aren't needed to read the report.
     for (const t of report.tickets) for (const th of t.threads) delete th.email_ids;
     res.set('Cache-Control', 'no-store');
