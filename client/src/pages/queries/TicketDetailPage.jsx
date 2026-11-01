@@ -395,6 +395,46 @@ function EmailHtml({ html }) {
   return <div ref={hostRef} />;
 }
 
+// ── Possibly linked tickets ──────────────────────────────────────────────────
+// A conversation that names a parcel another ticket is about, but wasn't filed
+// on it (it names several parcels, or that ticket is resolved or quiet for 30+
+// days). Shown for a person to look over; nothing is merged automatically.
+const LINK_REASONS = {
+  several_consignments: 'mentions more than one parcel, so it has its own ticket',
+  quiet:                'that ticket had no email for 30+ days',
+  resolved:             'that ticket is resolved',
+  moved_off:            'this conversation was moved off it: it was about more than one parcel',
+};
+
+function LinkedSuggestions({ items, onOpen }) {
+  if (!items?.length) return null;
+  return (
+    <div style={{ padding: '10px 20px', borderBottom: '1px solid var(--mv-hairline)',
+      borderLeft: '3px solid var(--mv-purple)', background: 'var(--mv-purple-100)' }}>
+      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.09em', textTransform: 'uppercase',
+        color: 'var(--mv-purple)', marginBottom: 4 }}>
+        Possibly linked
+      </div>
+      {items.map(l => (
+        <div key={`${l.direction}-${l.query_id}`} style={{ fontSize: 13, color: 'var(--mv-ink-78)', lineHeight: 1.5 }}>
+          <button onClick={() => onOpen(l.query_id)} style={{ background: 'none', border: 'none', padding: 0,
+            color: 'var(--mv-purple)', fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', fontSize: 13,
+            fontVariantNumeric: 'tabular-nums' }}>
+            #{l.ticket_number}
+          </button>
+          {' '}{l.customer_name || ''}
+          {l.consignment ? <span style={{ fontVariantNumeric: 'tabular-nums' }}> · {l.consignment}</span> : null}
+          <span style={{ color: 'var(--mv-ink-52)' }}>
+            {' — '}{l.direction === 'points_here'
+              ? 'a newer conversation about this parcel'
+              : (LINK_REASONS[l.reason] || 'same parcel')}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Thread item ───────────────────────────────────────────────────────────────
 function ThreadItem({ email, queryId, courierName, courierCode, onApproved }) {
   const [editMode,   setEditMode]   = useState(false);
@@ -1145,6 +1185,9 @@ export default function TicketDetailPage() {
                 <span className="text-xs font-extrabold uppercase tracking-wide" style={{ color: 'var(--mv-teal)' }}>👤 Customer comms</span>
                 <span className="rounded-full px-2 py-0.5 text-xs font-bold" style={{ background: 'var(--mv-teal-100)', color: 'var(--mv-teal)' }}>{customerEmails.length}</span>
               </div>
+              {!showCourierTab && (
+                <LinkedSuggestions items={ticket.linked_suggestions} onOpen={qid => navigate(`/queries/${qid}`)} />
+              )}
               <div ref={messagesRef} className="min-h-0 flex-1 overflow-y-auto p-6">
                 {customerEmails.length === 0 ? (
                   <div className="py-12 text-center text-sm" style={{ color: 'var(--mv-ink-45)' }}>No customer messages yet</div>
@@ -1167,6 +1210,7 @@ export default function TicketDetailPage() {
                   </span>
                   <span className="rounded-full px-2 py-0.5 text-xs font-bold" style={{ background: 'var(--mv-amber-100)', color: 'var(--mv-amber-deep)' }}>{courierEmails.length}</span>
                 </div>
+                <LinkedSuggestions items={ticket.linked_suggestions} onOpen={qid => navigate(`/queries/${qid}`)} />
                 <div className="min-h-0 flex-1 overflow-y-auto p-6">
                   {courierEmails.length === 0 ? (
                     <div className="py-12 text-center text-sm" style={{ color: 'var(--mv-ink-45)' }}>No courier correspondence yet</div>

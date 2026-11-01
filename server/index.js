@@ -165,7 +165,13 @@ async function start() {
     // #2416 …) — see services/threadRepair.js. Marker-guarded: runs once, ever.
     import('./services/threadRepair.js')
       .then(m => m.splitMergedThreadsOnce())
-      .catch(e => console.warn('[Thread repair] skipped:', e.message));
+      .catch(e => console.warn('[Thread repair] skipped:', e.message))
+      // One-time clean-up for the Nov 2026 matching rules (multi-parcel threads
+      // moved off customers' tickets, noreply-notice tickets resolved, drafts
+      // that name no parcel removed) — services/matchingCleanup.js. Marker-guarded.
+      .then(() => import('./services/matchingCleanup.js'))
+      .then(m => m.matchingCleanupOnce())
+      .catch(e => console.warn('[Matching clean-up] skipped:', e.message));
     // One-time: pull SENT replies into existing threads so they become two-sided.
     backfillSentRepliesOnce().catch(e => console.warn('[Sent backfill] skipped:', e.message));
   } catch (err) {
