@@ -101,6 +101,7 @@ export async function runAutoChaseScan() {
       FROM queries q
      WHERE q.internal_automation_state = 'awaiting_courier_response'
        AND q.status NOT IN ${RESOLVED}
+       AND q.consignment_number IS NOT NULL      -- a chase must name the parcel
        AND q.last_courier_response_at IS NULL
      LIMIT 100
   `);

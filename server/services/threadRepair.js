@@ -10,8 +10,11 @@
  *
  * A ticket's extra Gmail threads are kept when they genuinely belong: the
  * ticket has a real consignment number and the thread mentions it (couriers do
- * start new chains about the same parcel). Every other extra thread is moved to
- * a ticket of its own. The ticket's first thread always stays.
+ * start new chains about the same parcel) — and no other parcel. A thread about
+ * several parcels (Sam's DPD clawback email naming two customers' consignments,
+ * filed whole on #1420) is a separate matter. Every other extra thread is moved
+ * to a ticket of its own, which points back at the ticket it came from
+ * ("Possibly linked"). The ticket's first thread always stays.
  *
  *   findMergedThreads()          — report only, changes nothing
  *   splitMergedThreads({ ... })  — applies the report
@@ -24,7 +27,7 @@
 
 import { query } from '../db/index.js';
 import { getTrackingMatchers, recognizeTracking, courierFamily } from './courierAutomation.js';
-import { resolveCustomer } from './gmailSync.js';
+import { resolveCustomer, consignmentsInText } from './gmailSync.js';
 
 const SUPPORT = /@(moovparcel\.co\.uk|moov-os\.com|moovparcel\.com)\s*>?$/i;
 const RESOLVED = ['resolved', 'resolved_claim_approved', 'resolved_claim_rejected'];
@@ -78,7 +81,9 @@ export async function findMergedThreads({ ticketNumbers = null } = {}) {
     const foreign = [];
     for (const [thread, list] of byThread) {
       if (thread === home) continue;
-      const belongs = forms.length && list.some(e => mentions(`${e.subject}\n${e.body_text}`, forms));
+      const threadText = list.map(e => `${e.subject}\n${e.body_text}`).join('\n');
+      const belongs = forms.length && mentions(threadText, forms)
+        && (await consignmentsInText(threadText, null)).size <= 1;
       if (belongs) continue;
       const counterpartEmail = list.map(e => firstAddress(e.from_address)).find(a => a && !SUPPORT.test(a))
         || firstAddress(list[0].to_address);
@@ -157,6 +162,11 @@ export async function splitMergedThreads({ ticketNumbers = null, onProgress = nu
       const moved = await query(
         `UPDATE query_emails SET query_id = $1 WHERE query_id = $2 AND gmail_thread_id = $3`,
         [ins.rows[0].id, t.ticket_id, f.gmail_thread_id]);
+      // The new ticket shows where it came from, as a "Possibly linked" note.
+      await query(
+        `UPDATE queries SET linked_ticket_suggestions = $2::jsonb WHERE id = $1`,
+        [ins.rows[0].id, JSON.stringify([{ query_id: t.ticket_id, ticket_number: t.ticket_number,
+          consignment: t.consignment_is_real ? t.consignment : null, reason: 'moved_off' }])]);
       done.push({ from_ticket: t.ticket_number, new_ticket: Number(ins.rows[0].ticket_number), thread: f.gmail_thread_id,
                   subject: f.first_subject, status, emails_moved: moved.rowCount });
       } catch (e) {

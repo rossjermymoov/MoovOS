@@ -123,7 +123,12 @@ async function handleResolved(queryId, body, isConsistent = null) {
   return { status: 'resolved', ...result };
 }
 
+// A chase or address confirmation names the consignment; without one it reads
+// "consignment null" (#4347), so a person handles it instead.
+const NO_CONSIGNMENT_REASON = 'No consignment number on this ticket, so no courier email was drafted — needs a person.';
+
 async function handleGdprRequest(queryId, ticket) {
+  if (!ticket.consignment_number) return handleAmbiguous(queryId, NO_CONSIGNMENT_REASON);
   const r = await query(
     `SELECT recipient_address FROM parcels WHERE consignment_number = $1 LIMIT 1`,
     [ticket.consignment_number],
@@ -151,6 +156,7 @@ async function handleGdprRequest(queryId, ticket) {
 }
 
 async function handleNeedsMoreInfo(queryId, ticket, reason, isConsistent = null) {
+  if (!ticket.consignment_number) return handleAmbiguous(queryId, NO_CONSIGNMENT_REASON);
   const tpl = await getCourierTemplates(ticket.courier_code);
   const vars = { customer_name: ticket.customer_name || 'the customer', tracking_code: ticket.consignment_number };
   const middle =

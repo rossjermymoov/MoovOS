@@ -174,6 +174,8 @@ import { AI_WINDOW_DAYS } from './aiUsage.js';
 
 // Sender domains that are couriers / our wholesaler (AGL) — never the customer.
 const COURIER_DOMAINS = /@(?:[a-z0-9-]+\.)*(dpd|dhl|evri|hermes|myhermes|yodel|ups|parcelforce|royalmail|fedex|agl)\.[a-z.]{2,}/i;
+// A courier's no-reply sender (noreply@, no-reply@, donotreply@ …).
+export const COURIER_NOREPLY = /^(?:no[-_.]?reply|do[-_.]?not[-_.]?reply|donotreply)[^@]*@/i;
 
 // Match a courier reply back to its ticket by the [Ref: Moov-XXXX] tag we stamp
 // on outbound courier mail (subject or body). The authoritative thread key.
@@ -189,38 +191,121 @@ async function findTicketByRef(text) {
   return r.rows[0]?.id || null;
 }
 
-// Find the ticket a courier email belongs to by the consignment number(s) in it.
-// Only REAL consignment formats count (recognizeTracking), and only the same
-// courier: a signature's map-link ID or a random reference used to match
-// whichever ticket had wrongly stored it, piling a courier's unrelated emails
-// into one ticket (#2153, #2416). DPD numbers written with spaces
-// ("1550 1940 217 401 2") are recognised too.
-async function findTicketByTrackingInBody(text, courierHint = null) {
+// How long a ticket can go without email before a NEW conversation about the
+// same parcel starts a fresh ticket instead of joining it (Freshdesk does the same).
+const QUIET_TICKET_DAYS = 30;
+
+// The same parcel written different ways (DPD with or without its 1550 prefix
+// and check letter) collapses to one key, so "several consignments" means
+// several parcels, not one parcel written twice.
+function parcelKey(normalized) {
+  const m = String(normalized).match(/^(?:1550)?(\d{10})[A-Z]?$/);
+  return m ? m[1] : String(normalized);
+}
+
+// Recognised consignment numbers in an email, for one courier. Only REAL
+// consignment formats count (a signature's map-link ID or a random reference
+// used to match whichever ticket had wrongly stored it — #2153, #2416). DPD
+// numbers written with spaces ("1550 1940 217 401 2") are recognised too.
+export async function consignmentsInText(text, courierHint) {
   const str = String(text || '');
   const candidates = new Set(str.match(/\b[A-Za-z0-9]{8,30}\b/g) || []);
   for (const spaced of str.match(/\b\d[\d ]{8,22}\d[A-Za-z]?\b/g) || []) candidates.add(spaced.replace(/\s+/g, ''));
-
   const matchers = await getTrackingMatchers();
-  const variants = new Set();
+  const parcels = new Map();   // parcelKey → every written form worth looking up
   for (const c of candidates) {
-    // Any reading that fits the sending courier (a 14-digit number can be DPD or DHL).
+    // Any reading that fits the courier (a 14-digit number can be DPD or DHL).
     const hit = recognizeTrackingAll(c, matchers).find(h => sameCourier(courierFamily(h.courier_code), courierHint));
     if (!hit) continue;
     const u = hit.normalized;
-    variants.add(u);
-    const m = u.match(/^1550(\d{10}[A-Z]?)$/); if (m) variants.add(m[1]);   // strip DPD 1550
-    if (/^\d{10}[A-Z]?$/.test(u)) variants.add('1550' + u);                 // add DPD 1550
+    const key = parcelKey(u);
+    const forms = parcels.get(key) || new Set();
+    forms.add(u);
+    const m = u.match(/^1550(\d{10}[A-Z]?)$/); if (m) forms.add(m[1]);   // strip DPD 1550
+    if (/^\d{10}[A-Z]?$/.test(u)) forms.add('1550' + u);                 // add DPD 1550
+    parcels.set(key, forms);
   }
-  if (!variants.size) return null;
+  return parcels;
+}
 
+// Which ticket a new conversation with a courier belongs to, by consignment.
+// It joins an existing ticket only when it is about ONE parcel and that ticket
+// is still open and has had email in the last QUIET_TICKET_DAYS. Otherwise it
+// starts its own ticket, and the tickets it may relate to come back as
+// `suggestions` (shown on the ticket as "Possibly linked: #…") for a person to
+// judge — e.g. Sam's DPD clawback email naming two customers' parcels was filed
+// whole on East London Packaging's July return (#1420).
+export async function matchTicketByTracking(text, courierHint = null) {
+  const parcels = await consignmentsInText(text, courierHint);
+  if (!parcels.size) return { ticketId: null, suggestions: [] };
+
+  const allForms = [...parcels.values()].flatMap(f => [...f]);
   const r = await query(
-    `SELECT id, courier_code FROM queries
-      WHERE upper(replace(consignment_number, ' ', '')) = ANY($1)
-        AND status NOT IN ('resolved','resolved_claim_approved','resolved_claim_rejected')
-      ORDER BY created_at DESC LIMIT 5`,
-    [[...variants]],
+    `SELECT q.id, q.ticket_number, q.courier_code, q.consignment_number, q.status,
+            GREATEST(q.created_at, COALESCE((
+              SELECT MAX(COALESCE(qe.received_at, qe.sent_at, qe.created_at)) FROM query_emails qe
+               WHERE qe.query_id = q.id AND COALESCE(qe.is_ai_draft, false) = false
+            ), q.created_at)) AS last_activity
+       FROM queries q
+      WHERE upper(replace(q.consignment_number, ' ', '')) = ANY($1)
+      ORDER BY q.created_at DESC LIMIT 20`,
+    [allForms],
   );
-  return r.rows.find(t => sameCourier(courierFamily(t.courier_code), courierHint))?.id || null;
+  const tickets = r.rows.filter(t => sameCourier(courierFamily(t.courier_code), courierHint));
+  if (!tickets.length) return { ticketId: null, suggestions: [] };
+
+  const RESOLVED = ['resolved', 'resolved_claim_approved', 'resolved_claim_rejected'];
+  const quietBefore = Date.now() - QUIET_TICKET_DAYS * 86400000;
+  const suggestion = (t, reason) => ({
+    query_id: t.id, ticket_number: t.ticket_number, consignment: t.consignment_number, reason,
+  });
+
+  if (parcels.size > 1) {
+    return { ticketId: null, suggestions: tickets.slice(0, 5).map(t => suggestion(t, 'several_consignments')) };
+  }
+  const live = tickets.find(t => !RESOLVED.includes(t.status) && new Date(t.last_activity).getTime() >= quietBefore);
+  if (live) return { ticketId: live.id, suggestions: [] };
+  return {
+    ticketId: null,
+    suggestions: tickets.slice(0, 5).map(t => suggestion(t, RESOLVED.includes(t.status) ? 'resolved' : 'quiet')),
+  };
+}
+
+// Record the tickets a new ticket may relate to (see matchTicketByTracking).
+async function saveLinkSuggestions(queryId, suggestions) {
+  if (!queryId || !suggestions?.length) return;
+  await query(
+    `UPDATE queries SET linked_ticket_suggestions = $2::jsonb WHERE id = $1`,
+    [queryId, JSON.stringify(suggestions.filter(x => x.query_id !== queryId))],
+  );
+}
+
+// Is this courier email a reply to something Moov asked that courier on this
+// ticket? Only then does the AI read it and draft a next step. DPD often starts
+// new email chains, so it also counts when the email names the ticket's
+// consignment and the ticket had email within QUIET_TICKET_DAYS. A courier
+// notice on a ticket Moov never wrote to the courier about (#4347) is left for
+// a person instead of being answered with a chase.
+export async function isReplyToOurCourierContact(queryId, text, gmailMsgId) {
+  const t = (await query(
+    `SELECT q.consignment_number,
+            EXISTS (SELECT 1 FROM query_emails qe
+                     WHERE qe.query_id = q.id AND qe.direction = 'outbound_courier'
+                       AND qe.sent_at IS NOT NULL AND COALESCE(qe.is_ai_draft, false) = false) AS moov_wrote,
+            (SELECT MAX(COALESCE(qe.received_at, qe.sent_at, qe.created_at)) FROM query_emails qe
+              WHERE qe.query_id = q.id AND COALESCE(qe.is_ai_draft, false) = false
+                AND qe.gmail_message_id IS DISTINCT FROM $2) AS prior_activity
+       FROM queries q WHERE q.id = $1`,
+    [queryId, gmailMsgId],
+  )).rows[0];
+  if (!t) return false;
+  if (t.moov_wrote) return true;
+  if (!t.consignment_number || !t.prior_activity) return false;
+  if (new Date(t.prior_activity).getTime() < Date.now() - QUIET_TICKET_DAYS * 86400000) return false;
+  const flat = String(text || '').replace(/\s+/g, '').toUpperCase();
+  const c = String(t.consignment_number).replace(/\s+/g, '').toUpperCase();
+  const forms = [c, c.replace(/^1550/, ''), /^\d{10}[A-Z]?$/.test(c) ? '1550' + c : null].filter(Boolean);
+  return forms.some(f => flat.includes(f));
 }
 
 /** A consignment number worth storing on a ticket: a real courier format, normalised; else null. */
@@ -523,7 +608,10 @@ async function upsertTicket(msg, gmail = null) {
   // re-sent on every reply), and automatic mail (auto-replies, newsletters) gets
   // no AI at all — keyword rules only.
   const aiText   = textForAi(subject, body);
-  const autoKind = isOurs ? null : automaticMailKind(headers, subject);
+  // Couriers' noreply addresses only send automatic notices ("we couldn't
+  // deliver this parcel"), whatever their headers say — never a reply to us.
+  const courierNotice = isCourierSender && COURIER_NOREPLY.test(senderEmail);
+  const autoKind = isOurs ? null : (automaticMailKind(headers, subject) || (courierNotice ? 'notice' : null));
 
   // Find the ticket this Gmail thread belongs to.
   //  • Our own reply (outbound) attaches to its thread under ANY status —
@@ -547,13 +635,18 @@ async function upsertTicket(msg, gmail = null) {
   }
 
   let courierStarted = false;   // this courier email started a new ticket (not a reply to us)
+  let linkSuggestions = [];     // tickets a new ticket may relate to ("Possibly linked")
 
   // A courier replied outside our thread — route it back to the ORIGINAL ticket
   // by the tracking number, never spin up a new "DPD-as-customer" ticket.
   if (!queryId && isCourierSender) {
     // Authoritative: our [Ref: Moov-XXXX] tag; fallback: tracking number in body.
-    queryId = await findTicketByRef(`${subject}\n${body}`)
-           || await findTicketByTrackingInBody(`${subject}\n${body}`, courierFamily(senderEmail));
+    queryId = await findTicketByRef(`${subject}\n${body}`);
+    if (!queryId) {
+      const m = await matchTicketByTracking(`${subject}\n${body}`, courierFamily(senderEmail));
+      queryId = m.ticketId;
+      linkSuggestions = m.suggestions;
+    }
     if (!queryId && autoKind) {
       // An automatic courier email (auto-acknowledgement, bulk notice) that
       // belongs to no ticket isn't worth a ticket of its own.
@@ -562,6 +655,7 @@ async function upsertTicket(msg, gmail = null) {
     }
     if (!queryId) {
       queryId = await createCourierStartedTicket({ subject, body, aiText, receivedAt, senderEmail, senderName, autoKind });
+      await saveLinkSuggestions(queryId, linkSuggestions);
       courierStarted = true;
       console.log(`[Gmail sync] Courier email from ${senderEmail} matched no ticket — new ticket ${queryId}`);
     }
@@ -584,8 +678,12 @@ async function upsertTicket(msg, gmail = null) {
   //  • only between Moov addresses → skipped: internal, not a customer query.
   if (!queryId && isOurs) {
     if (courierRecipient) {
-      queryId = await findTicketByRef(`${subject}\n${body}`)
-             || await findTicketByTrackingInBody(`${subject}\n${body}`, courierFamily(courierRecipient));
+      queryId = await findTicketByRef(`${subject}\n${body}`);
+      if (!queryId) {
+        const m = await matchTicketByTracking(`${subject}\n${body}`, courierFamily(courierRecipient));
+        queryId = m.ticketId;
+        linkSuggestions = m.suggestions;
+      }
       if (queryId) console.log(`[Gmail sync] Moov email to ${courierRecipient} attached to ticket ${queryId}`);
     }
     if (!queryId) {
@@ -595,6 +693,7 @@ async function upsertTicket(msg, gmail = null) {
         return { status: 'skipped', reason: 'internal email between Moov addresses' };
       }
       queryId = await createMoovStartedTicket({ subject, body, receivedAt, counterpart, isCourier: !!courierRecipient });
+      await saveLinkSuggestions(queryId, linkSuggestions);
       console.log(`[Gmail sync] Moov started a conversation with ${counterpart} — Pending ticket ${queryId}`);
     }
   }
@@ -611,7 +710,7 @@ async function upsertTicket(msg, gmail = null) {
     newTicketDissatisfied = triage.dissatisfied;
     console.log(`[Gmail sync] Triage (${triage.source}): "${subject}" → ${triage.ticket_type}`);
     const groupName   = GROUP_BY_TICKET_TYPE[triage.ticket_type] || 'Queries';
-    // Only a real consignment format is stored — see findTicketByTrackingInBody
+    // Only a real consignment format is stored — see consignmentsInText
     // for what a junk one (a signature's map-link ID) used to cause.
     const valid       = await validTracking(triage.tracking_number);
     const tracking    = valid?.tracking || null;
@@ -840,10 +939,21 @@ async function upsertTicket(msg, gmail = null) {
   // A courier's auto-acknowledgement ("we've received your email") isn't an
   // answer — skip the AI read. Their real replies are read as before, with
   // quoted history stripped.
-  if (isCourierSender && autoKind === 'auto_reply') {
-    console.log(`[Gmail sync] Courier auto-reply on ticket ${queryId} — not interpreted`);
+  if (isCourierSender && autoKind) {
+    console.log(`[Gmail sync] Automatic courier email (${autoKind}) on ticket ${queryId} — not interpreted`);
   } else if (isCourierSender && courierStarted) {
     console.log(`[Gmail sync] Courier-started ticket ${queryId} — not a reply to our inquiry, not interpreted`);
+  } else if (isCourierSender && !(await isReplyToOurCourierContact(queryId, `${subject}\n${body}`, gmailMsgId))) {
+    // The courier wrote on a ticket Moov hasn't contacted them about (or about a
+    // parcel the ticket isn't for) — a person decides what, if anything, to send.
+    await query(
+      `UPDATE queries
+          SET requires_attention = true, internal_automation_state = 'action_required',
+              attention_reason = $2, updated_at = NOW()
+        WHERE id = $1`,
+      [queryId, 'The courier wrote on this ticket without us asking them anything — check whether it needs a reply.'],
+    );
+    console.log(`[Gmail sync] Courier email on ticket ${queryId} isn't a reply to us — left for a person`);
   } else if (isCourierSender) {
     try { await interpretCourierReply(queryId, aiText); }
     catch (e) { console.warn('[Gmail sync] courier reply interpretation failed:', e.message); }

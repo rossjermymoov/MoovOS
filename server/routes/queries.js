@@ -402,6 +402,8 @@ router.get('/maintenance/merged-threads', async (req, res, next) => {
     const { findMergedThreads, getSplitJobStatus } = await import('../services/threadRepair.js');
     const report = await findMergedThreads({ ticketNumbers: parseTicketList(req.query.tickets) });
     report.split_job = await getSplitJobStatus();   // progress / error of the one-time split
+    const { getMatchingCleanupStatus } = await import('../services/matchingCleanup.js');
+    report.matching_cleanup = await getMatchingCleanupStatus();
     // Email ids aren't needed to read the report.
     for (const t of report.tickets) for (const th of t.threads) delete th.email_ids;
     res.set('Cache-Control', 'no-store');
@@ -1329,6 +1331,34 @@ router.patch('/spot-checks/:id', async (req, res, next) => {
 // Single query with full email thread, evidence, and notifications
 // ─────────────────────────────────────────────────────────────────────────────
 
+// "Possibly linked" tickets for the ticket page: the ones this ticket's
+// conversation may relate to (saved when it was created), plus newer tickets
+// that point back at this one. Purely informational — nothing is merged.
+async function linkedSuggestionsFor(queryId) {
+  try {
+    const r = await query(`
+      SELECT s.query_id, q.ticket_number, q.customer_name, q.status, s.consignment, s.reason, 'related' AS direction
+        FROM queries me
+        CROSS JOIN LATERAL jsonb_to_recordset(COALESCE(me.linked_ticket_suggestions, '[]'::jsonb))
+             AS s(query_id uuid, consignment text, reason text)
+        JOIN queries q ON q.id = s.query_id
+       WHERE me.id = $1
+      UNION ALL
+      SELECT o.id, o.ticket_number, o.customer_name, o.status, s.consignment, s.reason, 'points_here'
+        FROM queries o
+        CROSS JOIN LATERAL jsonb_to_recordset(o.linked_ticket_suggestions)
+             AS s(query_id uuid, consignment text, reason text)
+       WHERE o.linked_ticket_suggestions @> jsonb_build_array(jsonb_build_object('query_id', $1::text))
+         AND s.query_id = $1::uuid
+       ORDER BY ticket_number DESC
+       LIMIT 10`, [queryId]);
+    return r.rows;
+  } catch (e) {
+    console.warn('[Linked suggestions] lookup failed:', e.message);
+    return [];
+  }
+}
+
 router.get('/:id', async (req, res, next) => {
   try {
     const [queryRes, emailsRes, evidenceRes, notificationsRes] = await Promise.all([
@@ -1375,6 +1405,7 @@ router.get('/:id', async (req, res, next) => {
       emails:        ordered.map(toMessageFragment),
       evidence:      evidenceRes.rows,
       notifications: notificationsRes.rows,
+      linked_suggestions: await linkedSuggestionsFor(req.params.id),
     });
   } catch (err) { next(err); }
 });
