@@ -35,7 +35,7 @@ const RESOLVED = ['resolved', 'resolved_claim_approved', 'resolved_claim_rejecte
 // threads from weeks ago don't flood the queue as new Open tickets.
 const STALE_DAYS = 30;
 
-function consignmentForms(c) {
+export function consignmentForms(c) {
   const u = String(c || '').replace(/\s+/g, '').toUpperCase();
   const out = new Set([u]);
   const m = u.match(/^1550(\d{10})[A-Z0-9]?$/); if (m) out.add(m[1]);
@@ -43,7 +43,7 @@ function consignmentForms(c) {
   return [...out];
 }
 
-function mentions(text, forms) {
+export function mentions(text, forms) {
   const squashed = String(text || '').replace(/\s+/g, '').toUpperCase();
   return forms.some(f => f.length >= 8 && squashed.includes(f));
 }

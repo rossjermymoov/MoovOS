@@ -170,7 +170,7 @@ async function start() {
       // moved off customers' tickets, noreply-notice tickets resolved, drafts
       // that name no parcel removed) — services/matchingCleanup.js. Marker-guarded.
       .then(() => import('./services/matchingCleanup.js'))
-      .then(m => m.matchingCleanupOnce())
+      .then(m => m.matchingCleanupOnce().then(() => m.undoWrongMovesOnce()))
       .catch(e => console.warn('[Matching clean-up] skipped:', e.message));
     // One-time: pull SENT replies into existing threads so they become two-sided.
     backfillSentRepliesOnce().catch(e => console.warn('[Sent backfill] skipped:', e.message));

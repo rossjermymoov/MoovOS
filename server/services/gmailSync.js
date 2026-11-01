@@ -203,29 +203,63 @@ function parcelKey(normalized) {
   return m ? m[1] : String(normalized);
 }
 
-// Recognised consignment numbers in an email, for one courier. Only REAL
-// consignment formats count (a signature's map-link ID or a random reference
-// used to match whichever ticket had wrongly stored it — #2153, #2416). DPD
-// numbers written with spaces ("1550 1940 217 401 2") are recognised too.
+// A number introduced as the parcel's NEW label — DPD relabels a parcel for its
+// return: "returned to you under a different parcel number 1550 8003 194 895".
+// It's the same parcel, not another one.
+const RELABEL_BEFORE = /\b(?:reconsign(?:ed)?|relabel+ed|re-?labell?ed|return(?:ed)?\s+to\s+(?:you|sender|the\s+sender|consignor)|(?:new|different|return)\s+(?:parcel|tracking)\s+number|under\s+(?:a\s+)?(?:new\s+|different\s+)?(?:parcel|tracking)\s+number)\b[^\n]{0,40}$/i;
+// Boxes of one multi-parcel shipment have near-consecutive numbers
+// ("1760369466 – 1760369467 – 1760369468"): one shipment, one matter.
+const SAME_SHIPMENT_GAP = 50;
+
+// Recognised consignment numbers in an email, for one courier, grouped so that
+// one map entry = one parcel (or one multi-box shipment). Only REAL consignment
+// formats count (a signature's map-link ID or a random reference used to match
+// whichever ticket had wrongly stored it — #2153, #2416). DPD numbers written
+// with spaces ("1550 1940 217 401 2") are recognised too. Not counted as another
+// parcel: a return relabel of the same parcel, another box of the same
+// shipment, or a reference like "C-0391820937" / "CLM-…".
 export async function consignmentsInText(text, courierHint) {
   const str = String(text || '');
-  const candidates = new Set(str.match(/\b[A-Za-z0-9]{8,30}\b/g) || []);
-  for (const spaced of str.match(/\b\d[\d ]{8,22}\d[A-Za-z]?\b/g) || []) candidates.add(spaced.replace(/\s+/g, ''));
+  const found = [];   // { raw, index }
+  for (const m of str.matchAll(/\b[A-Za-z0-9]{8,30}\b/g)) found.push({ raw: m[0], index: m.index });
+  for (const m of str.matchAll(/\b\d[\d ]{8,22}\d[A-Za-z]?\b/g)) found.push({ raw: m[0].replace(/\s+/g, ''), index: m.index });
+
   const matchers = await getTrackingMatchers();
   const parcels = new Map();   // parcelKey → every written form worth looking up
-  for (const c of candidates) {
+  const relabels = new Map();
+  for (const { raw, index } of found) {
+    if (/[A-Za-z]{1,5}-$/.test(str.slice(Math.max(0, index - 6), index))) continue;   // "C-…", "CLM-…"
     // Any reading that fits the courier (a 14-digit number can be DPD or DHL).
-    const hit = recognizeTrackingAll(c, matchers).find(h => sameCourier(courierFamily(h.courier_code), courierHint));
+    const hit = recognizeTrackingAll(raw, matchers).find(h => sameCourier(courierFamily(h.courier_code), courierHint));
     if (!hit) continue;
     const u = hit.normalized;
+    const target = RELABEL_BEFORE.test(str.slice(Math.max(0, index - 160), index)) ? relabels : parcels;
     const key = parcelKey(u);
-    const forms = parcels.get(key) || new Set();
+    const forms = target.get(key) || new Set();
     forms.add(u);
     const m = u.match(/^1550(\d{10}[A-Z]?)$/); if (m) forms.add(m[1]);   // strip DPD 1550
     if (/^\d{10}[A-Z]?$/.test(u)) forms.add('1550' + u);                 // add DPD 1550
-    parcels.set(key, forms);
+    target.set(key, forms);
   }
-  return parcels;
+  // An email that only names the relabel still identifies the parcel.
+  const all = parcels.size ? parcels : relabels;
+
+  // Fold near-consecutive numbers (boxes of one shipment) into one entry.
+  const keys = [...all.keys()].sort();
+  const grouped = new Map();
+  let lastKey = null;
+  for (const k of keys) {
+    const sameShipment = lastKey && /^\d+$/.test(k) && /^\d+$/.test(lastKey) && k.length === lastKey.length
+      && Math.abs(Number(k) - Number(lastKey)) <= SAME_SHIPMENT_GAP;
+    if (sameShipment) {
+      const head = [...grouped.keys()].at(-1);
+      for (const f of all.get(k)) grouped.get(head).add(f);
+    } else {
+      grouped.set(k, new Set(all.get(k)));
+    }
+    lastKey = k;
+  }
+  return grouped;
 }
 
 // Which ticket a new conversation with a courier belongs to, by consignment.
